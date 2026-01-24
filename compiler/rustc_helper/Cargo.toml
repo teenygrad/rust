@@ -1,0 +1,9 @@
+[package]
+name = "rustc_helper"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+toml = "0.9.7"
+serde = { version = "1.0.225", features = ["derive"] }
+cmake = "0.1.54"

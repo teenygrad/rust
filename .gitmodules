@@ -47,3 +47,6 @@
 	path = src/gcc
 	url = https://github.com/rust-lang/gcc.git
 	shallow = true
+[submodule "src/triton"]
+	path = src/triton
+	url = git@github.com:teenygrad/triton.git
