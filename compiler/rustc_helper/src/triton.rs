@@ -68,7 +68,7 @@ impl Triton {
 
 pub fn build_triton(project_dir: &Path, target_dir: &Path, llvm: &Llvm) -> Triton {
     let config: TritonConfig = read_toml(&project_dir.join("triton.toml"));
-    let source_dir = project_dir.join("triton");
+    let source_dir = project_dir.join("../../src/triton");
     let out_dir = target_dir.join("build/triton-build");
     let install_dir = target_dir.join("install");
 

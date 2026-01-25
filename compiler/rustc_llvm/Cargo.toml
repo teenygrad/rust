@@ -12,6 +12,8 @@ libc = "0.2.73"
 # tidy-alphabetical-start
 # `cc` updates often break things, so we pin it here.
 cc = "=1.2.16"
+cargo_metadata = "0.23.1"
+rustc_helper = { path = "../rustc_helper" }
 # tidy-alphabetical-end
 
 [features]

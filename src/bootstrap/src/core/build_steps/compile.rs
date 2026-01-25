@@ -2331,7 +2331,9 @@ impl Step for Assemble {
                         // the codegen backend.
                         output.gcc.install_to(builder, &rustc_libdir);
                     }
-                    CodegenBackendKind::Llvm | CodegenBackendKind::Custom(_) => continue,
+                    CodegenBackendKind::Llvm | CodegenBackendKind::Mlir | CodegenBackendKind::Custom(_) => {
+                        continue
+                    }
                 }
             }
         }

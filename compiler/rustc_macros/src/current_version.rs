@@ -9,8 +9,9 @@ pub(crate) fn current_version(_input: TokenStream) -> TokenStream {
             // The produced literal has type `rustc_session::RustcVersion`.
             Self { major: #major, minor: #minor, patch: #patch }
         ),
-        Err(err) => syn::Error::new(Span::call_site(), format!("{env_var} env var: {err}"))
-            .into_compile_error(),
+        Err(_) => quote!(Self { major: 0, minor: 0, patch: 0 }), // AXM FIXME - handle error
+                                                                 // Err(err) => syn::Error::new(Span::call_site(), format!("{env_var} env var: {err}"))
+                                                                 //     .into_compile_error(),
     })
 }
 

@@ -342,6 +342,8 @@ pub fn get_codegen_backend(
             "dummy" => || Box::new(DummyCodegenBackend { target_config_override: None }),
             #[cfg(feature = "llvm")]
             "llvm" => rustc_codegen_llvm::LlvmCodegenBackend::new,
+            #[cfg(feature = "mlir")]
+            "mlir" => rustc_codegen_mlir::MlirCodegenBackend::new,
             backend_name => get_codegen_sysroot(early_dcx, sysroot, backend_name),
         }
     });
@@ -484,7 +486,7 @@ pub fn rustc_path<'a>(sysroot: &Sysroot) -> Option<&'a Path> {
         .get_or_init(|| {
             let candidate = sysroot
                 .default
-                .join(env!("RUSTC_INSTALL_BINDIR"))
+                .join(option_env!("RUSTC_INSTALL_BINDIR").unwrap_or("/tmp"))
                 .join(if cfg!(target_os = "windows") { "rustc.exe" } else { "rustc" });
             candidate.exists().then_some(candidate)
         })
@@ -527,7 +529,7 @@ fn get_codegen_sysroot(
                 .join("\n* ");
             let err = format!(
                 "failed to find a `codegen-backends` folder in the sysroot candidates:\n\
-                 * {candidates}"
+                 * {candidates} for {backend_name}"
             );
             early_dcx.early_fatal(err);
         });
@@ -545,7 +547,11 @@ fn get_codegen_sysroot(
     let mut file: Option<PathBuf> = None;
 
     let expected_names = &[
-        format!("rustc_codegen_{}-{}", backend_name, env!("CFG_RELEASE")),
+        format!(
+            "rustc_codegen_{}-{}",
+            backend_name,
+            option_env!("CFG_RELEASE").unwrap_or("teenygrad-0.0.0") // AXM FIXME - env!("CFG_RELEASE"),
+        ),
         format!("rustc_codegen_{backend_name}"),
     ];
     for entry in d.filter_map(|e| e.ok()) {

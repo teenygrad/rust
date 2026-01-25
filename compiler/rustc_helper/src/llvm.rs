@@ -34,7 +34,7 @@ pub struct Llvm {
 
 pub fn build_llvm(project_dir: &Path, target_dir: &Path) -> Llvm {
     let config: LlvmConfig = read_toml(&project_dir.join("llvm.toml"));
-    let source_dir = project_dir.join("llvm-project/llvm");
+    let source_dir = project_dir.join("../../src/llvm-project/llvm");
     let out_dir = target_dir.join("build/llvm-build");
     let install_dir = target_dir.join("install");
 

@@ -1362,7 +1362,7 @@ pub fn host_tuple() -> &'static str {
     // Instead of grabbing the host triple (for the current host), we grab (at
     // compile time) the target triple that this rustc is built with and
     // calling that (at runtime) the host triple.
-    (option_env!("CFG_COMPILER_HOST_TRIPLE")).expect("CFG_COMPILER_HOST_TRIPLE")
+    (option_env!("CFG_COMPILER_HOST_TRIPLE")).unwrap_or("nvptx64-nvidia-cuda") // AXM FIXME - expect("CFG_COMPILER_HOST_TRIPLE")
 }
 
 fn file_path_mapping(
@@ -1433,6 +1433,7 @@ impl Default for Options {
             logical_env: FxIndexMap::default(),
             verbose: false,
             target_modifiers: BTreeMap::default(),
+            frontend: None,
         }
     }
 }
@@ -1543,6 +1544,12 @@ impl CrateType {
             | CrateType::Sdylib => false,
         }
     }
+}
+
+#[derive(Copy, PartialEq, PartialOrd, Clone, Ord, Eq, Hash, Debug, Encodable, Decodable)]
+#[derive(HashStable_Generic)]
+pub enum Frontend {
+    Triton,
 }
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq)]
@@ -1799,6 +1806,7 @@ pub fn rustc_optgroups() -> Vec<RustcOptGroup> {
         ),
         make_crate_type_option(),
         opt(Stable, Opt, "", "crate-name", "Specify the name of the crate being built", "<NAME>"),
+        opt(Stable, Opt, "", "frontend", "The frontend (e.g. triton)", "<FRONTEND>"),
         opt(Stable, Opt, "", "edition", &EDITION_STRING, EDITION_NAME_LIST),
         opt(Stable, Multi, "", "emit", &EMIT_HELP, "<TYPE>[=<FILE>]"),
         opt(Stable, Multi, "", "print", &print_request::PRINT_HELP, "<INFO>[=<FILE>]"),
@@ -2791,6 +2799,14 @@ pub fn build_session_options(early_dcx: &mut EarlyDiagCtxt, matches: &getopts::M
 
     let verbose = matches.opt_present("verbose") || unstable_opts.verbose_internals;
 
+    let frontend = matches.opt_str("frontend").map(|s| match s.to_lowercase().as_str() {
+        "triton" => Frontend::Triton,
+        _ => {
+            early_dcx
+                .early_fatal(format!("unknown frontend: `{}`. Supported frontends: triton", s));
+        }
+    });
+
     Options {
         assert_incr_state,
         crate_types,
@@ -2836,6 +2852,7 @@ pub fn build_session_options(early_dcx: &mut EarlyDiagCtxt, matches: &getopts::M
         logical_env,
         verbose,
         target_modifiers,
+        frontend,
     }
 }
 
@@ -3132,6 +3149,7 @@ pub(crate) mod dep_tracking {
         RemapPathScopeComponents, ResolveDocLinks, SourceFileHashAlgorithm, SplitDwarfKind,
         SwitchWithOptPath, SymbolManglingVersion, WasiExecModel,
     };
+    use crate::config::Frontend;
     use crate::lint;
     use crate::utils::NativeLib;
 
@@ -3168,6 +3186,12 @@ pub(crate) mod dep_tracking {
                 }
                 None => Hash::hash(&0, hasher),
             }
+        }
+    }
+
+    impl DepTrackingHash for Frontend {
+        fn hash(&self, hasher: &mut StableHasher, _: ErrorOutputType, _for_crate_hash: bool) {
+            Hash::hash(self, hasher);
         }
     }
 

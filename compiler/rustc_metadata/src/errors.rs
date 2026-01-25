@@ -486,7 +486,7 @@ impl<G: EmissionGuarantee> Diagnostic<'_, G> for CannotFindCrate {
             }
 
             if self.missing_core {
-                if env!("CFG_RELEASE_CHANNEL") == "dev" && !self.is_ui_testing {
+                if option_env!("CFG_RELEASE_CHANNEL") == Some("dev") && !self.is_ui_testing {
                     // Note: Emits the nicer suggestion only for the dev channel.
                     diag.help(fluent::metadata_consider_adding_std);
                 } else {

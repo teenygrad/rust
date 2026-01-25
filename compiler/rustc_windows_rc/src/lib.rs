@@ -76,7 +76,7 @@ fn write_resource_script_file(
     let descriptive_version = env::var("CFG_VERSION").unwrap_or("unknown".to_string());
 
     // Set the product name to "Rust Compiler" or "Rust Compiler (nightly)" etc
-    let product_name = product_name(env::var("CFG_RELEASE_CHANNEL").unwrap());
+    let product_name = product_name(env::var("CFG_RELEASE_CHANNEL").unwrap_or("dev".to_string()));
 
     // For the numeric version we need `major,minor,patch,build`.
     // Extract them from `CFG_RELEASE` which is "major.minor.patch" and a "-dev", "-nightly" or similar suffix

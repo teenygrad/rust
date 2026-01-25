@@ -4,6 +4,11 @@ use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use cargo_metadata::MetadataCommand;
+use rustc_helper::llvm::build_llvm;
+use rustc_helper::llvm_wrapper::build_wrapper;
+use rustc_helper::triton::build_triton;
+
 const OPTIONAL_COMPONENTS: &[&str] = &[
     "x86",
     "arm",
@@ -47,16 +52,31 @@ fn detect_llvm_link() -> (&'static str, &'static str) {
 // the one we want to use. As such, we restore the environment to what bootstrap saw. This isn't
 // perfect -- we might actually want to see something from Cargo's added library paths -- but
 // for now it works.
+//
+// AXM FIXME: This is a hack and should be removed when we have a better solution, this code was derived from the bootstrap
+// which we don't have here.
 fn restore_library_path() {
-    let key = tracked_env_var_os("REAL_LIBRARY_PATH_VAR").expect("REAL_LIBRARY_PATH_VAR");
-    if let Some(env) = tracked_env_var_os("REAL_LIBRARY_PATH") {
-        unsafe {
-            env::set_var(&key, env);
-        }
+    let key = dylib_path_var();
+    let value = env::var(key).unwrap_or_default();
+    let value = value.split(':').filter(|s| !s.contains("toolchain")).collect::<Vec<_>>();
+    let value = value.join(":");
+
+    unsafe {
+        env::set_var(key, value);
+    }
+}
+
+fn dylib_path_var() -> &'static str {
+    if cfg!(any(target_os = "windows", target_os = "cygwin")) {
+        "PATH"
+    } else if cfg!(target_vendor = "apple") {
+        "DYLD_LIBRARY_PATH"
+    } else if cfg!(target_os = "haiku") {
+        "LIBRARY_PATH"
+    } else if cfg!(target_os = "aix") {
+        "LIBPATH"
     } else {
-        unsafe {
-            env::remove_var(&key);
-        }
+        "LD_LIBRARY_PATH"
     }
 }
 
@@ -105,25 +125,30 @@ fn output(cmd: &mut Command) -> String {
 }
 
 fn main() {
-    if cfg!(feature = "check_only") {
+    if cfg!(feature = "check_only") || tracked_env_var_os("RUST_CHECK").is_some() {
+        // If we're just running `check`.
         return;
     }
 
-    for component in REQUIRED_COMPONENTS.iter().chain(OPTIONAL_COMPONENTS.iter()) {
-        println!("cargo:rustc-check-cfg=cfg(llvm_component,values(\"{component}\"))");
-    }
+    let metadata = MetadataCommand::new().exec().unwrap();
 
-    if tracked_env_var_os("RUST_CHECK").is_some() {
-        // If we're just running `check`, there's no need for LLVM to be built.
-        return;
-    }
+    // Get the project directory.
+    let package = metadata.packages.iter().find(|p| p.name.as_str() == "rustc_llvm").unwrap();
+    let project_dir: PathBuf = package.manifest_path.parent().unwrap().into();
+    let target_dir: PathBuf = metadata.target_directory.into();
 
     restore_library_path();
 
-    let llvm_config =
-        PathBuf::from(tracked_env_var_os("LLVM_CONFIG").expect("LLVM_CONFIG was not set"));
+    println!("cargo:rerun-if-changed=llvm.toml");
+    println!("cargo:rerun-if-changed=triton.toml");
 
-    println!("cargo:rerun-if-changed={}", llvm_config.display());
+    let llvm = build_llvm(&project_dir, &target_dir);
+    let triton = build_triton(&project_dir, &target_dir, &llvm);
+    let _llvm_wrapper = build_wrapper(&project_dir, &target_dir, &llvm, &triton);
+
+    // AXM FIXME: Get the proper LLVM_CONFIG from the environment.
+    let llvm_config = llvm.llvm_config;
+    // AXM FIXME: println!("cargo:rerun-if-changed={}", llvm_config.display());
 
     // Test whether we're cross-compiling LLVM. This is a pretty rare case
     // currently where we're producing an LLVM for a different platform than
@@ -226,15 +251,110 @@ fn main() {
         cfg.define("NDEBUG", None);
     }
 
+    cfg.includes(triton.include_dirs());
+    println!("cargo:rustc-link-search=native={}", triton.link_dir().display());
+    for lib in triton.link_libs() {
+        println!("cargo:rustc-link-lib={}", lib);
+    }
+
+    let mlir_libs = vec![
+        "MLIRCAPIIR",
+        "MLIRCallInterfaces",
+        "MLIRNVVMToLLVM",
+        "MLIRIndexingMapOpInterface",
+        "MLIRControlFlowInterfaces",
+        "MLIRFunctionInterfaces",
+        "MLIRInferTypeOpInterface",
+        "MLIRArithUtils",
+        "MLIRCastInterfaces",
+        "MLIRInferIntRangeInterface",
+        "MLIRShapedOpInterfaces",
+        "MLIRLoopLikeInterface",
+        "MLIRSCFDialect",
+        "MLIRInferIntRangeCommon",
+        "MLIRArithDialect",
+        "MLIRMathDialect",
+        "MLIRSCFDialect",
+        "MLIRSCFTransforms",
+        "MLIRControlFlowDialect",
+        "MLIRUBDialect",
+        "MLIRDialectUtils",
+        "MLIRIR",
+        "MLIRSupport",
+        "MLIRPass",
+        "MLIRTensorDialect",
+        "MLIRTensorTransforms",
+        "MLIRViewLikeInterface",
+        "MLIRSideEffectInterfaces",
+        "MLIRParallelCombiningOpInterface",
+        "MLIRDestinationStyleOpInterface",
+        "MLIRComplexDialect",
+        "MLIRAffineDialect",
+        "MLIRMemRefDialect",
+        "MLIRTargetLLVMIRImport",
+        "MLIRLLVMDialect",
+        "MLIRDataLayoutInterfaces",
+        "MLIRDLTIDialect",
+        "MLIRMemRefDialect",
+        "MLIRMemorySlotInterfaces",
+        "MLIRTransforms",
+        "MLIRSCFToControlFlow",
+        "MLIRControlFlowToLLVM",
+        "MLIRIndexToLLVM",
+        "MLIRArithToLLVM",
+        "MLIRArithTransforms",
+        "MLIRAnalysis",
+        "MLIRTransformUtils",
+        "MLIRMathToLLVM",
+        "MLIRGPUDialect",
+        "MLIRGPUToNVVMTransforms",
+        "MLIRLLVMCommonConversion",
+        "MLIRNVVMDialect",
+        "MLIRIndexDialect",
+        "MLIRFuncToLLVM",
+        "MLIRLLVMIRTransforms",
+        "MLIRFuncDialect",
+        "MLIRTransformDialect",
+        "MLIRRewrite",
+        "MLIRVectorDialect",
+        "MLIRVectorTransforms",
+        "MLIRArithAttrToLLVMConversion",
+        "MLIRAffineDialect",
+        "MLIRAffineTransforms",
+        "MLIRSubsetOpInterface",
+        "MLIRGPUToGPURuntimeTransforms",
+        "MLIRConvertToLLVMPass",
+        "MLIRAffineUtils",
+        "MLIRSCFTransformOps",
+        "MLIRSCFUtils",
+        "MLIRReconcileUnrealizedCasts",
+        "MLIRUBToLLVM",
+        "MLIRGPUTransformOps",
+        "MLIRGPUTransforms",
+        "MLIRPDLDialect",
+        "MLIRPDLToPDLInterp",
+        "MLIRRewritePDL",
+        "MLIRLinalgDialect",
+        "MLIRLinalgTransforms",
+        "MLIRVectorInterfaces",
+        "MLIRValueBoundsOpInterface",
+        "MLIRMaskingOpInterface",
+        "MLIRMaskableOpInterface",
+        "MLIRConvertToLLVMInterface",
+        "MLIRGPUUtils",
+        "MLIRPDLInterpDialect",
+        "MLIRPresburger",
+        "MLIRBuiltinToLLVMIRTranslation",
+        "MLIRGPUToLLVMIRTranslation",
+        "MLIRLLVMToLLVMIRTranslation",
+        "MLIRNVVMToLLVMIRTranslation",
+        "MLIRTargetLLVMIRExport",
+    ];
+    for lib in mlir_libs {
+        println!("cargo:rustc-link-lib={}", lib);
+    }
+
     rerun_if_changed_anything_in_dir(Path::new("llvm-wrapper"));
-    cfg.file("llvm-wrapper/PassWrapper.cpp")
-        .file("llvm-wrapper/RustWrapper.cpp")
-        .file("llvm-wrapper/CoverageMappingWrapper.cpp")
-        .file("llvm-wrapper/SymbolWrapper.cpp")
-        .file("llvm-wrapper/Linker.cpp")
-        .cpp(true)
-        .cpp_link_stdlib(None) // we handle this below
-        .compile("llvm-wrapper");
 
     let (llvm_kind, llvm_link_arg) = detect_llvm_link();
 

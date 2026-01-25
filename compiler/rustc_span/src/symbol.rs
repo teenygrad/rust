@@ -948,7 +948,7 @@ symbols! {
         entry_nops,
         enumerate_method,
         env,
-        env_CFG_RELEASE: env!("CFG_RELEASE"),
+        env_CFG_RELEASE: "teenygrad-0.0.0", // AXM FIXME - env!("CFG_RELEASE"),
         eprint_macro,
         eprintln_macro,
         eq,
