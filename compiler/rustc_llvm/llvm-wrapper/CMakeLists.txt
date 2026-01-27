@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
 
+# Set CMake policies for LLVM 22.0 compatibility
+if(POLICY CMP0116)
+    cmake_policy(SET CMP0116 NEW)
+endif()
+
 # Enable compile commands for IntelliSense
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -31,7 +36,7 @@ endif()
 
 # Triton paths (can be overridden via CMake variables)
 if(NOT DEFINED TRITON_SOURCE_DIR)
-    set(TRITON_SOURCE_DIR "${PROJECT_DIR}/triton")
+    set(TRITON_SOURCE_DIR "${PROJECT_DIR}/../../src/triton")
 endif()
 if(NOT DEFINED TRITON_BUILD_DIR)
     set(TRITON_BUILD_DIR "${TARGET_DIR}/build/triton-build/build")
@@ -45,20 +50,31 @@ if(NOT EXISTS "${LLVM_CONFIG}")
     message(FATAL_ERROR "LLVM not found. Please build LLVM first using build.rs or set LLVM_BUILD_DIR manually.")
 endif()
 
-# Find LLVM
+# Find LLVM first (MLIR depends on it)
 find_package(LLVM REQUIRED CONFIG PATHS "${LLVM_BUILD_DIR}/lib/cmake/llvm")
 
-# Find MLIR
+# Add LLVM and MLIR to module path after find_package sets the variables
+# These variables are set by find_package(LLVM) and find_package(MLIR)
+if(DEFINED LLVM_CMAKE_DIR)
+    list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
+endif()
+
+# Find MLIR (this imports all MLIR targets)
 find_package(MLIR REQUIRED CONFIG PATHS "${MLIR_DIR}")
 
-# Add LLVM and MLIR to module path
-list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")
-list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
+# Add MLIR module path after find_package(MLIR) sets MLIR_CMAKE_DIR
+if(DEFINED MLIR_CMAKE_DIR)
+    list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")
+endif()
 
-# Include LLVM and MLIR utilities
+# Include LLVM utilities (needed for llvm_update_compile_flags, etc.)
 include(TableGen)
 include(AddLLVM)
-include(AddMLIR)
+
+# Note: AddMLIR is typically only needed when building MLIR components from source.
+# Since we're using find_package(MLIR CONFIG), all targets are already imported.
+# Only include AddMLIR if we need mlir_tablegen() or other build utilities.
+# For now, we'll skip it since we're just linking against pre-built MLIR libraries.
 
 # Get LLVM CXX flags using llvm-config
 execute_process(
@@ -150,8 +166,9 @@ set(LLVM_WRAPPER_INCLUDE_DIRS
 
 # Source files (matching build.rs)
 set(LLVM_WRAPPER_SOURCES
-    PassWrapper.cpp
+    # PassWrapper.cpp
     RustWrapper.cpp
+    MLIRWrapper.cpp
     CoverageMappingWrapper.cpp
     SymbolWrapper.cpp
     Linker.cpp

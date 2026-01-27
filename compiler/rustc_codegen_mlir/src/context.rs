@@ -7,7 +7,7 @@ use rustc_middle::mir::mono::CodegenUnit;
 use rustc_middle::ty::TyCtxt;
 
 use crate::ModuleMlir;
-use crate::ffi::{MLIRContext, ModuleOp, Type};
+use crate::mlir::ffi::{MLIRContext, ModuleOp, Type};
 
 /// `TyCtxt` (and related cache datastructures) can't be move between threads.
 /// However, there are various cx related functions which we want to be available to the builder and
@@ -71,22 +71,24 @@ impl<'ll, 'tcx> CodegenCx<'ll, 'tcx> {
         codegen_unit: &'tcx CodegenUnit<'tcx>,
         llvm_module: &'ll ModuleMlir,
     ) -> Self {
-        let (llcx, llmod) = (&*llvm_module.llcx, llvm_module.llmod());
+        todo!()
+        // let (llcx, llmod) = (&*llvm_module.llcx, llvm_module.llmod());
 
-        GenericCx(
-            FullCx {
-                tcx,
-                scx: SimpleCx::new(llmod, llcx, tcx.data_layout.pointer_size()),
-                codegen_unit,
-            },
-            PhantomData,
-        )
+        // GenericCx(
+        //     FullCx {
+        //         tcx,
+        //         scx: SimpleCx::new(llmod, llcx, tcx.data_layout.pointer_size()),
+        //         codegen_unit,
+        //     },
+        //     PhantomData,
+        // )
     }
 }
 
 impl<'ll> SimpleCx<'ll> {
     pub(crate) fn new(llmod: &'ll ModuleOp, llcx: &'ll MLIRContext, pointer_size: Size) -> Self {
-        let isize_ty = Type::ix_llcx(llcx, pointer_size.bits());
-        Self(SCx { llmod, llcx, isize_ty }, PhantomData)
+        // let isize_ty = Type::ix_llcx(llcx, pointer_size.bits());
+        // Self(SCx { llmod, llcx, isize_ty }, PhantomData)
+        todo!()
     }
 }

@@ -14,6 +14,8 @@
 
 // Opaque pointer types
 unsafe extern "C" {
+    pub(crate) type Type;
+
     pub(crate) type MLIRContext;
     pub(crate) type OpBuilder;
     pub(crate) type ModuleOp;

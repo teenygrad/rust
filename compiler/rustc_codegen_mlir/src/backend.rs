@@ -32,125 +32,26 @@ impl ExtraBackendMethods for MlirCodegenBackend {
         &self,
         tcx: TyCtxt<'tcx>,
         module_name: &str,
-        _kind: AllocatorKind,
-        _alloc_error_handler_kind: AllocatorKind,
-    ) -> ModuleMlir {
-        // TODO: Implement allocator codegen
-        ModuleMlir::new(tcx, module_name)
+        methods: &[rustc_ast::expand::allocator::AllocatorMethod],
+    ) -> Self::Module {
+        todo!()
     }
 
     fn compile_codegen_unit(
         &self,
         tcx: TyCtxt<'_>,
         cgu_name: Symbol,
-    ) -> (ModuleCodegen<ModuleMlir>, u64) {
-        let start_time = Instant::now();
-
-        let dep_node = tcx.codegen_unit(cgu_name).codegen_dep_node(tcx);
-        let (module, _) = tcx.dep_graph.with_task(
-            dep_node,
-            tcx,
-            cgu_name,
-            module_codegen,
-            Some(dep_graph::hash_result),
-        );
-        let time_to_codegen = start_time.elapsed();
-
-        // We assume that the cost to run LLVM on a CGU is proportional to
-        // the time we needed for codegenning it.
-        let cost = time_to_codegen.as_nanos() as u64;
-
-        fn module_codegen(tcx: TyCtxt<'_>, cgu_name: Symbol) -> ModuleCodegen<ModuleMlir> {
-            let cgu = tcx.codegen_unit(cgu_name);
-            let _prof_timer =
-                tcx.prof.generic_activity_with_arg_recorder("codegen_module", |recorder| {
-                    recorder.record_arg(cgu_name.to_string());
-                    recorder.record_arg(cgu.size_estimate().to_string());
-                });
-            // Instantiate monomorphizations without filling out definitions yet...
-            let mut llvm_module = ModuleMlir::new(tcx, cgu_name.as_str());
-            {
-                let mut cx = CodegenCx::new(tcx, cgu, &llvm_module);
-                let mono_items = cx.codegen_unit.items_in_deterministic_order(cx.tcx);
-                for &(mono_item, data) in &mono_items {
-                    mono_item.predefine::<Builder<'_, '_, '_>>(
-                        &mut cx,
-                        cgu_name.as_str(),
-                        data.linkage,
-                        data.visibility,
-                    );
-                }
-
-                // ... and now that we have everything pre-defined, fill out those definitions.
-                for &(mono_item, item_data) in &mono_items {
-                    mono_item.define::<Builder<'_, '_, '_>>(&mut cx, cgu_name.as_str(), item_data);
-                }
-
-                // If this codegen unit contains the main function, also create the
-                // wrapper here
-                if let Some(entry) =
-                    maybe_create_entry_wrapper::<Builder<'_, '_, '_>>(&cx, cx.codegen_unit)
-                {
-                    let attrs = attributes::sanitize_attrs(&cx, SanitizerSet::empty());
-                    attributes::apply_to_llfn(entry, llvm::AttributePlace::Function, &attrs);
-                }
-
-                // Finalize code coverage by injecting the coverage map. Note, the coverage map will
-                // also be added to the `llvm.compiler.used` variable, created next.
-                if cx.sess().instrument_coverage() {
-                    cx.coverageinfo_finalize();
-                }
-
-                // Create the llvm.used and llvm.compiler.used variables.
-                if !cx.used_statics.is_empty() {
-                    cx.create_used_variable_impl(c"llvm.used", &cx.used_statics);
-                }
-                if !cx.compiler_used_statics.is_empty() {
-                    cx.create_used_variable_impl(c"llvm.compiler.used", &cx.compiler_used_statics);
-                }
-
-                // Run replace-all-uses-with for statics that need it. This must
-                // happen after the llvm.used variables are created.
-                for &(old_g, new_g) in cx.statics_to_rauw().borrow().iter() {
-                    unsafe {
-                        llvm::LLVMReplaceAllUsesWith(old_g, new_g);
-                        llvm::LLVMDeleteGlobal(old_g);
-                    }
-                }
-
-                // Finalize debuginfo
-                if cx.sess().opts.debuginfo != DebugInfo::None {
-                    cx.debuginfo_finalize();
-                }
-            }
-
-            ModuleCodegen::new_regular(cgu_name.to_string(), llvm_module)
-        }
-
-        (module, cost)
+    ) -> (ModuleCodegen<Self::Module>, u64) {
+        todo!()
     }
 
     fn target_machine_factory(
         &self,
-        _sess: &Session,
-        _optlvl: OptLevel,
-        _target_features: &[String],
+        sess: &Session,
+        opt_level: rustc_session::config::OptLevel,
+        target_features: &[String],
     ) -> TargetMachineFactoryFn<Self> {
-        // TODO: Implement target machine factory
-        Arc::new(|_config: TargetMachineFactoryConfig| Ok(()))
-    }
-
-    fn spawn_named_thread<F, T>(
-        _time_trace: bool,
-        name: String,
-        f: F,
-    ) -> std::io::Result<std::thread::JoinHandle<T>>
-    where
-        F: FnOnce() -> T,
-        F: Send + 'static,
-        T: Send + 'static,
-    {
-        std::thread::Builder::new().name(name).spawn(f)
+        todo!()
     }
 }
 
@@ -263,84 +164,24 @@ impl MlirCodegenBackend {
 
 impl CodegenBackend for MlirCodegenBackend {
     fn locale_resource(&self) -> &'static str {
-        ""
+        todo!()
     }
 
-    fn init(&self, _sess: &Session) {
-        // TODO: Initialize MLIR backend
-    }
-
-    fn provide(&self, providers: &mut Providers) {
-        providers.global_backend_features = |_tcx, ()| vec![];
-    }
-
-    fn print(&self, req: &PrintRequest, out: &mut String, _sess: &Session) {
-        use std::fmt::Write;
-        match req.kind {
-            PrintKind::TargetFeatures => {
-                writeln!(out, "Available target features:").unwrap();
-                writeln!(out, "    (none)").unwrap();
-                writeln!(out).unwrap();
-            }
-            _ => {
-                // Default: do nothing
-            }
-        }
-    }
-
-    fn print_passes(&self) {
-        // TODO: Implement pass printing
-    }
-
-    fn print_version(&self) {
-        println!("MLIR codegen backend (basic implementation)");
-    }
-
-    fn target_config(&self, _sess: &Session) -> TargetConfig {
-        TargetConfig {
-            target_features: vec![],
-            unstable_target_features: vec![],
-            has_reliable_f16: false,
-            has_reliable_f16_math: false,
-            has_reliable_f128: false,
-            has_reliable_f128_math: false,
-        }
+    fn name(&self) -> &'static str {
+        todo!()
     }
 
     fn codegen_crate<'tcx>(&self, tcx: TyCtxt<'tcx>) -> Box<dyn Any> {
-        Box::new(rustc_codegen_ssa::base::codegen_crate(
-            MlirCodegenBackend(()),
-            tcx,
-            "generic".to_string(),
-        ))
+        todo!()
     }
 
     fn join_codegen(
         &self,
         ongoing_codegen: Box<dyn Any>,
         sess: &Session,
-        _outputs: &OutputFilenames,
-    ) -> (CodegenResults, FxIndexMap<WorkProductId, WorkProduct>) {
-        let (codegen_results, work_products) = ongoing_codegen
-            .downcast::<rustc_codegen_ssa::back::write::OngoingCodegen<MlirCodegenBackend>>()
-            .expect("Expected MlirCodegenBackend's OngoingCodegen, found Box<Any>")
-            .join(sess);
-
-        (codegen_results, work_products)
-    }
-
-    fn link(
-        &self,
-        sess: &Session,
-        codegen_results: CodegenResults,
-        metadata: EncodedMetadata,
         outputs: &OutputFilenames,
-    ) {
-        use rustc_codegen_ssa::back::archive::ArArchiveBuilderBuilder;
-        use rustc_codegen_ssa::back::link::link_binary;
-
-        // Run the linker on any artifacts that resulted from codegen.
-        link_binary(sess, &ArArchiveBuilderBuilder, codegen_results, metadata, outputs);
+    ) -> (CodegenResults, FxIndexMap<WorkProductId, WorkProduct>) {
+        todo!()
     }
 }
 
