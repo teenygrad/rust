@@ -66,6 +66,8 @@ mod intrinsic;
 mod llvm;
 mod llvm_util;
 mod macros;
+#[cfg(feature = "mlir")]
+pub mod mlir;
 mod mono_item;
 mod type_;
 mod type_of;

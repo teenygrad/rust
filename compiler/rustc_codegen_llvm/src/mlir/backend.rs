@@ -21,8 +21,8 @@ use rustc_session::Session;
 use rustc_session::config::{OptLevel, OutputFilenames, PrintKind, PrintRequest};
 use rustc_span::Symbol;
 
-use crate::context::CodegenCx;
-use crate::module::ModuleMlir;
+use crate::mlir::context::MlirCodegenCx;
+use crate::mlir::ModuleMlir;
 
 #[derive(Clone)]
 pub struct MlirCodegenBackend(());

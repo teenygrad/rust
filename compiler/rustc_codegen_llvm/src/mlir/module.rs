@@ -5,7 +5,7 @@ use rustc_errors::DiagCtxtHandle;
 use rustc_middle::ty::TyCtxt;
 use rustc_session::config::Frontend;
 
-use crate::backend::MlirCodegenBackend;
+use crate::mlir::backend::MlirCodegenBackend;
 use crate::mlir::ffi::{
     MLIRContext, MLIRRustContextCreate, MLIRRustInitTriton, MLIRRustModuleBuilderCreate,
     MLIRRustModuleCreate, MLIRRustResult, ModuleOp,
