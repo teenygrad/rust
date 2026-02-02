@@ -1,40 +1,57 @@
+//! MLIR codegen backend implementation.
+//!
+//! This module provides the main backend implementation that integrates
+//! with rustc's compilation pipeline.
+
 use std::any::Any;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use rustc_ast::expand::allocator::AllocatorKind;
 use rustc_codegen_ssa::back::lto::{SerializedModule, ThinModule};
 use rustc_codegen_ssa::back::write::{
     CodegenContext, FatLtoInput, ModuleConfig, TargetMachineFactoryConfig, TargetMachineFactoryFn,
 };
+use rustc_codegen_ssa::base::codegen_crate;
 use rustc_codegen_ssa::traits::*;
 use rustc_codegen_ssa::{CodegenResults, CompiledModule, ModuleCodegen, TargetConfig};
 use rustc_data_structures::fx::FxIndexMap;
 use rustc_errors::DiagCtxtHandle;
-use rustc_metadata::EncodedMetadata;
 use rustc_middle::dep_graph;
 use rustc_middle::dep_graph::{WorkProduct, WorkProductId};
+use rustc_middle::mir::mono::MonoItem;
 use rustc_middle::ty::TyCtxt;
-use rustc_middle::util::Providers;
 use rustc_session::Session;
-use rustc_session::config::{OptLevel, OutputFilenames, PrintKind, PrintRequest};
+use rustc_session::config::{OutputFilenames, PrintKind, PrintRequest};
 use rustc_span::Symbol;
+use tracing::info;
 
-use crate::mlir::context::MlirCodegenCx;
+use crate::mlir::mir_visitor::{MirSummary, MirVisitor};
 use crate::mlir::ModuleMlir;
 
+/// The MLIR codegen backend.
 #[derive(Clone)]
 pub struct MlirCodegenBackend(());
+
+impl MlirCodegenBackend {
+    #[allow(clippy::new_ret_no_self)]
+    pub fn new() -> Box<dyn CodegenBackend> {
+        Box::new(MlirCodegenBackend(()))
+    }
+}
 
 impl ExtraBackendMethods for MlirCodegenBackend {
     fn codegen_allocator<'tcx>(
         &self,
         tcx: TyCtxt<'tcx>,
         module_name: &str,
-        methods: &[rustc_ast::expand::allocator::AllocatorMethod],
+        _methods: &[rustc_ast::expand::allocator::AllocatorMethod],
     ) -> Self::Module {
-        todo!()
+        info!("=== MLIR codegen_allocator ===");
+        info!("Module name: {}", module_name);
+
+        // Create a placeholder module for the allocator
+        ModuleMlir::new(tcx, module_name)
     }
 
     fn compile_codegen_unit(
@@ -42,17 +59,104 @@ impl ExtraBackendMethods for MlirCodegenBackend {
         tcx: TyCtxt<'_>,
         cgu_name: Symbol,
     ) -> (ModuleCodegen<Self::Module>, u64) {
-        todo!()
+        let start_time = Instant::now();
+
+        let dep_node = tcx.codegen_unit(cgu_name).codegen_dep_node(tcx);
+        let (module, _) = tcx.dep_graph.with_task(
+            dep_node,
+            tcx,
+            cgu_name,
+            |tcx, cgu_name| compile_codegen_unit_impl(tcx, cgu_name),
+            Some(dep_graph::hash_result),
+        );
+
+        let time_to_codegen = start_time.elapsed();
+        let cost = time_to_codegen.as_nanos() as u64;
+
+        (module, cost)
     }
 
     fn target_machine_factory(
         &self,
-        sess: &Session,
+        _sess: &Session,
         opt_level: rustc_session::config::OptLevel,
         target_features: &[String],
     ) -> TargetMachineFactoryFn<Self> {
-        todo!()
+        info!("=== MLIR target_machine_factory ===");
+        info!("Opt level: {:?}", opt_level);
+        info!("Target features: {:?}", target_features);
+
+        // Return a factory that creates a unit target machine (placeholder)
+        Arc::new(move |_config: TargetMachineFactoryConfig| Ok(()))
     }
+}
+
+/// Implementation of compile_codegen_unit that logs all MIR.
+fn compile_codegen_unit_impl(tcx: TyCtxt<'_>, cgu_name: Symbol) -> ModuleCodegen<ModuleMlir> {
+    let cgu = tcx.codegen_unit(cgu_name);
+
+    info!("========================================");
+    info!("=== MLIR compile_codegen_unit ===");
+    info!("CGU name: {}", cgu_name);
+    info!("CGU size estimate: {}", cgu.size_estimate());
+    info!("========================================");
+
+    // Create the MLIR module
+    let mlir_module = ModuleMlir::new(tcx, cgu_name.as_str());
+
+    // Get all mono items in deterministic order
+    let mono_items = cgu.items_in_deterministic_order(tcx);
+
+    info!("--- Mono Items ({}) ---", mono_items.len());
+
+    // Create a MIR visitor for detailed logging
+    let mut visitor = MirVisitor::new(tcx);
+
+    for (idx, (mono_item, data)) in mono_items.iter().enumerate() {
+        info!("");
+        info!("=== Mono Item [{}/{}] ===", idx + 1, mono_items.len());
+        info!("Linkage: {:?}", data.linkage);
+        info!("Visibility: {:?}", data.visibility);
+
+        match mono_item {
+            MonoItem::Fn(instance) => {
+                info!("Type: Function");
+                info!("Instance: {:?}", instance);
+                info!("DefId: {:?}", instance.def_id());
+                info!("Symbol: {}", tcx.symbol_name(*instance).name);
+
+                // Log MIR summary first
+                let summary = MirSummary::from_instance(tcx, *instance);
+                summary.log();
+
+                // Now visit the full MIR structure
+                visitor.visit_instance(*instance);
+            }
+            MonoItem::Static(def_id) => {
+                info!("Type: Static");
+                info!("DefId: {:?}", def_id);
+                info!(
+                    "Symbol: {}",
+                    tcx.symbol_name(rustc_middle::ty::Instance::mono(tcx, *def_id)).name
+                );
+
+                // Log static type
+                let ty = tcx.type_of(*def_id).instantiate_identity();
+                info!("Static type: {:?}", ty);
+            }
+            MonoItem::GlobalAsm(item_id) => {
+                info!("Type: GlobalAsm");
+                info!("ItemId: {:?}", item_id);
+            }
+        }
+    }
+
+    info!("");
+    info!("========================================");
+    info!("=== End of CGU: {} ===", cgu_name);
+    info!("========================================");
+
+    ModuleCodegen::new_regular(cgu_name.to_string(), mlir_module)
 }
 
 impl WriteBackendMethods for MlirCodegenBackend {
@@ -64,11 +168,11 @@ impl WriteBackendMethods for MlirCodegenBackend {
     type ThinBuffer = ThinBuffer;
 
     fn print_pass_timings(&self) {
-        // TODO: Implement pass timings
+        info!("MLIR: print_pass_timings (not implemented)");
     }
 
     fn print_statistics(&self) {
-        // TODO: Implement statistics
+        info!("MLIR: print_statistics (not implemented)");
     }
 
     #[allow(unreachable_code)]
@@ -78,7 +182,9 @@ impl WriteBackendMethods for MlirCodegenBackend {
         _each_linked_rlib_for_lto: &[PathBuf],
         mut modules: Vec<FatLtoInput<Self>>,
     ) -> ModuleCodegen<Self::Module> {
-        // TODO: Implement fat LTO
+        info!("MLIR: run_and_optimize_fat_lto");
+        info!("  Modules count: {}", modules.len());
+
         // For now, just return the first module
         if let Some(first) = modules.pop() {
             match first {
@@ -99,26 +205,25 @@ impl WriteBackendMethods for MlirCodegenBackend {
         _modules: Vec<(String, Self::ThinBuffer)>,
         cached_modules: Vec<(SerializedModule<Self::ModuleBuffer>, WorkProduct)>,
     ) -> (Vec<ThinModule<Self>>, Vec<WorkProduct>) {
-        // TODO: Implement thin LTO
-        // For now, return empty vectors
+        info!("MLIR: run_thin_lto (not implemented)");
         (Vec::new(), cached_modules.into_iter().map(|(_, wp)| wp).collect())
     }
 
     fn optimize(
         _cgcx: &CodegenContext<Self>,
         _dcx: DiagCtxtHandle<'_>,
-        _module: &mut ModuleCodegen<Self::Module>,
+        module: &mut ModuleCodegen<Self::Module>,
         _config: &ModuleConfig,
     ) {
-        // TODO: Implement optimization
+        info!("MLIR: optimize module '{}'", module.name);
+        // TODO: Implement MLIR optimization passes
     }
 
     fn optimize_thin(
         _cgcx: &CodegenContext<Self>,
         _thin: ThinModule<Self>,
     ) -> ModuleCodegen<Self::Module> {
-        // TODO: Implement thin optimization
-        // For now, create a dummy module
+        info!("MLIR: optimize_thin (not implemented)");
         panic!("Thin LTO optimization not yet implemented")
     }
 
@@ -128,10 +233,14 @@ impl WriteBackendMethods for MlirCodegenBackend {
         module: ModuleCodegen<Self::Module>,
         _config: &ModuleConfig,
     ) -> CompiledModule {
-        let frontend = cgcx.opts.frontend.expect("frontend not set");
-        todo!("codegen - mlir - {:?}", frontend);
+        info!("=== MLIR codegen ===");
+        info!("Module name: {}", module.name);
 
-        // TODO: Implement actual codegen
+        let frontend = cgcx.opts.frontend.expect("frontend not set");
+        info!("Frontend: {:?}", frontend);
+
+        // TODO: Implement actual MLIR to native code generation
+        // For now, return an empty compiled module
         CompiledModule {
             name: module.name,
             kind: module.kind,
@@ -145,43 +254,78 @@ impl WriteBackendMethods for MlirCodegenBackend {
     }
 
     fn prepare_thin(module: ModuleCodegen<Self::Module>) -> (String, Self::ThinBuffer) {
-        // TODO: Implement thin preparation
+        info!("MLIR: prepare_thin for '{}'", module.name);
         (module.name, ThinBuffer::new())
     }
 
     fn serialize_module(module: ModuleCodegen<Self::Module>) -> (String, Self::ModuleBuffer) {
-        // TODO: Implement module serialization
+        info!("MLIR: serialize_module '{}'", module.name);
         (module.name, ModuleBuffer::new())
-    }
-}
-
-impl MlirCodegenBackend {
-    #[allow(clippy::new_ret_no_self)]
-    pub fn new() -> Box<dyn CodegenBackend> {
-        Box::new(MlirCodegenBackend(()))
     }
 }
 
 impl CodegenBackend for MlirCodegenBackend {
     fn locale_resource(&self) -> &'static str {
-        todo!()
+        // Use the same locale resource as LLVM backend
+        crate::DEFAULT_LOCALE_RESOURCE
     }
 
     fn name(&self) -> &'static str {
-        todo!()
+        "mlir"
+    }
+
+    fn target_config(&self, sess: &Session) -> TargetConfig {
+        // Delegate to LLVM's target config for now
+        // In the future, this should be MLIR-specific
+        crate::llvm_util::target_config(sess)
     }
 
     fn codegen_crate<'tcx>(&self, tcx: TyCtxt<'tcx>) -> Box<dyn Any> {
-        todo!()
+        info!("========================================");
+        info!("=== MLIR codegen_crate ===");
+        info!("Crate name: {:?}", tcx.crate_name(rustc_hir::def_id::LOCAL_CRATE));
+        info!("========================================");
+
+        // Use the shared codegen infrastructure from rustc_codegen_ssa
+        let target_cpu = crate::llvm_util::target_cpu(tcx.sess).to_string();
+        Box::new(codegen_crate(self.clone(), tcx, target_cpu))
     }
 
     fn join_codegen(
         &self,
         ongoing_codegen: Box<dyn Any>,
         sess: &Session,
-        outputs: &OutputFilenames,
+        _outputs: &OutputFilenames,
     ) -> (CodegenResults, FxIndexMap<WorkProductId, WorkProduct>) {
-        todo!()
+        info!("=== MLIR join_codegen ===");
+
+        let (codegen_results, work_products) = ongoing_codegen
+            .downcast::<rustc_codegen_ssa::back::write::OngoingCodegen<MlirCodegenBackend>>()
+            .expect("Expected OngoingCodegen<MlirCodegenBackend>")
+            .join(sess);
+
+        info!("Codegen completed");
+        info!("  Work products: {}", work_products.len());
+
+        (codegen_results, work_products)
+    }
+
+    // Uses default link implementation from the trait
+
+    fn print(&self, req: &PrintRequest, out: &mut String, _sess: &Session) {
+        match req.kind {
+            PrintKind::TargetCPUs => {
+                out.push_str("MLIR backend target CPUs:\n");
+                out.push_str("  (uses LLVM target CPUs)\n");
+            }
+            PrintKind::TargetFeatures => {
+                out.push_str("MLIR backend target features:\n");
+                out.push_str("  (uses LLVM target features)\n");
+            }
+            _ => {
+                // Delegate other print requests to LLVM
+            }
+        }
     }
 }
 
