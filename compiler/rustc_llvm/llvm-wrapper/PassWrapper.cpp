@@ -6,9 +6,9 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Analysis/Lint.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
-#if LLVM_VERSION_GE(22, 0)
-#include "llvm/Analysis/RuntimeLibcallInfo.h"
-#endif
+// #if LLVM_VERSION_GE(22, 0)
+// #include "llvm/Analysis/RuntimeLibcallInfo.h"
+// #endif
 #include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/Bitcode/BitcodeWriterPass.h"
 #include "llvm/CodeGen/CommandFlags.h"
@@ -311,7 +311,7 @@ extern "C" LLVMTargetMachineRef LLVMRustCreateTargetMachine(
   std::string Error;
   auto Trip = Triple(Triple::normalize(TripleStr));
   const llvm::Target *TheTarget =
-#if LLVM_VERSION_GE(21, 0)
+#if LLVM_VERSION_GE(23, 0) // AXM: Fixme once llvm upgraded to 22
       TargetRegistry::lookupTarget(Trip, Error);
 #else
       TargetRegistry::lookupTarget(Trip.getTriple(), Error);
@@ -370,7 +370,7 @@ extern "C" LLVMTargetMachineRef LLVMRustCreateTargetMachine(
 
   Options.EmitStackSizeSection = EmitStackSizeSection;
 
-#if LLVM_VERSION_GE(21, 0)
+#if LLVM_VERSION_GE(22, 0)
   TargetMachine *TM = TheTarget->createTargetMachine(Trip, CPU, Feature,
                                                      Options, RM, CM, OptLevel);
 #else
@@ -391,7 +391,7 @@ extern "C" void LLVMRustAddLibraryInfo(LLVMTargetMachineRef T,
   if (DisableSimplifyLibCalls)
     TLII.disableAllFunctions();
   unwrap(PMR)->add(new TargetLibraryInfoWrapperPass(TLII));
-#if LLVM_VERSION_GE(22, 0)
+#if LLVM_VERSION_GE(23, 0) // AXM: Fixme once llvm upgraded to 22
   unwrap(PMR)->add(new RuntimeLibraryInfoWrapper(
       TargetTriple, Options->ExceptionModel, Options->FloatABIType,
       Options->EABIVersion, Options->MCOptions.ABIName, Options->VecLib));
@@ -1252,7 +1252,7 @@ LLVMRustCreateThinLTOData(LLVMRustThinLTOModule *modules, size_t num_modules,
   // being lifted from `lib/LTO/LTO.cpp` as well
   DenseMap<GlobalValue::GUID, const GlobalValueSummary *> PrevailingCopy;
   for (auto &I : Ret->Index) {
-#if LLVM_VERSION_GE(22, 0)
+#if LLVM_VERSION_GE(23, 0)
     const auto &SummaryList = I.second.getSummaryList();
 #else
     const auto &SummaryList = I.second.SummaryList;
@@ -1289,7 +1289,7 @@ LLVMRustCreateThinLTOData(LLVMRustThinLTOModule *modules, size_t num_modules,
   // linkage will stay as external, and internal will stay as internal.
   std::set<GlobalValue::GUID> ExportedGUIDs;
   for (auto &List : Ret->Index) {
-#if LLVM_VERSION_GE(22, 0)
+#if LLVM_VERSION_GE(23, 0)
     const auto &SummaryList = List.second.getSummaryList();
 #else
     const auto &SummaryList = List.second.SummaryList;

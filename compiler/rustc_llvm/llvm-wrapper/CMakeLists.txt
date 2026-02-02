@@ -166,7 +166,7 @@ set(LLVM_WRAPPER_INCLUDE_DIRS
 
 # Source files (matching build.rs)
 set(LLVM_WRAPPER_SOURCES
-    # PassWrapper.cpp
+    PassWrapper.cpp
     RustWrapper.cpp
     MLIRWrapper.cpp
     CoverageMappingWrapper.cpp
