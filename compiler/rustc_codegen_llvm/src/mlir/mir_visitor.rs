@@ -4,11 +4,11 @@
 //! for debugging and development of the MLIR codegen backend.
 
 use rustc_middle::mir::{
-    self, BasicBlock, BasicBlockData, Body, Local, LocalDecl, Operand, Place, ProjectionElem,
-    Rvalue, Statement, StatementKind, Terminator, TerminatorKind,
+    BasicBlock, BasicBlockData, Body, Local, LocalDecl, Operand, Place, ProjectionElem, Rvalue,
+    Statement, StatementKind, Terminator, TerminatorKind,
 };
 use rustc_middle::ty::{Instance, Ty, TyCtxt};
-use tracing::{debug, info};
+use tracing::info;
 
 /// Visitor for MIR structures that logs all encountered elements.
 pub struct MirVisitor<'tcx> {
@@ -41,16 +41,21 @@ impl<'tcx> MirVisitor<'tcx> {
 
     /// Visit an entire function instance.
     pub fn visit_instance(&mut self, instance: Instance<'tcx>) {
+        eprintln!("[DEBUG] MirVisitor::visit_instance called for instance: {:?}", instance);
         self.log(&format!("=== Instance: {:?} ===", instance));
         self.log(&format!("DefId: {:?}", instance.def_id()));
         self.log(&format!("Args: {:?}", instance.args));
 
+        eprintln!("[DEBUG] Getting MIR for instance");
         let mir = self.tcx.instance_mir(instance.def);
+        eprintln!("[DEBUG] Got MIR, calling visit_body");
         self.visit_body(mir, instance);
+        eprintln!("[DEBUG] Completed visit_body");
     }
 
     /// Visit a MIR body (function body).
     pub fn visit_body(&mut self, body: &Body<'tcx>, instance: Instance<'tcx>) {
+        eprintln!("[DEBUG] MirVisitor::visit_body called");
         self.log(&format!("--- MIR Body for {:?} ---", instance.def_id()));
 
         self.with_indent(|this| {
@@ -91,10 +96,7 @@ impl<'tcx> MirVisitor<'tcx> {
 
     /// Visit a local declaration.
     fn visit_local_decl(&mut self, local: Local, decl: &LocalDecl<'tcx>) {
-        self.log(&format!(
-            "{:?}: {:?} (mutability: {:?})",
-            local, decl.ty, decl.mutability
-        ));
+        self.log(&format!("{:?}: {:?} (mutability: {:?})", local, decl.ty, decl.mutability));
         self.with_indent(|this| {
             this.log(&format!("Local info: {:?}", decl.local_info));
         });
@@ -102,10 +104,7 @@ impl<'tcx> MirVisitor<'tcx> {
 
     /// Visit a basic block.
     fn visit_basic_block(&mut self, bb: BasicBlock, data: &BasicBlockData<'tcx>) {
-        self.log(&format!(
-            "BasicBlock {:?} (is_cleanup: {})",
-            bb, data.is_cleanup
-        ));
+        self.log(&format!("BasicBlock {:?} (is_cleanup: {})", bb, data.is_cleanup));
 
         self.with_indent(|this| {
             // Log all statements
@@ -247,96 +246,92 @@ impl<'tcx> MirVisitor<'tcx> {
     fn visit_rvalue(&mut self, rvalue: &Rvalue<'tcx>) {
         self.log(&format!("RHS: {:?}", rvalue));
 
-        self.with_indent(|this| {
-            match rvalue {
-                Rvalue::Use(operand) => {
-                    this.log("Use:");
-                    this.visit_operand(operand);
-                }
-                Rvalue::Repeat(operand, count) => {
-                    this.log(&format!("Repeat (count: {:?}):", count));
-                    this.visit_operand(operand);
-                }
-                Rvalue::Ref(region, borrow_kind, place) => {
-                    this.log(&format!("Ref: region={:?}, kind={:?}", region, borrow_kind));
-                    this.visit_place("Place", place);
-                }
-                Rvalue::RawPtr(raw_ptr_kind, place) => {
-                    this.log(&format!("RawPtr: {:?}", raw_ptr_kind));
-                    this.visit_place("Place", place);
-                }
-                Rvalue::Cast(cast_kind, operand, ty) => {
-                    this.log(&format!("Cast: {:?} -> {:?}", cast_kind, ty));
-                    this.visit_operand(operand);
-                }
-                Rvalue::BinaryOp(bin_op, operands) => {
-                    let (lhs, rhs) = operands.as_ref();
-                    this.log(&format!("BinaryOp: {:?}", bin_op));
-                    this.with_indent(|this| {
-                        this.log("LHS:");
-                        this.visit_operand(lhs);
-                        this.log("RHS:");
-                        this.visit_operand(rhs);
-                    });
-                }
-                Rvalue::NullaryOp(null_op) => {
-                    this.log(&format!("NullaryOp: {:?}", null_op));
-                }
-                Rvalue::UnaryOp(un_op, operand) => {
-                    this.log(&format!("UnaryOp: {:?}", un_op));
-                    this.visit_operand(operand);
-                }
-                Rvalue::Discriminant(place) => {
-                    this.log("Discriminant:");
-                    this.visit_place("Place", place);
-                }
-                Rvalue::Aggregate(aggregate_kind, operands) => {
-                    this.log(&format!("Aggregate: {:?}", aggregate_kind));
-                    this.with_indent(|this| {
-                        for (idx, op) in operands.iter().enumerate() {
-                            this.log(&format!("Field {}:", idx));
-                            this.visit_operand(op);
-                        }
-                    });
-                }
-                Rvalue::ShallowInitBox(operand, ty) => {
-                    this.log(&format!("ShallowInitBox: type={:?}", ty));
-                    this.visit_operand(operand);
-                }
-                Rvalue::CopyForDeref(place) => {
-                    this.log("CopyForDeref:");
-                    this.visit_place("Place", place);
-                }
-                Rvalue::ThreadLocalRef(def_id) => {
-                    this.log(&format!("ThreadLocalRef: {:?}", def_id));
-                }
-                Rvalue::WrapUnsafeBinder(operand, ty) => {
-                    this.log(&format!("WrapUnsafeBinder: type={:?}", ty));
-                    this.visit_operand(operand);
-                }
+        self.with_indent(|this| match rvalue {
+            Rvalue::Use(operand) => {
+                this.log("Use:");
+                this.visit_operand(operand);
+            }
+            Rvalue::Repeat(operand, count) => {
+                this.log(&format!("Repeat (count: {:?}):", count));
+                this.visit_operand(operand);
+            }
+            Rvalue::Ref(region, borrow_kind, place) => {
+                this.log(&format!("Ref: region={:?}, kind={:?}", region, borrow_kind));
+                this.visit_place("Place", place);
+            }
+            Rvalue::RawPtr(raw_ptr_kind, place) => {
+                this.log(&format!("RawPtr: {:?}", raw_ptr_kind));
+                this.visit_place("Place", place);
+            }
+            Rvalue::Cast(cast_kind, operand, ty) => {
+                this.log(&format!("Cast: {:?} -> {:?}", cast_kind, ty));
+                this.visit_operand(operand);
+            }
+            Rvalue::BinaryOp(bin_op, operands) => {
+                let (lhs, rhs) = operands.as_ref();
+                this.log(&format!("BinaryOp: {:?}", bin_op));
+                this.with_indent(|this| {
+                    this.log("LHS:");
+                    this.visit_operand(lhs);
+                    this.log("RHS:");
+                    this.visit_operand(rhs);
+                });
+            }
+            Rvalue::NullaryOp(null_op) => {
+                this.log(&format!("NullaryOp: {:?}", null_op));
+            }
+            Rvalue::UnaryOp(un_op, operand) => {
+                this.log(&format!("UnaryOp: {:?}", un_op));
+                this.visit_operand(operand);
+            }
+            Rvalue::Discriminant(place) => {
+                this.log("Discriminant:");
+                this.visit_place("Place", place);
+            }
+            Rvalue::Aggregate(aggregate_kind, operands) => {
+                this.log(&format!("Aggregate: {:?}", aggregate_kind));
+                this.with_indent(|this| {
+                    for (idx, op) in operands.iter().enumerate() {
+                        this.log(&format!("Field {}:", idx));
+                        this.visit_operand(op);
+                    }
+                });
+            }
+            Rvalue::ShallowInitBox(operand, ty) => {
+                this.log(&format!("ShallowInitBox: type={:?}", ty));
+                this.visit_operand(operand);
+            }
+            Rvalue::CopyForDeref(place) => {
+                this.log("CopyForDeref:");
+                this.visit_place("Place", place);
+            }
+            Rvalue::ThreadLocalRef(def_id) => {
+                this.log(&format!("ThreadLocalRef: {:?}", def_id));
+            }
+            Rvalue::WrapUnsafeBinder(operand, ty) => {
+                this.log(&format!("WrapUnsafeBinder: type={:?}", ty));
+                this.visit_operand(operand);
             }
         });
     }
 
     /// Visit an operand.
     fn visit_operand(&mut self, operand: &Operand<'tcx>) {
-        self.with_indent(|this| {
-            match operand {
-                Operand::Copy(place) => {
-                    this.log("Copy:");
-                    this.visit_place("Place", place);
-                }
-                Operand::Move(place) => {
-                    this.log("Move:");
-                    this.visit_place("Place", place);
-                }
-                Operand::Constant(constant) => {
-                    this.log(&format!("Constant: {:?}", constant));
-                    this.with_indent(|this| {
-                        this.log(&format!("Type: {:?}", constant.ty()));
-                        this.log(&format!("Const: {:?}", constant.const_));
-                    });
-                }
+        self.with_indent(|this| match operand {
+            Operand::Copy(place) => {
+                this.log("Copy:");
+                this.visit_place("Place", place);
+            }
+            Operand::Move(place) => {
+                this.log("Move:");
+                this.visit_place("Place", place);
+            }
+            Operand::Constant(constant) => {
+                this.log(&format!("Constant: {:?}", constant));
+                this.with_indent(|this| {
+                    this.log(&format!("Type: {:?}", constant.ty()));
+                    this.log(&format!("Const: {:?}", constant.const_));
+                });
             }
         });
     }
@@ -346,125 +341,117 @@ impl<'tcx> MirVisitor<'tcx> {
         self.log(&format!("Kind: {:?}", terminator.kind));
         self.log(&format!("Source info: {:?}", terminator.source_info));
 
-        self.with_indent(|this| {
-            match &terminator.kind {
-                TerminatorKind::Goto { target } => {
-                    this.log(&format!("Goto: {:?}", target));
-                }
-                TerminatorKind::SwitchInt { discr, targets } => {
-                    this.log("SwitchInt:");
-                    this.visit_operand(discr);
-                    this.log(&format!("Targets: {:?}", targets));
-                }
-                TerminatorKind::UnwindResume => {
-                    this.log("UnwindResume");
-                }
-                TerminatorKind::UnwindTerminate(reason) => {
-                    this.log(&format!("UnwindTerminate: {:?}", reason));
-                }
-                TerminatorKind::Return => {
-                    this.log("Return");
-                }
-                TerminatorKind::Unreachable => {
-                    this.log("Unreachable");
-                }
-                TerminatorKind::Drop { place, target, unwind, replace, drop, async_fut } => {
-                    this.log(&format!(
-                        "Drop: target={:?}, unwind={:?}, replace={}, drop={:?}, async_fut={:?}",
-                        target, unwind, replace, drop, async_fut
-                    ));
-                    this.visit_place("Place", place);
-                }
-                TerminatorKind::Call {
-                    func,
-                    args,
-                    destination,
-                    target,
-                    unwind,
-                    call_source,
-                    fn_span,
-                } => {
-                    this.log(&format!(
-                        "Call: target={:?}, unwind={:?}, call_source={:?}, span={:?}",
-                        target, unwind, call_source, fn_span
-                    ));
-                    this.log("Function:");
-                    this.visit_operand(func);
-                    this.log(&format!("Args ({}):", args.len()));
-                    this.with_indent(|this| {
-                        for (idx, arg) in args.iter().enumerate() {
-                            this.log(&format!("Arg {}:", idx));
-                            this.visit_operand(&arg.node);
-                        }
-                    });
-                    this.visit_place("Destination", destination);
-                }
-                TerminatorKind::TailCall { func, args, fn_span } => {
-                    this.log(&format!("TailCall: span={:?}", fn_span));
-                    this.log("Function:");
-                    this.visit_operand(func);
-                    this.log(&format!("Args ({}):", args.len()));
-                    this.with_indent(|this| {
-                        for (idx, arg) in args.iter().enumerate() {
-                            this.log(&format!("Arg {}:", idx));
-                            this.visit_operand(&arg.node);
-                        }
-                    });
-                }
-                TerminatorKind::Assert { cond, expected, msg, target, unwind } => {
-                    this.log(&format!(
-                        "Assert: expected={}, target={:?}, unwind={:?}",
-                        expected, target, unwind
-                    ));
-                    this.log(&format!("Message: {:?}", msg));
-                    this.log("Condition:");
-                    this.visit_operand(cond);
-                }
-                TerminatorKind::Yield { value, resume, resume_arg, drop } => {
-                    this.log(&format!(
-                        "Yield: resume={:?}, drop={:?}",
-                        resume, drop
-                    ));
-                    this.log("Value:");
-                    this.visit_operand(value);
-                    this.visit_place("ResumeArg", resume_arg);
-                }
-                TerminatorKind::CoroutineDrop => {
-                    this.log("CoroutineDrop");
-                }
-                TerminatorKind::FalseEdge { real_target, imaginary_target } => {
-                    this.log(&format!(
-                        "FalseEdge: real={:?}, imaginary={:?}",
-                        real_target, imaginary_target
-                    ));
-                }
-                TerminatorKind::FalseUnwind { real_target, unwind } => {
-                    this.log(&format!(
-                        "FalseUnwind: real={:?}, unwind={:?}",
-                        real_target, unwind
-                    ));
-                }
-                TerminatorKind::InlineAsm {
-                    asm_macro,
-                    template,
-                    operands,
-                    options,
-                    line_spans,
-                    targets,
-                    unwind,
-                } => {
-                    this.log(&format!(
-                        "InlineAsm: macro={:?}, options={:?}, targets={:?}, unwind={:?}",
-                        asm_macro, options, targets, unwind
-                    ));
-                    this.log(&format!("Template: {:?}", template));
-                    this.log(&format!("Operands ({}):", operands.len()));
-                    this.with_indent(|this| {
-                        for (idx, op) in operands.iter().enumerate() {
-                            this.log(&format!("[{}] {:?}", idx, op));
-                        }
-                    });
-                }
+        self.with_indent(|this| match &terminator.kind {
+            TerminatorKind::Goto { target } => {
+                this.log(&format!("Goto: {:?}", target));
+            }
+            TerminatorKind::SwitchInt { discr, targets } => {
+                this.log("SwitchInt:");
+                this.visit_operand(discr);
+                this.log(&format!("Targets: {:?}", targets));
+            }
+            TerminatorKind::UnwindResume => {
+                this.log("UnwindResume");
+            }
+            TerminatorKind::UnwindTerminate(reason) => {
+                this.log(&format!("UnwindTerminate: {:?}", reason));
+            }
+            TerminatorKind::Return => {
+                this.log("Return");
+            }
+            TerminatorKind::Unreachable => {
+                this.log("Unreachable");
+            }
+            TerminatorKind::Drop { place, target, unwind, replace, drop, async_fut } => {
+                this.log(&format!(
+                    "Drop: target={:?}, unwind={:?}, replace={}, drop={:?}, async_fut={:?}",
+                    target, unwind, replace, drop, async_fut
+                ));
+                this.visit_place("Place", place);
+            }
+            TerminatorKind::Call {
+                func,
+                args,
+                destination,
+                target,
+                unwind,
+                call_source,
+                fn_span,
+            } => {
+                this.log(&format!(
+                    "Call: target={:?}, unwind={:?}, call_source={:?}, span={:?}",
+                    target, unwind, call_source, fn_span
+                ));
+                this.log("Function:");
+                this.visit_operand(func);
+                this.log(&format!("Args ({}):", args.len()));
+                this.with_indent(|this| {
+                    for (idx, arg) in args.iter().enumerate() {
+                        this.log(&format!("Arg {}:", idx));
+                        this.visit_operand(&arg.node);
+                    }
+                });
+                this.visit_place("Destination", destination);
+            }
+            TerminatorKind::TailCall { func, args, fn_span } => {
+                this.log(&format!("TailCall: span={:?}", fn_span));
+                this.log("Function:");
+                this.visit_operand(func);
+                this.log(&format!("Args ({}):", args.len()));
+                this.with_indent(|this| {
+                    for (idx, arg) in args.iter().enumerate() {
+                        this.log(&format!("Arg {}:", idx));
+                        this.visit_operand(&arg.node);
+                    }
+                });
+            }
+            TerminatorKind::Assert { cond, expected, msg, target, unwind } => {
+                this.log(&format!(
+                    "Assert: expected={}, target={:?}, unwind={:?}",
+                    expected, target, unwind
+                ));
+                this.log(&format!("Message: {:?}", msg));
+                this.log("Condition:");
+                this.visit_operand(cond);
+            }
+            TerminatorKind::Yield { value, resume, resume_arg, drop } => {
+                this.log(&format!("Yield: resume={:?}, drop={:?}", resume, drop));
+                this.log("Value:");
+                this.visit_operand(value);
+                this.visit_place("ResumeArg", resume_arg);
+            }
+            TerminatorKind::CoroutineDrop => {
+                this.log("CoroutineDrop");
+            }
+            TerminatorKind::FalseEdge { real_target, imaginary_target } => {
+                this.log(&format!(
+                    "FalseEdge: real={:?}, imaginary={:?}",
+                    real_target, imaginary_target
+                ));
+            }
+            TerminatorKind::FalseUnwind { real_target, unwind } => {
+                this.log(&format!("FalseUnwind: real={:?}, unwind={:?}", real_target, unwind));
+            }
+            TerminatorKind::InlineAsm {
+                asm_macro,
+                template,
+                operands,
+                options,
+                line_spans,
+                targets,
+                unwind,
+            } => {
+                this.log(&format!(
+                    "InlineAsm: macro={:?}, options={:?}, targets={:?}, unwind={:?}",
+                    asm_macro, options, targets, unwind
+                ));
+                this.log(&format!("Template: {:?}", template));
+                this.log(&format!("Operands ({}):", operands.len()));
+                this.with_indent(|this| {
+                    for (idx, op) in operands.iter().enumerate() {
+                        this.log(&format!("[{}] {:?}", idx, op));
+                    }
+                });
             }
         });
     }

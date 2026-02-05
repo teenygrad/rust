@@ -26,8 +26,8 @@ use rustc_session::config::{OutputFilenames, PrintKind, PrintRequest};
 use rustc_span::Symbol;
 use tracing::info;
 
-use crate::mlir::mir_visitor::{MirSummary, MirVisitor};
 use crate::mlir::ModuleMlir;
+use crate::mlir::mir_visitor::{MirSummary, MirVisitor};
 
 /// The MLIR codegen backend.
 #[derive(Clone)]
@@ -36,6 +36,7 @@ pub struct MlirCodegenBackend(());
 impl MlirCodegenBackend {
     #[allow(clippy::new_ret_no_self)]
     pub fn new() -> Box<dyn CodegenBackend> {
+        eprintln!("[DEBUG] MlirCodegenBackend::new() called - creating backend");
         Box::new(MlirCodegenBackend(()))
     }
 }
@@ -59,9 +60,11 @@ impl ExtraBackendMethods for MlirCodegenBackend {
         tcx: TyCtxt<'_>,
         cgu_name: Symbol,
     ) -> (ModuleCodegen<Self::Module>, u64) {
+        eprintln!("[DEBUG] MlirCodegenBackend::compile_codegen_unit called for CGU: {}", cgu_name);
         let start_time = Instant::now();
 
         let dep_node = tcx.codegen_unit(cgu_name).codegen_dep_node(tcx);
+        eprintln!("[DEBUG] Calling compile_codegen_unit_impl via dep_graph");
         let (module, _) = tcx.dep_graph.with_task(
             dep_node,
             tcx,
@@ -69,6 +72,7 @@ impl ExtraBackendMethods for MlirCodegenBackend {
             |tcx, cgu_name| compile_codegen_unit_impl(tcx, cgu_name),
             Some(dep_graph::hash_result),
         );
+        eprintln!("[DEBUG] compile_codegen_unit_impl completed");
 
         let time_to_codegen = start_time.elapsed();
         let cost = time_to_codegen.as_nanos() as u64;
@@ -93,6 +97,9 @@ impl ExtraBackendMethods for MlirCodegenBackend {
 
 /// Implementation of compile_codegen_unit that logs all MIR.
 fn compile_codegen_unit_impl(tcx: TyCtxt<'_>, cgu_name: Symbol) -> ModuleCodegen<ModuleMlir> {
+    // Debug: Verify this function is being called
+    eprintln!("[DEBUG] compile_codegen_unit_impl called for CGU: {}", cgu_name);
+
     let cgu = tcx.codegen_unit(cgu_name);
 
     info!("========================================");
@@ -108,9 +115,11 @@ fn compile_codegen_unit_impl(tcx: TyCtxt<'_>, cgu_name: Symbol) -> ModuleCodegen
     let mono_items = cgu.items_in_deterministic_order(tcx);
 
     info!("--- Mono Items ({}) ---", mono_items.len());
+    eprintln!("[DEBUG] Found {} mono items", mono_items.len());
 
     // Create a MIR visitor for detailed logging
     let mut visitor = MirVisitor::new(tcx);
+    eprintln!("[DEBUG] Created MirVisitor");
 
     for (idx, (mono_item, data)) in mono_items.iter().enumerate() {
         info!("");
@@ -124,13 +133,16 @@ fn compile_codegen_unit_impl(tcx: TyCtxt<'_>, cgu_name: Symbol) -> ModuleCodegen
                 info!("Instance: {:?}", instance);
                 info!("DefId: {:?}", instance.def_id());
                 info!("Symbol: {}", tcx.symbol_name(*instance).name);
+                eprintln!("[DEBUG] Processing function: {}", tcx.symbol_name(*instance).name);
 
                 // Log MIR summary first
                 let summary = MirSummary::from_instance(tcx, *instance);
                 summary.log();
 
                 // Now visit the full MIR structure
+                eprintln!("[DEBUG] Calling visitor.visit_instance for function");
                 visitor.visit_instance(*instance);
+                eprintln!("[DEBUG] Completed visitor.visit_instance");
             }
             MonoItem::Static(def_id) => {
                 info!("Type: Static");
@@ -139,6 +151,7 @@ fn compile_codegen_unit_impl(tcx: TyCtxt<'_>, cgu_name: Symbol) -> ModuleCodegen
                     "Symbol: {}",
                     tcx.symbol_name(rustc_middle::ty::Instance::mono(tcx, *def_id)).name
                 );
+                eprintln!("[DEBUG] Processing static item: {:?}", def_id);
 
                 // Log static type
                 let ty = tcx.type_of(*def_id).instantiate_identity();
@@ -147,6 +160,7 @@ fn compile_codegen_unit_impl(tcx: TyCtxt<'_>, cgu_name: Symbol) -> ModuleCodegen
             MonoItem::GlobalAsm(item_id) => {
                 info!("Type: GlobalAsm");
                 info!("ItemId: {:?}", item_id);
+                eprintln!("[DEBUG] Processing GlobalAsm item: {:?}", item_id);
             }
         }
     }
@@ -274,13 +288,21 @@ impl CodegenBackend for MlirCodegenBackend {
         "mlir"
     }
 
-    fn target_config(&self, sess: &Session) -> TargetConfig {
-        // Delegate to LLVM's target config for now
-        // In the future, this should be MLIR-specific
-        crate::llvm_util::target_config(sess)
+    fn target_config(&self, _sess: &Session) -> TargetConfig {
+        // To Do: Implement MLIR-specific target config for the target
+        // defined in the session
+        TargetConfig {
+            target_features: Vec::new(),
+            unstable_target_features: Vec::new(),
+            has_reliable_f16: false,
+            has_reliable_f16_math: false,
+            has_reliable_f128: false,
+            has_reliable_f128_math: false,
+        }
     }
 
     fn codegen_crate<'tcx>(&self, tcx: TyCtxt<'tcx>) -> Box<dyn Any> {
+        eprintln!("[DEBUG] MlirCodegenBackend::codegen_crate called");
         info!("========================================");
         info!("=== MLIR codegen_crate ===");
         info!("Crate name: {:?}", tcx.crate_name(rustc_hir::def_id::LOCAL_CRATE));
@@ -288,6 +310,7 @@ impl CodegenBackend for MlirCodegenBackend {
 
         // Use the shared codegen infrastructure from rustc_codegen_ssa
         let target_cpu = crate::llvm_util::target_cpu(tcx.sess).to_string();
+        eprintln!("[DEBUG] Calling codegen_crate with target_cpu: {}", target_cpu);
         Box::new(codegen_crate(self.clone(), tcx, target_cpu))
     }
 
