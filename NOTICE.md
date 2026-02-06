@@ -1,4 +1,4 @@
-This project is based on rust compiler.
+This project is based on the rust compiler.
 
 - Original code was under Apache 2.0
 - Our modifications are under GPL v3
