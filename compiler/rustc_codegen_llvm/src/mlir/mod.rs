@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Teenygrad. All rights reserved.
+
 //! MLIR codegen backend implementation
 //!
 //! This module provides an alternative codegen backend using MLIR infrastructure.

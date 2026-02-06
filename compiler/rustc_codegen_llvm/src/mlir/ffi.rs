@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Teenygrad. All rights reserved.
+
 //! Bindings to the MLIR C API and our own `extern "C"` wrapper functions
 //! around MLIR functionality (`MLIRRust*`).
 

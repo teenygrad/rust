@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Teenygrad. All rights reserved.
+
 //! MIR visitor for MLIR codegen backend.
 //!
 //! This module provides utilities to traverse and log MIR structures

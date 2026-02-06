@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Teenygrad. All rights reserved.
+
 //! Test harness for MLIR codegen backend.
 //!
 //! This module provides utilities and documentation for testing the MLIR codegen backend,
@@ -37,12 +39,7 @@ pub struct TestConfig {
 
 impl Default for TestConfig {
     fn default() -> Self {
-        Self {
-            verbose_mir: true,
-            summary_only: false,
-            log_file: None,
-            function_filter: None,
-        }
+        Self { verbose_mir: true, summary_only: false, log_file: None, function_filter: None }
     }
 }
 

@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Teenygrad. All rights reserved.
+
 use std::ffi::CStr;
 
 use rustc_codegen_ssa::back::write::CodegenContext;

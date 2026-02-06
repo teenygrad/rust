@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Teenygrad. All rights reserved.
+
 use core::borrow::Borrow;
 use core::marker::PhantomData;
 use core::mem::MaybeUninit;
