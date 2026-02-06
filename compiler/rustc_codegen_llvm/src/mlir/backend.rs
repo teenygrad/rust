@@ -136,8 +136,8 @@ fn compile_codegen_unit_impl(tcx: TyCtxt<'_>, cgu_name: Symbol) -> ModuleCodegen
                 eprintln!("[DEBUG] Processing function: {}", tcx.symbol_name(*instance).name);
 
                 // Log MIR summary first
-                let summary = MirSummary::from_instance(tcx, *instance);
-                summary.log();
+                // let summary = MirSummary::from_instance(tcx, *instance);
+                // summary.log();
 
                 // Now visit the full MIR structure
                 eprintln!("[DEBUG] Calling visitor.visit_instance for function");
