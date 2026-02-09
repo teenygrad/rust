@@ -1,4 +1,19 @@
-// Copyright (C) 2026 Teenygrad. All rights reserved.
+/*
+ * Copyright (c) 2025 Teenygrad. All rights reserved.
+ *
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
 
 //! MLIR codegen backend implementation.
 //!
@@ -29,7 +44,9 @@ use rustc_span::Symbol;
 use tracing::info;
 
 use crate::mlir::ModuleMlir;
-use crate::mlir::mir_visitor::{MirSummary, MirVisitor};
+use crate::mlir::codegen::Codegen;
+use crate::mlir::codegen::triton::TritonCodegen;
+use crate::mlir::mir_visitor::MirVisitor;
 
 /// The MLIR codegen backend.
 #[derive(Clone)]
@@ -111,7 +128,8 @@ fn compile_codegen_unit_impl(tcx: TyCtxt<'_>, cgu_name: Symbol) -> ModuleCodegen
     info!("========================================");
 
     // Create the MLIR module
-    let mlir_module = ModuleMlir::new(tcx, cgu_name.as_str());
+    let mut mlir_module = ModuleMlir::new(tcx, cgu_name.as_str());
+    let triton_codegen = TritonCodegen::default();
 
     // Get all mono items in deterministic order
     let mono_items = cgu.items_in_deterministic_order(tcx);
@@ -143,7 +161,11 @@ fn compile_codegen_unit_impl(tcx: TyCtxt<'_>, cgu_name: Symbol) -> ModuleCodegen
 
                 // Now visit the full MIR structure
                 eprintln!("[DEBUG] Calling visitor.visit_instance for function");
-                visitor.visit_instance(*instance);
+                triton_codegen
+                    .codegen(&mut mlir_module, instance)
+                    .expect("Failed to generate MLIR for instance");
+
+                // visitor.visit_instance(*instance);
                 eprintln!("[DEBUG] Completed visitor.visit_instance");
             }
             MonoItem::Static(def_id) => {

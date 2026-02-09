@@ -64,3 +64,5 @@ codegen_llvm_write_output_with_llvm_err = could not write output to {$path}: {$l
 
 codegen_llvm_write_thinlto_key = error while writing ThinLTO key data: {$err}
 codegen_llvm_write_thinlto_key_with_llvm_err = error while writing ThinLTO key data: {$err}: {$llvm_err}
+
+codegen_llvm_mlir_codegen_failed = mlir codegen failed: {$err}

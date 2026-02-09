@@ -15,23 +15,10 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use rustc_middle::ty::{Instance, TyCtxt};
-use rustc_span::Symbol;
+use rustc_macros::Diagnostic;
 
-use crate::mlir::ModuleMlir;
-use crate::mlir::codegen::Codegen;
-use crate::mlir::errors::MlirError;
-
-pub(crate) struct TritonCodegen;
-
-impl Default for TritonCodegen {
-    fn default() -> Self {
-        Self
-    }
-}
-
-impl Codegen for TritonCodegen {
-    fn codegen(&self, _module: &mut ModuleMlir, _item: &Instance<'_>) -> Result<(), MlirError> {
-        todo!()
-    }
+#[derive(Diagnostic, Debug)]
+pub enum MlirError {
+    #[diag(codegen_llvm_mlir_codegen_failed)]
+    CodegenFailed { err: String },
 }
