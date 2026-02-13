@@ -48,3 +48,12 @@
 [submodule "src/llvm-project"]
 	path = src/llvm-project
 	url = git@github.com:teenygrad/llvm-project.git
+[submodule "src/mlir-sys"]
+	path = src/mlir-sys
+	url = git@github.com:teenygrad/mlir-sys.git
+[submodule "src/melior"]
+	path = src/melior
+	url = git@github.com:teenygrad/melior.git
+[submodule "src/tblgen-rs"]
+	path = src/tblgen-rs
+	url = git@github.com:teenygrad/tblgen-rs.git

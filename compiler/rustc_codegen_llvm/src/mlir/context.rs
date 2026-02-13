@@ -26,7 +26,7 @@ use rustc_middle::ty::TyCtxt;
 use crate::context::{GenericCx, SCx};
 use crate::llvm;
 use crate::llvm::ffi::Type;
-use crate::mlir::ModuleMlir;
+use crate::mlir::MlirModule;
 use crate::mlir::ffi::{MLIRContext, ModuleOp};
 
 /// MLIR-specific simple context.
@@ -76,7 +76,7 @@ impl<'ll, 'tcx> MlirCodegenCx<'ll, 'tcx> {
     pub(crate) fn new(
         tcx: TyCtxt<'tcx>,
         codegen_unit: &'tcx CodegenUnit<'tcx>,
-        llvm_module: &'ll ModuleMlir,
+        llvm_module: &'ll MlirModule,
     ) -> Self {
         todo!()
         // let (llcx, llmod) = (&*llvm_module.llcx, llvm_module.llmod());

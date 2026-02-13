@@ -78,15 +78,18 @@ pub fn build_wrapper(
     create_dir(&out_dir);
     create_dir(&install_dir);
 
+    let llvm_build_dir = llvm.out_dir.join("build");
+    let triton_build_dir = triton.out_dir.join("build");
+
     Config::new(&source_dir)
         .generator("Ninja")
-        .env("LLVM_BUILD_DIR", &llvm.build_dir)
-        .env("LLVM_INCLUDE_DIRS", llvm.build_dir.join("include"))
-        .env("LLVM_LIBRARY_DIR", llvm.build_dir.join("lib"))
+        .env("LLVM_BUILD_DIR", llvm_build_dir.clone())
+        .env("LLVM_INCLUDE_DIRS", llvm_build_dir.join("include"))
+        .env("LLVM_LIBRARY_DIR", llvm_build_dir.join("lib"))
         .env("TRITON_SOURCE_DIR", &triton.source_dir)
-        .env("TRITON_BUILD_DIR", &triton.build_dir)
-        .define("LLD_DIR", llvm.build_dir.join("lib/cmake/lld"))
-        .define("LLVM_SYSPATH", &llvm.build_dir)
+        .env("TRITON_BUILD_DIR", triton_build_dir)
+        .define("LLD_DIR", llvm_build_dir.join("lib/cmake/lld"))
+        .define("LLVM_SYSPATH", llvm_build_dir.clone())
         .define("CMAKE_BUILD_TYPE", config.build_type)
         .define("CMAKE_INSTALL_PREFIX", &install_dir)
         .out_dir(&out_dir)

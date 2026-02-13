@@ -31,13 +31,17 @@ pub struct TritonConfig {
 #[derive(Debug)]
 pub struct Triton {
     pub source_dir: PathBuf,
-    pub build_dir: PathBuf,
+    pub out_dir: PathBuf,
     pub install_dir: PathBuf,
 }
 
 impl Triton {
-    pub fn new(source_dir: PathBuf, build_dir: PathBuf, install_dir: PathBuf) -> Self {
-        Self { source_dir, build_dir, install_dir }
+    pub fn new(project_dir: &Path, target_dir: &Path) -> Self {
+        let source_dir = project_dir.join("../../src/triton");
+        let out_dir = target_dir.join("build/triton-build");
+        let install_dir = target_dir.join("install");
+
+        Self { source_dir, out_dir, install_dir }
     }
 
     pub fn source_dir(&self) -> PathBuf {
@@ -45,20 +49,20 @@ impl Triton {
     }
 
     pub fn build_dir(&self) -> PathBuf {
-        self.build_dir.clone()
+        self.out_dir.clone()
     }
 
     pub fn include_dirs(&self) -> Vec<PathBuf> {
         vec![
             self.source_dir.join("include"),
             self.source_dir.join("third_party"),
-            self.build_dir.join("build/include"),
-            self.build_dir.join("build/third_party"),
+            self.out_dir.join("build/include"),
+            self.out_dir.join("build/third_party"),
         ]
     }
 
     pub fn link_dir(&self) -> PathBuf {
-        self.build_dir.join("build")
+        self.out_dir.join("build")
     }
 
     pub fn link_libs(&self) -> Vec<String> {
@@ -68,29 +72,29 @@ impl Triton {
 
 pub fn build_triton(project_dir: &Path, target_dir: &Path, llvm: &Llvm) -> Triton {
     let config: TritonConfig = read_toml(&project_dir.join("triton.toml"));
-    let source_dir = project_dir.join("../../src/triton");
-    let out_dir = target_dir.join("build/triton-build");
-    let install_dir = target_dir.join("install");
+    let triton = Triton::new(project_dir, target_dir);
 
-    create_dir(&out_dir);
-    create_dir(&install_dir);
+    create_dir(&triton.out_dir);
+    create_dir(&triton.install_dir);
 
-    Config::new(&source_dir)
+    let llvm_build_dir = llvm.out_dir.join("build");
+
+    Config::new(&triton.source_dir)
         .generator("Ninja")
-        .env("LLVM_BUILD_DIR", &llvm.build_dir)
-        .env("LLVM_INCLUDE_DIRS", llvm.build_dir.join("include"))
-        .env("LLVM_LIBRARY_DIR", llvm.build_dir.join("lib"))
-        .define("LLD_DIR", llvm.build_dir.join("lib/cmake/lld"))
-        .define("LLVM_SYSPATH", &llvm.build_dir)
+        .env("LLVM_BUILD_DIR", llvm_build_dir.clone())
+        .env("LLVM_INCLUDE_DIRS", llvm_build_dir.join("include"))
+        .env("LLVM_LIBRARY_DIR", llvm_build_dir.join("lib"))
+        .define("LLD_DIR", llvm_build_dir.join("lib/cmake/lld"))
+        .define("LLVM_SYSPATH", llvm_build_dir.clone())
         .define("TRITON_BUILD_PYTHON_MODULE", config.python_module)
         .define("TRITON_BUILD_PROTON", config.proton)
         .define("TRITON_CODEGEN_BACKENDS", config.backends)
         .define("TRITON_WHEEL_DIR", Path::new("/tmp"))
         .define("CMAKE_BUILD_TYPE", config.build_type)
-        .define("CMAKE_INSTALL_PREFIX", &install_dir)
-        .define("CMAKE_INCLUDE_PATH", source_dir.join("third_party"))
-        .out_dir(&out_dir)
+        .define("CMAKE_INSTALL_PREFIX", &triton.install_dir)
+        .define("CMAKE_INCLUDE_PATH", triton.source_dir.join("third_party"))
+        .out_dir(&triton.out_dir)
         .build();
 
-    Triton::new(source_dir, out_dir, install_dir)
+    triton
 }

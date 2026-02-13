@@ -22,36 +22,44 @@ use crate::{create_dir, read_toml};
 #[derive(Debug, Deserialize)]
 pub struct LlvmConfig {
     pub build_type: String,
-    pub enable_projects: String,
+    pub enabled_projects: String,
+    pub enabled_targets: String,
 }
 
 #[derive(Debug)]
 pub struct Llvm {
-    pub build_dir: PathBuf,
-    pub install_dir: PathBuf,
+    pub source_dir: PathBuf,
+    pub out_dir: PathBuf,
     pub llvm_config: PathBuf,
+    pub install_dir: PathBuf,
+}
+
+impl Llvm {
+    pub fn new(project_dir: &Path, target_dir: &Path) -> Self {
+        let source_dir = project_dir.join("../../src/llvm-project/llvm");
+        let out_dir = target_dir.join("build/llvm-build");
+        let install_dir = target_dir.join("install");
+
+        Llvm { source_dir, out_dir, llvm_config: install_dir.join("bin/llvm-config"), install_dir }
+    }
 }
 
 pub fn build_llvm(project_dir: &Path, target_dir: &Path) -> Llvm {
+    let llvm = Llvm::new(project_dir, target_dir);
     let config: LlvmConfig = read_toml(&project_dir.join("llvm.toml"));
-    let source_dir = project_dir.join("../../src/llvm-project/llvm");
-    let out_dir = target_dir.join("build/llvm-build");
-    let install_dir = target_dir.join("install");
 
-    create_dir(&out_dir);
-    create_dir(&install_dir);
+    create_dir(&llvm.out_dir);
+    create_dir(&llvm.install_dir);
 
-    Config::new(&source_dir)
+    Config::new(&llvm.source_dir)
         .generator("Ninja")
-        .define("LLVM_ENABLE_PROJECTS", config.enable_projects)
+        .define("LLVM_ENABLE_PROJECTS", config.enabled_projects)
+        .define("LLVM_TARGETS_TO_BUILD", config.enabled_targets)
         .define("CMAKE_BUILD_TYPE", config.build_type)
-        .define("CMAKE_INSTALL_PREFIX", &install_dir)
-        .out_dir(&out_dir)
+        .define("CMAKE_INSTALL_PREFIX", &llvm.install_dir)
+        .define("LLVM_INSTALL_UTILS", "ON")
+        .out_dir(&llvm.out_dir)
         .build();
 
-    Llvm {
-        build_dir: out_dir.join("build"),
-        llvm_config: install_dir.join("bin/llvm-config"),
-        install_dir,
-    }
+    llvm
 }

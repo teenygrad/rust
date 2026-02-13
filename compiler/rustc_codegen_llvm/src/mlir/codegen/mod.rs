@@ -15,14 +15,13 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use rustc_middle::ty::{Instance, TyCtxt};
-use rustc_span::Symbol;
+use rustc_middle::mir::mono::MonoItem;
+use rustc_middle::ty::TyCtxt;
 
-use crate::mlir::ModuleMlir;
 use crate::mlir::errors::MlirError;
 
 pub(crate) mod triton;
 
 pub trait Codegen {
-    fn codegen(&self, module: &mut ModuleMlir, tcx: &Instance<'_>) -> Result<(), MlirError>;
+    fn codegen<'tcx>(&mut self, tcx: TyCtxt<'tcx>, item: &MonoItem<'tcx>) -> Result<(), MlirError>;
 }

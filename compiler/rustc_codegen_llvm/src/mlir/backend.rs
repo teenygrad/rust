@@ -43,7 +43,7 @@ use rustc_session::config::{OutputFilenames, PrintKind, PrintRequest};
 use rustc_span::Symbol;
 use tracing::info;
 
-use crate::mlir::ModuleMlir;
+use crate::mlir::MlirModule;
 use crate::mlir::codegen::Codegen;
 use crate::mlir::codegen::triton::TritonCodegen;
 use crate::mlir::mir_visitor::MirVisitor;
@@ -71,7 +71,7 @@ impl ExtraBackendMethods for MlirCodegenBackend {
         info!("Module name: {}", module_name);
 
         // Create a placeholder module for the allocator
-        ModuleMlir::new(tcx, module_name)
+        MlirModule::new(tcx, module_name)
     }
 
     fn compile_codegen_unit(
@@ -115,7 +115,7 @@ impl ExtraBackendMethods for MlirCodegenBackend {
 }
 
 /// Implementation of compile_codegen_unit that logs all MIR.
-fn compile_codegen_unit_impl(tcx: TyCtxt<'_>, cgu_name: Symbol) -> ModuleCodegen<ModuleMlir> {
+fn compile_codegen_unit_impl(tcx: TyCtxt<'_>, cgu_name: Symbol) -> ModuleCodegen<MlirModule> {
     // Debug: Verify this function is being called
     eprintln!("[DEBUG] compile_codegen_unit_impl called for CGU: {}", cgu_name);
 
@@ -128,8 +128,8 @@ fn compile_codegen_unit_impl(tcx: TyCtxt<'_>, cgu_name: Symbol) -> ModuleCodegen
     info!("========================================");
 
     // Create the MLIR module
-    let mut mlir_module = ModuleMlir::new(tcx, cgu_name.as_str());
-    let triton_codegen = TritonCodegen::default();
+    let mut mlir_module = MlirModule::new(tcx, cgu_name.as_str());
+    let mut triton_codegen = TritonCodegen::new(&mut mlir_module);
 
     // Get all mono items in deterministic order
     let mono_items = cgu.items_in_deterministic_order(tcx);
@@ -138,8 +138,8 @@ fn compile_codegen_unit_impl(tcx: TyCtxt<'_>, cgu_name: Symbol) -> ModuleCodegen
     eprintln!("[DEBUG] Found {} mono items", mono_items.len());
 
     // Create a MIR visitor for detailed logging
-    let mut visitor = MirVisitor::new(tcx);
-    eprintln!("[DEBUG] Created MirVisitor");
+    // let mut visitor = MirVisitor::new(tcx);
+    // eprintln!("[DEBUG] Created MirVisitor");
 
     for (idx, (mono_item, data)) in mono_items.iter().enumerate() {
         info!("");
@@ -147,46 +147,44 @@ fn compile_codegen_unit_impl(tcx: TyCtxt<'_>, cgu_name: Symbol) -> ModuleCodegen
         info!("Linkage: {:?}", data.linkage);
         info!("Visibility: {:?}", data.visibility);
 
-        match mono_item {
-            MonoItem::Fn(instance) => {
-                info!("Type: Function");
-                info!("Instance: {:?}", instance);
-                info!("DefId: {:?}", instance.def_id());
-                info!("Symbol: {}", tcx.symbol_name(*instance).name);
-                eprintln!("[DEBUG] Processing function: {}", tcx.symbol_name(*instance).name);
+        triton_codegen.codegen(tcx, mono_item).expect("Failed to generate MLIR for instance");
 
-                // Log MIR summary first
-                // let summary = MirSummary::from_instance(tcx, *instance);
-                // summary.log();
+        // match mono_item {
+        // MonoItem::Fn(instance) => {
+        //     info!("Type: Function");
+        //     info!("Instance: {:?}", instance);
+        //     info!("DefId: {:?}", instance.def_id());
+        //     info!("Symbol: {}", tcx.symbol_name(*instance).name);
+        //     eprintln!("[DEBUG] Processing function: {}", tcx.symbol_name(*instance).name);
 
-                // Now visit the full MIR structure
-                eprintln!("[DEBUG] Calling visitor.visit_instance for function");
-                triton_codegen
-                    .codegen(&mut mlir_module, instance)
-                    .expect("Failed to generate MLIR for instance");
+        //     // Log MIR summary first
+        //     // let summary = MirSummary::from_instance(tcx, *instance);
+        //     // summary.log();
 
-                // visitor.visit_instance(*instance);
-                eprintln!("[DEBUG] Completed visitor.visit_instance");
-            }
-            MonoItem::Static(def_id) => {
-                info!("Type: Static");
-                info!("DefId: {:?}", def_id);
-                info!(
-                    "Symbol: {}",
-                    tcx.symbol_name(rustc_middle::ty::Instance::mono(tcx, *def_id)).name
-                );
-                eprintln!("[DEBUG] Processing static item: {:?}", def_id);
+        //     // Now visit the full MIR structure
+        //     eprintln!("[DEBUG] Calling visitor.visit_instance for function");
 
-                // Log static type
-                let ty = tcx.type_of(*def_id).instantiate_identity();
-                info!("Static type: {:?}", ty);
-            }
-            MonoItem::GlobalAsm(item_id) => {
-                info!("Type: GlobalAsm");
-                info!("ItemId: {:?}", item_id);
-                eprintln!("[DEBUG] Processing GlobalAsm item: {:?}", item_id);
-            }
-        }
+        //     // visitor.visit_instance(*instance);
+        //     eprintln!("[DEBUG] Completed visitor.visit_instance");
+        // }
+        // MonoItem::Static(def_id) => {
+        //     info!("Type: Static");
+        //     info!("DefId: {:?}", def_id);
+        //     info!(
+        //         "Symbol: {}",
+        //         tcx.symbol_name(rustc_middle::ty::Instance::mono(tcx, *def_id)).name
+        //     );
+        //     eprintln!("[DEBUG] Processing static item: {:?}", def_id);
+
+        //     // Log static type
+        //     let ty = tcx.type_of(*def_id).instantiate_identity();
+        //     info!("Static type: {:?}", ty);
+        // }
+        // MonoItem::GlobalAsm(item_id) => {
+        //     info!("Type: GlobalAsm");
+        //     info!("ItemId: {:?}", item_id);
+        //     eprintln!("[DEBUG] Processing GlobalAsm item: {:?}", item_id);
+        // }
     }
 
     info!("");
@@ -198,7 +196,7 @@ fn compile_codegen_unit_impl(tcx: TyCtxt<'_>, cgu_name: Symbol) -> ModuleCodegen
 }
 
 impl WriteBackendMethods for MlirCodegenBackend {
-    type Module = ModuleMlir;
+    type Module = MlirModule;
     type ModuleBuffer = ModuleBuffer;
     type TargetMachine = ();
     type TargetMachineError = String;

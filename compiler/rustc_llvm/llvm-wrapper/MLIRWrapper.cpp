@@ -18,24 +18,6 @@ extern "C" MLIRContextRef MLIRRustContextCreate() {
   return wrap(new MLIRContext());
 }
 
-extern "C" MLIRRustResult MLIRRustInitTriton(MLIRContextRef ctx) {
-  MLIRContext *context = unwrap(ctx);
-
-  llvm::errs() << "Initializing Triton dialect\n";
-
-  DialectRegistry registry;
-  registry.insert<BuiltinDialect, DLTIDialect, LLVM::LLVMDialect,
-                  func::FuncDialect>();
-  registry.insert<mlir::triton::TritonDialect>();
-  mlir::registerBuiltinDialectTranslation(registry);
-  mlir::registerLLVMDialectTranslation(registry);
-
-  context->appendDialectRegistry(registry);
-  context->loadAllAvailableDialects();
-
-  return MLIRRustResult::Success;
-}
-
 extern "C" OpBuilderRef MLIRRustModuleBuilderCreate(MLIRContextRef ctx) {
   return wrap(new OpBuilder(unwrap(ctx)));
 }

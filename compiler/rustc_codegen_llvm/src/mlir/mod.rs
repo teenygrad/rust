@@ -58,4 +58,4 @@ pub(crate) mod mir_visitor;
 pub(crate) mod module;
 
 pub use backend::MlirCodegenBackend;
-pub use module::ModuleMlir;
+pub use module::MlirModule;

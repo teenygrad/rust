@@ -1,8 +1,12 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
 # tidy-alphabetical-start
   "compiler/*",
+  "src/tblgen-rs",
+  "src/mlir-sys",
+  "src/melior/macro",
+  "src/melior/melior",
 # tidy-alphabetical-end
 ]
 
@@ -11,11 +15,16 @@ exclude = [
   "compiler/rustc",
   "compiler/rustc_codegen_cranelift",
   "compiler/rustc_codegen_gcc",
+  "compiler/rustc_mlir",
   "src/bootstrap",
   "tests/rustdoc-gui",
   # HACK(eddyb) This hardcodes the fact that our CI uses `/checkout/obj`.
   "obj",
 ]
+
+[workspace.package]
+edition = "2024"
+keywords = ["rust"]
 
 [profile.release.package.rustc_thread_pool]
 # The rustc fork of Rayon has deadlock detection code which intermittently

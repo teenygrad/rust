@@ -29,29 +29,32 @@ use crate::mlir::ffi::{
 };
 
 /// Represents an MLIR module during codegen
-pub struct ModuleMlir {
+pub struct MlirModule {
     pub name: String,
     pub(crate) mlcx: &'static mut MLIRContext,
     pub(crate) llmod_raw: *const ModuleOp,
 }
 
-unsafe impl Send for ModuleMlir {}
-unsafe impl Sync for ModuleMlir {}
+unsafe impl Send for MlirModule {}
+unsafe impl Sync for MlirModule {}
 
-impl ModuleMlir {
-    pub fn new(tcx: TyCtxt<'_>, mod_name: &str) -> Self {
+impl Drop for MlirModule {
+    fn drop(&mut self) {
+        todo!("Implement MlirModule drop");
+    }
+}
+
+impl MlirModule {
+    pub fn new(_tcx: TyCtxt<'_>, mod_name: &str) -> Self {
         let mlir_context = unsafe { MLIRRustContextCreate() };
         let builder = unsafe { MLIRRustModuleBuilderCreate(mlir_context) };
         let module = unsafe { MLIRRustModuleCreate(builder) };
-        let frontend = tcx.sess.opts.frontend.expect("frontend not set");
 
-        let module = Self { name: mod_name.to_string(), mlcx: mlir_context, llmod_raw: module };
-        module.init_module(frontend);
-        module
+        Self { name: mod_name.to_string(), mlcx: mlir_context, llmod_raw: module }
     }
 
     pub fn parse(
-        cgcx: &CodegenContext<MlirCodegenBackend>,
+        _cgcx: &CodegenContext<MlirCodegenBackend>,
         name: &CStr,
         _buffer: &[u8],
         _dcx: DiagCtxtHandle<'_>,
@@ -59,15 +62,8 @@ impl ModuleMlir {
         let mlir_context = unsafe { MLIRRustContextCreate() };
         let builder = unsafe { MLIRRustModuleBuilderCreate(mlir_context) };
         let module = unsafe { MLIRRustModuleCreate(builder) };
-        let frontend = cgcx.opts.frontend.expect("frontend not set");
 
-        let module = Self {
-            name: name.to_string_lossy().to_string(),
-            mlcx: mlir_context,
-            llmod_raw: module,
-        };
-        module.init_module(frontend);
-        module
+        Self { name: name.to_string_lossy().to_string(), mlcx: mlir_context, llmod_raw: module }
     }
 
     pub fn set_llmod(&mut self, llmod: *const ModuleOp) {
@@ -76,16 +72,5 @@ impl ModuleMlir {
 
     pub fn llmod(&self) -> &ModuleOp {
         unsafe { &*self.llmod_raw }
-    }
-
-    fn init_module(&self, frontend: Frontend) {
-        match frontend {
-            Frontend::Triton => {
-                let status = unsafe { MLIRRustInitTriton(self.mlcx) };
-                if status != MLIRRustResult::Success {
-                    panic!("failed to initialize Triton");
-                }
-            }
-        }
     }
 }

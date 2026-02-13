@@ -15,23 +15,41 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use rustc_middle::ty::{Instance, TyCtxt};
-use rustc_span::Symbol;
+use rustc_middle::mir::mono::MonoItem;
+use rustc_middle::ty::TyCtxt;
 
-use crate::mlir::ModuleMlir;
+use crate::mlir::MlirModule;
 use crate::mlir::codegen::Codegen;
 use crate::mlir::errors::MlirError;
 
-pub(crate) struct TritonCodegen;
+pub(crate) struct TritonCodegen<'a> {
+    module: &'a mut MlirModule,
+}
 
-impl Default for TritonCodegen {
-    fn default() -> Self {
-        Self
+impl<'a> TritonCodegen<'a> {
+    pub(crate) fn new(module: &'a mut MlirModule) -> Self {
+        Self { module }
     }
 }
 
-impl Codegen for TritonCodegen {
-    fn codegen(&self, _module: &mut ModuleMlir, _item: &Instance<'_>) -> Result<(), MlirError> {
-        todo!()
+impl<'a> Codegen for TritonCodegen<'a> {
+    fn codegen<'tcx>(&mut self, tcx: TyCtxt<'tcx>, item: &MonoItem<'tcx>) -> Result<(), MlirError> {
+        match item {
+            MonoItem::Fn(instance) => {
+                // Get the mangled function name
+                let mangled_name = tcx.symbol_name(*instance);
+                eprintln!("[DEBUG] Function mangled name: {}", mangled_name);
+                // TODO: Implement Triton codegen
+                todo!()
+            }
+            MonoItem::Static(_def_id) => {
+                // TODO: Implement Triton codegen for statics
+                todo!()
+            }
+            MonoItem::GlobalAsm(_item_id) => {
+                // TODO: Implement Triton codegen for global asm
+                todo!()
+            }
+        }
     }
 }
