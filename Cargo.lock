@@ -1034,6 +1034,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "regex",
+ "rustc_llvm",
  "syn",
  "tblgen",
  "unindent",
@@ -1076,6 +1077,7 @@ version = "210.0.1"
 dependencies = [
  "bindgen",
  "cargo_metadata",
+ "rustc_llvm",
 ]
 
 [[package]]
@@ -2525,6 +2527,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustc_mlir"
+version = "0.0.0"
+dependencies = [
+ "cargo_metadata",
+ "cc",
+ "cmake",
+ "melior",
+ "rustc_helper",
+ "rustc_llvm",
+ "thiserror",
+]
+
+[[package]]
 name = "rustc_monomorphize"
 version = "0.0.0"
 dependencies = [
@@ -3285,6 +3300,7 @@ dependencies = [
  "cargo_metadata",
  "cc",
  "paste",
+ "rustc_llvm",
  "thiserror",
 ]
 

@@ -15,7 +15,6 @@ exclude = [
   "compiler/rustc",
   "compiler/rustc_codegen_cranelift",
   "compiler/rustc_codegen_gcc",
-  "compiler/rustc_mlir",
   "src/bootstrap",
   "tests/rustdoc-gui",
   # HACK(eddyb) This hardcodes the fact that our CI uses `/checkout/obj`.

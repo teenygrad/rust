@@ -48,7 +48,7 @@ impl Triton {
         self.source_dir.clone()
     }
 
-    pub fn build_dir(&self) -> PathBuf {
+    pub fn out_dir(&self) -> PathBuf {
         self.out_dir.clone()
     }
 

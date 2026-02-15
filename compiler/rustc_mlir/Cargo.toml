@@ -8,7 +8,7 @@ build = "build.rs"
 doctest = false
 
 [dependencies]
-melior = { version = "0.26.4", features = ["ods-dialects"] }
+melior = { path = "../../src/melior/melior", features = ["ods-dialects"] }
 thiserror = "2.0.18"
 
 [build-dependencies]
@@ -16,3 +16,4 @@ cc = "1.2.16"
 cmake = "0.1.57"
 cargo_metadata = "0.23.1"
 rustc_helper = { path = "../rustc_helper" }
+rustc_llvm = { path = "../rustc_llvm" }

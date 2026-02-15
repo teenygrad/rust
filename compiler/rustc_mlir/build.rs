@@ -23,8 +23,9 @@ fn main() {
     let triton = Triton::new(&project_dir, &target_dir);
 
     // Use LLVM install_dir for cmake config paths
-    let llvm_dir = &llvm.install_dir;
-    let mlir_dir = llvm_dir.join("lib/cmake/mlir");
+    let llvm_build_dir = llvm.out_dir.join("build");
+    let triton_build_dir = triton.out_dir.join("build");
+    let mlir_dir = llvm_build_dir.join("lib/cmake/mlir");
 
     // Configure cmake build
     let mut config = cmake::Config::new(&wrapper_dir);
@@ -32,10 +33,10 @@ fn main() {
     config
         .generator("Ninja")
         .define("CMAKE_BUILD_TYPE", "Release")
-        .define("LLVM_DIR", llvm_dir.join("lib/cmake/llvm"))
+        .define("LLVM_DIR", llvm_build_dir.join("lib/cmake/llvm"))
         .define("MLIR_DIR", &mlir_dir)
-        .define("TRITON_SOURCE_DIR", &triton.source_dir())
-        .define("TRITON_BUILD_DIR", &triton.build_dir());
+        .define("TRITON_SOURCE_DIR", triton.source_dir())
+        .define("TRITON_BUILD_DIR", triton_build_dir);
 
     let dst = config.build();
 
@@ -44,7 +45,7 @@ fn main() {
     println!("cargo:rustc-link-lib=static=mlir-wrapper");
 
     // Link MLIR libraries
-    let mlir_lib_dir = llvm.build_dir.join("lib");
+    let mlir_lib_dir = llvm.out_dir.join("build/lib");
     println!("cargo:rustc-link-search=native={}", mlir_lib_dir.display());
 
     // Core MLIR libraries needed
