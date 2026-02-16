@@ -28,6 +28,7 @@ pub struct LlvmConfig {
 
 #[derive(Debug)]
 pub struct Llvm {
+    pub root_dir: PathBuf,
     pub source_dir: PathBuf,
     pub out_dir: PathBuf,
     pub llvm_config: PathBuf,
@@ -35,17 +36,23 @@ pub struct Llvm {
 }
 
 impl Llvm {
-    pub fn new(project_dir: &Path, target_dir: &Path) -> Self {
-        let source_dir = project_dir.join("../../src/llvm-project/llvm");
+    pub fn new(root_dir: &Path, target_dir: &Path) -> Self {
+        let source_dir = root_dir.join("src/llvm-project/llvm");
         let out_dir = target_dir.join("build/llvm-build");
         let install_dir = target_dir.join("install");
 
-        Llvm { source_dir, out_dir, llvm_config: install_dir.join("bin/llvm-config"), install_dir }
+        Llvm {
+            root_dir: root_dir.to_path_buf(),
+            source_dir,
+            out_dir,
+            llvm_config: install_dir.join("bin/llvm-config"),
+            install_dir,
+        }
     }
 }
 
-pub fn build_llvm(project_dir: &Path, target_dir: &Path) -> Llvm {
-    let llvm = Llvm::new(project_dir, target_dir);
+pub fn build_llvm(root_dir: &Path, project_dir: &Path, target_dir: &Path) -> Llvm {
+    let llvm = Llvm::new(root_dir, target_dir);
     let config: LlvmConfig = read_toml(&project_dir.join("llvm.toml"));
 
     create_dir(&llvm.out_dir);

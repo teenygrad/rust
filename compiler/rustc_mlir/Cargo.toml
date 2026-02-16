@@ -7,13 +7,20 @@ build = "build.rs"
 [lib]
 doctest = false
 
+[features]
+default = ["triton"]
+triton = []
+
 [dependencies]
 melior = { path = "../../src/melior/melior", features = ["ods-dialects"] }
+melior-macro = { path = "../../src/melior/macro" }
+mlir-sys = { path = "../../src/mlir-sys" }
 thiserror = "2.0.18"
 
 [build-dependencies]
 cc = "1.2.16"
 cmake = "0.1.57"
 cargo_metadata = "0.23.1"
+bindgen = "0.72.1"
 rustc_helper = { path = "../rustc_helper" }
 rustc_llvm = { path = "../rustc_llvm" }

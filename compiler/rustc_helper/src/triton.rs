@@ -30,18 +30,19 @@ pub struct TritonConfig {
 
 #[derive(Debug)]
 pub struct Triton {
+    pub root_dir: PathBuf,
     pub source_dir: PathBuf,
     pub out_dir: PathBuf,
     pub install_dir: PathBuf,
 }
 
 impl Triton {
-    pub fn new(project_dir: &Path, target_dir: &Path) -> Self {
-        let source_dir = project_dir.join("../../src/triton");
+    pub fn new(root_dir: &Path, target_dir: &Path) -> Self {
+        let source_dir = root_dir.join("src/triton");
         let out_dir = target_dir.join("build/triton-build");
         let install_dir = target_dir.join("install");
 
-        Self { source_dir, out_dir, install_dir }
+        Self { root_dir: root_dir.to_path_buf(), source_dir, out_dir, install_dir }
     }
 
     pub fn source_dir(&self) -> PathBuf {
@@ -70,9 +71,9 @@ impl Triton {
     }
 }
 
-pub fn build_triton(project_dir: &Path, target_dir: &Path, llvm: &Llvm) -> Triton {
+pub fn build_triton(root_dir: &Path, project_dir: &Path, target_dir: &Path, llvm: &Llvm) -> Triton {
     let config: TritonConfig = read_toml(&project_dir.join("triton.toml"));
-    let triton = Triton::new(project_dir, target_dir);
+    let triton = Triton::new(root_dir, target_dir);
 
     create_dir(&triton.out_dir);
     create_dir(&triton.install_dir);

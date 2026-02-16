@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
- 
+
 //! Rust bindings for MLIR and Triton dialects.
 //!
 //! This crate provides:
@@ -45,11 +45,16 @@
 #![allow(non_upper_case_globals)]
 #![allow(dead_code)]
 
-// pub mod ffi;
-// pub mod triton;
-// pub mod context;
-// pub mod builder;
+pub mod builder;
+pub mod context;
+pub mod errors;
+pub mod ffi;
+
+#[cfg(test)]
+mod test;
+
+#[cfg(feature = "triton")]
+pub mod triton;
 
 // Re-export melior for convenience
 pub use melior;
-

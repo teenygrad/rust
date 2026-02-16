@@ -133,6 +133,7 @@ fn main() {
     let metadata = MetadataCommand::new().exec().unwrap();
 
     // Get the project directory.
+    let root_dir: PathBuf = metadata.workspace_root.into();
     let package = metadata.packages.iter().find(|p| p.name.as_str() == "rustc_llvm").unwrap();
     let project_dir: PathBuf = package.manifest_path.parent().unwrap().into();
     let target_dir: PathBuf = metadata.target_directory.into();
@@ -142,8 +143,8 @@ fn main() {
     println!("cargo:rerun-if-changed=llvm.toml");
     println!("cargo:rerun-if-changed=triton.toml");
 
-    let llvm = build_llvm(&project_dir, &target_dir);
-    let triton = build_triton(&project_dir, &target_dir, &llvm);
+    let llvm = build_llvm(&root_dir, &project_dir, &target_dir);
+    let triton = build_triton(&root_dir, &project_dir, &target_dir, &llvm);
     let _llvm_wrapper = build_wrapper(&project_dir, &target_dir, &llvm, &triton);
 
     // AXM FIXME: Get the proper LLVM_CONFIG from the environment.

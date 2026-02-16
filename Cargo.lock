@@ -2530,10 +2530,13 @@ dependencies = [
 name = "rustc_mlir"
 version = "0.0.0"
 dependencies = [
+ "bindgen",
  "cargo_metadata",
  "cc",
  "cmake",
  "melior",
+ "melior-macro",
+ "mlir-sys",
  "rustc_helper",
  "rustc_llvm",
  "thiserror",

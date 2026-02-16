@@ -1,26 +1,26 @@
 use std::env;
-use std::path::PathBuf;
+use std::error::Error;
+use std::path::{Path, PathBuf};
 
 use cargo_metadata::MetadataCommand;
 use rustc_helper::llvm::Llvm;
 use rustc_helper::triton::Triton;
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     // Get project directory and target directory using cargo_metadata
     // Use rustc_llvm directory since that's where llvm.toml and triton.toml are located
     let metadata = MetadataCommand::new().exec().unwrap();
-    let llvm_package = metadata.packages.iter().find(|p| p.name.as_str() == "rustc_llvm").unwrap();
-    let project_dir: PathBuf = llvm_package.manifest_path.parent().unwrap().into();
+    let root_dir: PathBuf = metadata.workspace_root.into();
     let target_dir: PathBuf = metadata.target_directory.into();
 
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let wrapper_dir = manifest_dir.join("mlir-wrapper");
 
     // Get LLVM and Triton configs using helper functions
-    let llvm = Llvm::new(&project_dir, &target_dir);
-    let triton = Triton::new(&project_dir, &target_dir);
+    let llvm = Llvm::new(&root_dir, &target_dir);
+    let triton = Triton::new(&root_dir, &target_dir);
 
     // Use LLVM install_dir for cmake config paths
     let llvm_build_dir = llvm.out_dir.join("build");
@@ -40,6 +40,16 @@ fn main() {
 
     let dst = config.build();
 
+    println!(
+        "cargo:rustc-env=LLVM_INCLUDE_DIRECTORY={}",
+        llvm.install_dir.join("include").display()
+    );
+
+    println!(
+        "cargo:rustc-env=TRITON_INCLUDE_DIRECTORY={}",
+        triton.source_dir().join("include").display()
+    );
+
     // Link the built library
     println!("cargo:rustc-link-search=native={}", dst.join("lib").display());
     println!("cargo:rustc-link-lib=static=mlir-wrapper");
@@ -47,21 +57,6 @@ fn main() {
     // Link MLIR libraries
     let mlir_lib_dir = llvm.out_dir.join("build/lib");
     println!("cargo:rustc-link-search=native={}", mlir_lib_dir.display());
-
-    // Core MLIR libraries needed
-    let mlir_libs = [
-        "MLIRIR",
-        "MLIRSupport",
-        "MLIRParser",
-        "MLIRPass",
-        "MLIRTransforms",
-        "MLIRAnalysis",
-        "MLIRDialect",
-    ];
-
-    for lib in &mlir_libs {
-        println!("cargo:rustc-link-lib={}", lib);
-    }
 
     // Link LLVM support libraries
     println!("cargo:rustc-link-lib=LLVMSupport");
@@ -72,9 +67,6 @@ fn main() {
     for lib in triton.link_libs() {
         println!("cargo:rustc-link-lib={}", lib);
     }
-    // Additional Triton libraries
-    println!("cargo:rustc-link-lib=TritonIR");
-    println!("cargo:rustc-link-lib=TritonGPUIR");
 
     // Link C++ standard library
     if cfg!(target_os = "macos") {
@@ -90,4 +82,6 @@ fn main() {
     // Generate bindings header path for use in lib.rs
     println!("cargo:include={}", wrapper_dir.display());
     println!("cargo:out_dir={}", out_dir.display());
+
+    Ok(())
 }

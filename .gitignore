@@ -107,3 +107,4 @@ flake.lock
 
 # bv (beads viewer) local config and caches
 .bv/
+todo.md

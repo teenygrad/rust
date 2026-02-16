@@ -48,7 +48,6 @@ add_definitions(${LLVM_DEFINITIONS})
 # Source files
 set(WRAPPER_SOURCES
     MLIRWrapper.cpp
-    TritonWrapper.cpp
 )
 
 # Create static library
@@ -76,17 +75,11 @@ target_link_libraries(mlir-wrapper
 # Link Triton if available
 if(DEFINED TRITON_BUILD_DIR)
     target_link_directories(mlir-wrapper PRIVATE ${TRITON_BUILD_DIR}/lib)
-    target_link_libraries(mlir-wrapper PRIVATE triton TritonIR TritonGPUIR)
+    target_link_libraries(mlir-wrapper PRIVATE triton)
 endif()
 
 # Install
 install(TARGETS mlir-wrapper
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
-)
-
-install(FILES
-    MLIRWrapper.h
-    TritonWrapper.h
-    DESTINATION include
 )
