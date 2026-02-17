@@ -5,14 +5,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "MLIRWrapper.h"
-#include "mlir/CAPI/Wrap.h"
 
 #include "mlir/IR/DialectRegistry.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 
 using namespace mlir;
-
-DEFINE_C_API_PTR_METHODS(MlirContext, MLIRContext)
 
 extern "C" void mlirLoadTritonDialect(MlirContext ctx) {
   MLIRContext *context = unwrap(ctx);
@@ -22,4 +19,12 @@ extern "C" void mlirLoadTritonDialect(MlirContext ctx) {
   context->appendDialectRegistry(registry);
 
   context->loadDialect<triton::TritonDialect>();
+}
+
+extern "C" MlirType mlirTritonPointerType(MlirType pointee, int address_space) {
+  auto type = unwrap(pointee);
+
+  auto pointer_type = triton::getPointerType(type, address_space);
+
+  return wrap(pointer_type);
 }

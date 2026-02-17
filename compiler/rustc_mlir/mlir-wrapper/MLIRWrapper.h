@@ -11,13 +11,23 @@
 #ifndef MLIR_WRAPPER_H
 #define MLIR_WRAPPER_H
 
+#include "mlir/CAPI/Wrap.h"
+#include "mlir/IR/Types.h"
+#include <mlir-c/IR.h>
+
+using namespace mlir;
+
+DEFINE_C_API_PTR_METHODS(MlirContext, MLIRContext)
+
+DEFINE_C_API_METHODS(MlirType, Type)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <mlir-c/IR.h>
+void mlirTritonLoadDialects(MlirContext context);
 
-void mlirLoadTritonDialect(MlirContext context);
+MlirType mlirTritonPointerType(MlirType pointee, int address_space);
 
 #ifdef __cplusplus
 } // extern "C"

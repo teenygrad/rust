@@ -1,6 +1,6 @@
 use std::env;
 use std::error::Error;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use cargo_metadata::MetadataCommand;
 use rustc_helper::llvm::Llvm;
@@ -27,11 +27,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     let triton_build_dir = triton.out_dir.join("build");
     let mlir_dir = llvm_build_dir.join("lib/cmake/mlir");
 
+    let mlir_wrapper_build_dir = root_dir.join("target/build/mlir-wrapper-build");
+
+    // Ensure the mlir-wrapper build directory exists before configuring cmake
+    if let Err(e) = std::fs::create_dir_all(&mlir_wrapper_build_dir) {
+        panic!("Failed to create mlir-wrapper build directory {:?}: {}", mlir_wrapper_build_dir, e);
+    }
+
     // Configure cmake build
     let mut config = cmake::Config::new(&wrapper_dir);
 
     config
         .generator("Ninja")
+        .out_dir(mlir_wrapper_build_dir)
         .define("CMAKE_BUILD_TYPE", "Release")
         .define("LLVM_DIR", llvm_build_dir.join("lib/cmake/llvm"))
         .define("MLIR_DIR", &mlir_dir)

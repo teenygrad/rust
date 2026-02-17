@@ -15,9 +15,11 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use mlir_sys::MlirContext;
+use mlir_sys::{MlirContext, MlirType};
 
 #[link(name = "mlir-wrapper", kind = "static")]
 unsafe extern "C" {
     pub fn mlirLoadTritonDialect(context: MlirContext);
+
+    pub fn mlirTritonPointerType(pointee: MlirType, address_space: i32) -> MlirType;
 }
