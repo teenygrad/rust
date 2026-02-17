@@ -16,9 +16,9 @@
  */
 
 use melior::Context;
-use mlir_sys::MlirContext;
+use melior::ir::{Type, TypeLike};
 
-use crate::ffi::mlirLoadTritonDialect;
+use crate::ffi::{mlirLoadTritonDialect, mlirTritonPointerType};
 
 melior_macro::dialect! {
     name: "tt",
@@ -35,37 +35,47 @@ pub fn load_triton_dialect(context: &Context) {
         mlirLoadTritonDialect(context.to_raw());
     }
 }
+pub fn triton_pointer_type<'a>(pointee: &Type<'a>) -> Type<'a> {
+    unsafe { Type::from_raw(mlirTritonPointerType(pointee.to_raw(), 1)) }
+}
 
 #[cfg(test)]
 mod tests {
     use melior::ir::attribute::{StringAttribute, TypeAttribute};
     use melior::ir::r#type::FunctionType;
-    use melior::ir::{Location, Module, Type};
+    use melior::ir::{BlockLike, Location, Module, Region, Type};
 
-    use super::tt;
+    use super::tt::*;
     use crate::test::create_test_context;
-    use crate::triton::load_triton_dialect;
+    use crate::triton::{load_triton_dialect, triton_pointer_type};
 
     #[test]
-    fn test_tt_func() {
+    fn test_tt_func_op() {
         let context = create_test_context();
         load_triton_dialect(&context);
-
-        println!("AXM: Loaded dialects: {:?}", context.loaded_dialect_count());
-        println!("AXM: Registered dialects: {:?}", context.registered_dialect_count());
-        let tt_dialect = context.get_or_load_dialect("tt");
-        println!("AXM: TT dialect: {:?}", tt_dialect);
 
         let location = Location::unknown(&context);
         let module = Module::new(location);
         let _body = module.body();
 
-        let ptr_f32_type = Type::parse(&context, "tt.ptr<f32>").expect("Failed to parse ptr<f32>");
-        let inputs = vec![ptr_f32_type];
-        let function_type = TypeAttribute::new(FunctionType::new(&context, &inputs, &[]).into());
+        let f32_type = Type::float32(&context);
+        let ptr_f32_type = triton_pointer_type(&f32_type);
 
-        let builder = tt::FuncOperation::builder(&context, location)
-            .sym_name(StringAttribute::new(&context, "test_tt_func"));
-        builder.function_type(function_type);
+        let inputs = vec![ptr_f32_type];
+        let function_type =
+            TypeAttribute::new(FunctionType::new(&context, &inputs, &[f32_type]).into());
+
+        let body_region = Region::new();
+        let builder = FuncOperation::builder(&context, location)
+            .sym_name(StringAttribute::new(&context, "test_tt_func"))
+            .function_type(function_type)
+            .sym_visibility(StringAttribute::new(&context, "private"))
+            .body(body_region);
+        let func_op = builder.build();
+
+        module.body().append_operation(func_op.into());
+
+        let expected = "module {\n  tt.func private @test_tt_func(!tt.ptr<f32>) -> f32\n}\n";
+        assert_eq!(expected, module.as_operation().to_string());
     }
 }
