@@ -21,6 +21,8 @@ use crate::mlir::errors::MlirError;
 
 pub(crate) mod triton;
 
+mod types;
+
 pub trait Codegen {
     fn codegen<'tcx>(&mut self, tcx: TyCtxt<'tcx>, item: &MonoItem<'tcx>) -> Result<(), MlirError>;
 }
