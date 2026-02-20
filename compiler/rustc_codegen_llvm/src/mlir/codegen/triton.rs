@@ -14,33 +14,95 @@
  * limitations under the License.
  */
 
+use melior::utility::register_all_llvm_translations;
 use rustc_middle::mir::mono::MonoItem;
-use rustc_middle::ty::TyCtxt;
+use rustc_middle::ty::{Instance, TyCtxt, TypingEnv};
+use rustc_mlir::load_all_dialects;
+use rustc_mlir::triton::load_triton_dialect;
 
 use crate::mlir::MlirModule;
 use crate::mlir::codegen::Codegen;
 use crate::mlir::errors::MlirError;
 
 pub(crate) struct TritonCodegen<'a> {
-    module: &'a mut MlirModule,
+    module: &'a MlirModule<'static>,
 }
 
 impl<'a> TritonCodegen<'a> {
-    pub(crate) fn new(module: &'a mut MlirModule) -> Self {
+    pub(crate) fn new(module: &'a MlirModule<'static>) -> Self {
+        let context = module.context();
+        load_all_dialects(context);
+        register_all_llvm_translations(context);
+        load_triton_dialect(context);
+
         Self { module }
+    }
+
+    fn codegen_function<'tcx>(
+        &mut self,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+    ) -> Result<(), MlirError> {
+        // You can get information about the function's signature from its ty().
+        // This gives an FnDef/FnPtr Ty, from which you can extract argument types and result type.
+        //
+        // Get the function type as Ty.
+        let fn_ty = instance.ty(tcx, TypingEnv::fully_monomorphized());
+        if let rustc_middle::ty::TyKind::FnDef(..) | rustc_middle::ty::TyKind::FnPtr(_, _) =
+            fn_ty.kind()
+        {
+            // Downcast to a FnSig
+            let fn_sig = fn_ty.fn_sig(tcx);
+            let fn_sig = fn_sig.skip_binder(); // Remove late-bound lifetimes
+
+            // Arguments
+            let arg_types: Vec<_> = fn_sig.inputs().iter().collect();
+            // Result type
+            let ret_type = fn_sig.output();
+            // Extract a friendly function name, preferring unmangled if possible
+            let func_name = tcx.symbol_name(*instance).name;
+
+            // Try to demangle using the Rust symbol demangling crate if available.
+            // Since in rustc we don't always bring in the rustc-demangle crate, but
+            // the symbol_name should generally be readable for non-generic items.
+            // Otherwise, fallback to `def_path_str` (should give a crate-relative path).
+            let friendly_name = if func_name.starts_with("_R") {
+                // Looks like a Rust-mangled symbol. Try to show a better name.
+                tcx.def_path_str(instance.def_id())
+            } else {
+                func_name.to_string()
+            };
+
+            eprintln!(
+                "[DEBUG] TritonCodegen: function name: {} (raw symbol: {})",
+                friendly_name, func_name
+            );
+
+            // DEBUG output: print argument and result types
+            eprintln!("[DEBUG] TritonCodegen: instance function signature (argument types):");
+            for (i, arg_ty) in arg_types.iter().enumerate() {
+                eprintln!("    arg[{}]: {}", i, arg_ty);
+            }
+            eprintln!(
+                "[DEBUG] TritonCodegen: instance function signature (return type): {}",
+                ret_type
+            );
+        } else {
+            eprintln!(
+                "[DEBUG] TritonCodegen: instance.ty(tcx) is not a function type: {:?}",
+                fn_ty
+            );
+        }
+
+        // TODO: Implement Triton codegen
+        todo!()
     }
 }
 
 impl<'a> Codegen for TritonCodegen<'a> {
     fn codegen<'tcx>(&mut self, tcx: TyCtxt<'tcx>, item: &MonoItem<'tcx>) -> Result<(), MlirError> {
         match item {
-            MonoItem::Fn(instance) => {
-                // Get the mangled function name
-                let mangled_name = tcx.symbol_name(*instance);
-                eprintln!("[DEBUG] Function mangled name: {}", mangled_name);
-                // TODO: Implement Triton codegen
-                todo!()
-            }
+            MonoItem::Fn(instance) => self.codegen_function(tcx, instance),
             MonoItem::Static(_def_id) => {
                 // TODO: Implement Triton codegen for statics
                 todo!()

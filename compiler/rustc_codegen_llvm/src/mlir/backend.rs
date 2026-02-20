@@ -20,6 +20,7 @@
 //! with rustc's compilation pipeline.
 
 use std::any::Any;
+use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -35,7 +36,6 @@ use rustc_data_structures::fx::FxIndexMap;
 use rustc_errors::DiagCtxtHandle;
 use rustc_middle::dep_graph;
 use rustc_middle::dep_graph::{WorkProduct, WorkProductId};
-use rustc_middle::mir::mono::MonoItem;
 use rustc_middle::ty::TyCtxt;
 use rustc_session::Session;
 use rustc_session::config::{OutputFilenames, PrintKind, PrintRequest};
@@ -45,17 +45,16 @@ use tracing::info;
 use crate::mlir::MlirModule;
 use crate::mlir::codegen::Codegen;
 use crate::mlir::codegen::triton::TritonCodegen;
-use crate::mlir::mir_visitor::MirVisitor;
 
 /// The MLIR codegen backend.
 #[derive(Clone)]
-pub struct MlirCodegenBackend(());
+pub struct MlirCodegenBackend {}
 
 impl MlirCodegenBackend {
     #[allow(clippy::new_ret_no_self)]
     pub fn new() -> Box<dyn CodegenBackend> {
         eprintln!("[DEBUG] MlirCodegenBackend::new() called - creating backend");
-        Box::new(MlirCodegenBackend(()))
+        Box::new(MlirCodegenBackend {})
     }
 }
 
@@ -114,7 +113,10 @@ impl ExtraBackendMethods for MlirCodegenBackend {
 }
 
 /// Implementation of compile_codegen_unit that logs all MIR.
-fn compile_codegen_unit_impl(tcx: TyCtxt<'_>, cgu_name: Symbol) -> ModuleCodegen<MlirModule> {
+fn compile_codegen_unit_impl(
+    tcx: TyCtxt<'_>,
+    cgu_name: Symbol,
+) -> ModuleCodegen<MlirModule<'static>> {
     // Debug: Verify this function is being called
     eprintln!("[DEBUG] compile_codegen_unit_impl called for CGU: {}", cgu_name);
 
@@ -195,7 +197,7 @@ fn compile_codegen_unit_impl(tcx: TyCtxt<'_>, cgu_name: Symbol) -> ModuleCodegen
 }
 
 impl WriteBackendMethods for MlirCodegenBackend {
-    type Module = MlirModule;
+    type Module = MlirModule<'static>;
     type ModuleBuffer = ModuleBuffer;
     type TargetMachine = ();
     type TargetMachineError = String;

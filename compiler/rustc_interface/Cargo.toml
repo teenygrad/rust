@@ -60,5 +60,4 @@ check_only = ['rustc_codegen_llvm?/check_only']
 llvm = ['dep:rustc_codegen_llvm']
 llvm_enzyme = ['rustc_builtin_macros/llvm_enzyme', 'rustc_codegen_llvm/llvm_enzyme']
 llvm_offload = ['rustc_codegen_llvm/llvm_offload']
-mlir = ['dep:rustc_codegen_llvm', 'rustc_codegen_llvm/mlir']
 # tidy-alphabetical-end

@@ -16,40 +16,35 @@
 
 use std::ffi::CStr;
 
+use melior::Context;
+use melior::ir::{Location, Module};
 use rustc_codegen_ssa::back::write::CodegenContext;
 use rustc_errors::DiagCtxtHandle;
 use rustc_middle::ty::TyCtxt;
-use rustc_session::config::Frontend;
 
 use crate::mlir::backend::MlirCodegenBackend;
-use crate::mlir::ffi::{
-    MLIRContext, MLIRRustContextCreate, MLIRRustInitTriton, MLIRRustModuleBuilderCreate,
-    MLIRRustModuleCreate, MLIRRustResult, ModuleOp,
-};
 
 /// Represents an MLIR module during codegen
-pub struct MlirModule {
+pub struct MlirModule<'a> {
     pub name: String,
-    pub(crate) mlcx: &'static mut MLIRContext,
-    pub(crate) llmod_raw: *const ModuleOp,
+    pub(crate) context: Context,
+    pub(crate) llmod_raw: Module<'a>,
 }
 
-unsafe impl Send for MlirModule {}
-unsafe impl Sync for MlirModule {}
+unsafe impl<'a> Send for MlirModule<'a> {}
+unsafe impl<'a> Sync for MlirModule<'a> {}
 
-impl Drop for MlirModule {
-    fn drop(&mut self) {
-        todo!("Implement MlirModule drop");
-    }
-}
-
-impl MlirModule {
+impl<'a> MlirModule<'a> {
     pub fn new(_tcx: TyCtxt<'_>, mod_name: &str) -> Self {
-        let mlir_context = unsafe { MLIRRustContextCreate() };
-        let builder = unsafe { MLIRRustModuleBuilderCreate(mlir_context) };
-        let module = unsafe { MLIRRustModuleCreate(builder) };
+        let context = Context::new();
+        let location = Location::unknown(&context);
+        let module = Module::new(location);
 
-        Self { name: mod_name.to_string(), mlcx: mlir_context, llmod_raw: module }
+        Self { name: mod_name.to_string(), context, llmod_raw: module }
+    }
+
+    pub fn context(&self) -> &Context {
+        &self.context
     }
 
     pub fn parse(
@@ -58,18 +53,18 @@ impl MlirModule {
         _buffer: &[u8],
         _dcx: DiagCtxtHandle<'_>,
     ) -> Self {
-        let mlir_context = unsafe { MLIRRustContextCreate() };
-        let builder = unsafe { MLIRRustModuleBuilderCreate(mlir_context) };
-        let module = unsafe { MLIRRustModuleCreate(builder) };
+        let context = Context::new();
+        let location = Location::unknown(&context);
+        let module = Module::new(location);
 
-        Self { name: name.to_string_lossy().to_string(), mlcx: mlir_context, llmod_raw: module }
+        Self { name: name.to_string_lossy().to_string(), context, llmod_raw: module }
     }
 
-    pub fn set_llmod(&mut self, llmod: *const ModuleOp) {
+    pub fn set_llmod(&mut self, llmod: Module<'a>) {
         self.llmod_raw = llmod;
     }
 
-    pub fn llmod(&self) -> &ModuleOp {
-        unsafe { &*self.llmod_raw }
+    pub fn llmod(&self) -> &Module<'a> {
+        &self.llmod_raw
     }
 }

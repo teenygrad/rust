@@ -57,3 +57,13 @@ pub mod triton;
 
 // Re-export melior for convenience
 pub use melior;
+use melior::Context;
+use melior::dialect::DialectRegistry;
+use melior::utility::register_all_dialects;
+
+pub fn load_all_dialects(context: &Context) {
+    let registry = DialectRegistry::new();
+    register_all_dialects(&registry);
+    context.append_dialect_registry(&registry);
+    context.load_all_available_dialects();
+}
