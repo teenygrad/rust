@@ -20,5 +20,7 @@ use mlir_sys::{MlirContext, MlirType};
 unsafe extern "C" {
     pub fn mlirLoadTritonDialect(context: MlirContext);
 
-    pub fn mlirTritonPointerType(pointee: MlirType, address_space: i32) -> MlirType;
+    pub fn mlirCreateTritonPointerType(pointee: MlirType, address_space: i32) -> MlirType;
+
+    pub fn mlirCreateTritonRankedTensorType(elementType: MlirType) -> MlirType;
 }

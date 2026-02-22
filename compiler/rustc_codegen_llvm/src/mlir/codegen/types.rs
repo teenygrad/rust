@@ -14,17 +14,24 @@
  * limitations under the License.
  */
 
+use melior::Context;
 use melior::ir::Type;
-use rustc_middle::ty::{AliasTy, AliasTyKind, GenericArg, GenericArgKind, Ty, TyKind};
+use melior::ir::r#type::IntegerType;
+use rustc_middle::ty::{
+    AdtDef, AliasTy, AliasTyKind, GenericArg, GenericArgKind, Ty, TyCtxt, TyKind, TypingEnv,
+};
+use rustc_mlir::triton::{create_triton_pointer, create_triton_ranked_tensor};
 
-pub struct TypeMapper {}
+pub struct TypeMapper<'a> {
+    context: &'a Context,
+}
 
-impl TypeMapper {
-    pub fn new() -> Self {
-        Self {}
+impl<'a> TypeMapper<'a> {
+    pub fn new(context: &'a Context) -> Self {
+        Self { context }
     }
 
-    pub fn map_type<'tcx>(&self, ty: &Ty<'tcx>) -> Type<'tcx> {
+    pub fn map_type<'tcx>(&self, tcx: &TyCtxt<'tcx>, ty: &Ty<'tcx>) -> Type<'a> {
         match ty.kind() {
             TyKind::Int(_bits) => todo!("Int: {:?}", _bits),
             TyKind::Uint(_uint_ty) => todo!("Uint: {:?}", _uint_ty),
@@ -32,7 +39,7 @@ impl TypeMapper {
             TyKind::Bool => todo!(),
             TyKind::Array(_elem_ty, _len) => todo!("Array: {:?} {:?}", _elem_ty, _len),
             TyKind::Char => todo!("Char"),
-            TyKind::Adt(_def, _args) => self.map_adt_ty(ty),
+            TyKind::Adt(def, args) => self.map_adt_ty(tcx, def, args.as_slice()),
             TyKind::Foreign(_id) => todo!("Foreign: {:?}", _id),
             TyKind::Str => todo!("Str"),
             TyKind::Pat(_ty, _pat) => todo!("Pat: {:?} {:?}", _ty, _pat),
@@ -60,7 +67,7 @@ impl TypeMapper {
             TyKind::Never => todo!("Never"),
             TyKind::Tuple(_tys) => todo!("Tuple: {:?}", _tys),
             TyKind::Alias(alias_ty_kind, alias_ty) => {
-                self.map_alias_ty(ty, alias_ty_kind, alias_ty)
+                self.map_alias_ty(ty, tcx, alias_ty_kind, alias_ty)
             }
             TyKind::Param(_param_ty) => todo!("Param: {:?}", _param_ty),
             TyKind::Bound(bound_var_index_kind, _bound_ty) => {
@@ -72,32 +79,52 @@ impl TypeMapper {
         }
     }
 
-    fn map_adt_ty<'tcx>(&self, ty: &Ty<'tcx>) -> Type<'tcx> {
-        match ty.kind() {
-            TyKind::Adt(_def, _args) => todo!("Adt: {:?} {:?}", _def, _args),
-            _ => todo!("Adt: {:?}", ty),
+    fn map_adt_ty<'tcx>(
+        &self,
+        tcx: &TyCtxt<'tcx>,
+        def: &AdtDef,
+        args: &[GenericArg<'tcx>],
+    ) -> Type<'a> {
+        let name = tcx.def_path_str(def.did());
+
+        if name == "triton::llvm::triton::tensor::Tensor" {
+            debug_assert_eq!(args.len(), 1, "Tensor should have 1 argument");
+
+            let arg_ty = args[0].expect_ty();
+            let arg_type = self.map_type(tcx, &arg_ty);
+            return self.create_tensor_type(arg_type);
+        } else if name == "triton::llvm::triton::pointer::Pointer" {
+            debug_assert_eq!(args.len(), 1, "Pointer should have 1 argument");
+            let arg_ty = args[0].expect_ty();
+            let arg_type = self.map_type(tcx, &arg_ty);
+            return self.create_pointer_type(arg_type);
+        } else if name == "triton::llvm::triton::num::F32" {
+            return self.create_f32_type();
+        } else if name == "triton::llvm::triton::types::Bool" {
+            return self.create_bool_type();
         }
+
+        todo!("map_adt_ty: name:{:?} {:?} {:?}", name, def, args);
     }
 
     fn map_alias_ty<'tcx>(
         &self,
         ty: &Ty<'tcx>,
-        alias_ty_kind: &AliasTyKind,
+        tcx: &TyCtxt<'tcx>,
+        _alias_ty_kind: &AliasTyKind,
         alias_ty: &AliasTy<'tcx>,
-    ) -> Type<'tcx> {
-        match alias_ty_kind {
-            AliasTyKind::Projection => self.map_projection_alias_ty(ty, alias_ty),
-            AliasTyKind::Inherent => todo!("Inherent Alias"),
-            AliasTyKind::Opaque => todo!("Opaque Alias"),
-            AliasTyKind::Free => todo!("Free Alias"),
-        }
+    ) -> Type<'a> {
+        let typing_env = TypingEnv::post_analysis(*tcx, alias_ty.def_id);
+        let normalized = tcx.normalize_erasing_regions(typing_env, *ty);
+        self.map_type(tcx, &normalized)
     }
 
     fn map_projection_alias_ty<'tcx>(
         &self,
         _ty: &Ty<'tcx>,
+        tcx: &TyCtxt<'tcx>,
         alias_ty: &AliasTy<'tcx>,
-    ) -> Type<'tcx> {
+    ) -> Type<'a> {
         // Get the definition from the definition id of alias_ty
         let def_id = alias_ty.def_id;
 
@@ -110,12 +137,29 @@ impl TypeMapper {
                 GenericArgKind::Lifetime(_region) => eprintln!("Lifetime: {:?}", _region),
                 GenericArgKind::Type(ty) => {
                     eprintln!("Ty: {:?}", ty);
-                    self.map_type(&ty);
+                    self.map_type(tcx, &ty);
                 }
                 GenericArgKind::Const(_const) => eprintln!("Const: {:?}", _const),
             }
         }
 
         todo!()
+    }
+
+    fn create_tensor_type(&self, arg_type: Type<'a>) -> Type<'a> {
+        create_triton_ranked_tensor(&arg_type)
+    }
+
+    fn create_pointer_type(&self, arg_type: Type<'a>) -> Type<'a> {
+        create_triton_pointer(&arg_type)
+    }
+
+    fn create_f32_type(&self) -> Type<'a> {
+        Type::float32(self.context)
+    }
+
+    fn create_bool_type(&self) -> Type<'a> {
+        // bools are 1-bit integers
+        IntegerType::new(self.context, 1).into()
     }
 }

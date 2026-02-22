@@ -27,7 +27,9 @@ extern "C" {
 
 void mlirTritonLoadDialects(MlirContext context);
 
-MlirType mlirTritonPointerType(MlirType pointee, int address_space);
+MlirType mlirCreateTritonPointerType(MlirType pointee, int address_space);
+
+MlirType mlirCreateTritonRankedTensorType(MlirType elementType);
 
 #ifdef __cplusplus
 } // extern "C"

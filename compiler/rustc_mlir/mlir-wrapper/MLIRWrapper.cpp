@@ -21,10 +21,19 @@ extern "C" void mlirLoadTritonDialect(MlirContext ctx) {
   context->loadDialect<triton::TritonDialect>();
 }
 
-extern "C" MlirType mlirTritonPointerType(MlirType pointee, int address_space) {
+extern "C" MlirType mlirCreateTritonPointerType(MlirType pointee,
+                                                int address_space) {
   auto type = unwrap(pointee);
 
   auto pointer_type = triton::getPointerType(type, address_space);
 
   return wrap(pointer_type);
+}
+
+extern "C" MlirType mlirCreateTritonRankedTensorType(MlirType elementType) {
+  auto type = unwrap(elementType);
+
+  auto tensor_type = mlir::RankedTensorType::get({ShapedType::kDynamic}, type);
+
+  return wrap(tensor_type);
 }

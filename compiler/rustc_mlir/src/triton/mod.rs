@@ -17,7 +17,9 @@
 use melior::Context;
 use melior::ir::{Type, TypeLike};
 
-use crate::ffi::{mlirLoadTritonDialect, mlirTritonPointerType};
+use crate::ffi::{
+    mlirCreateTritonPointerType, mlirCreateTritonRankedTensorType, mlirLoadTritonDialect,
+};
 
 melior_macro::dialect! {
     name: "tt",
@@ -34,8 +36,13 @@ pub fn load_triton_dialect(context: &Context) {
         mlirLoadTritonDialect(context.to_raw());
     }
 }
-pub fn triton_pointer_type<'a>(pointee: &Type<'a>) -> Type<'a> {
-    unsafe { Type::from_raw(mlirTritonPointerType(pointee.to_raw(), 1)) }
+
+pub fn create_triton_pointer<'a>(pointee: &Type<'a>) -> Type<'a> {
+    unsafe { Type::from_raw(mlirCreateTritonPointerType(pointee.to_raw(), 1)) }
+}
+
+pub fn create_triton_ranked_tensor<'a>(element_type: &Type<'a>) -> Type<'a> {
+    unsafe { Type::from_raw(mlirCreateTritonRankedTensorType(element_type.to_raw())) }
 }
 
 #[cfg(test)]
@@ -50,7 +57,7 @@ mod tests {
 
     use super::tt::*;
     use crate::test::create_test_context;
-    use crate::triton::{load_triton_dialect, triton_pointer_type};
+    use crate::triton::{create_triton_pointer, load_triton_dialect};
 
     #[test]
     fn test_tt_func_op_with_attributes() {
@@ -61,7 +68,7 @@ mod tests {
         let module = Module::new(location);
 
         let f32_type = Type::float32(&context);
-        let ptr_f32_type = triton_pointer_type(&f32_type);
+        let ptr_f32_type = create_triton_pointer(&f32_type);
 
         // Function signature: (!tt.ptr<f32>, !tt.ptr<f32>) -> f32
         let inputs = vec![ptr_f32_type, ptr_f32_type];

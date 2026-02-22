@@ -27,7 +27,7 @@ use crate::mlir::errors::MlirError;
 
 pub(crate) struct TritonCodegen<'a> {
     module: &'a MlirModule<'static>,
-    type_mapper: TypeMapper,
+    type_mapper: TypeMapper<'a>,
 }
 
 impl<'a> TritonCodegen<'a> {
@@ -38,7 +38,7 @@ impl<'a> TritonCodegen<'a> {
         register_all_llvm_translations(context);
         load_triton_dialect(context);
 
-        Self { module, type_mapper: TypeMapper::new() }
+        Self { module, type_mapper: TypeMapper::new(context) }
     }
 
     fn codegen_function<'tcx>(
@@ -53,10 +53,10 @@ impl<'a> TritonCodegen<'a> {
 
         // Arguments
         let arg_types: Vec<_> =
-            fn_sig.inputs().iter().map(|ty| self.type_mapper.map_type(ty)).collect();
+            fn_sig.inputs().iter().map(|ty| self.type_mapper.map_type(&tcx, ty)).collect();
 
         // Result type
-        let ret_type = self.type_mapper.map_type(&fn_sig.output());
+        let ret_type = self.type_mapper.map_type(&tcx, &fn_sig.output());
 
         // Extract a friendly function name, preferring unmangled if possible
         let func_name = tcx.symbol_name(*instance).name;
