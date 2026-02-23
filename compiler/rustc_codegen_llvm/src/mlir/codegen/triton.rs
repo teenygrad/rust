@@ -14,12 +14,17 @@
  * limitations under the License.
  */
 
-use melior::ir::{BlockLike, Location, Operation};
+use melior::ir::{Block, BlockLike, BlockRef, Location, Operation, RegionLike};
 use melior::utility::register_all_llvm_translations;
 use rustc_middle::mir::mono::MonoItem;
+use rustc_middle::mir::{
+    BasicBlock, BasicBlockData, Local, NonDivergingIntrinsic, Place, Rvalue, Statement,
+    StatementKind, Terminator,
+};
 use rustc_middle::ty::layout::MaybeResult;
 use rustc_middle::ty::{Instance, Ty, TyCtxt, TypingEnv};
 use rustc_mlir::load_all_dialects;
+use rustc_mlir::triton::tt::FuncOperation;
 use rustc_mlir::triton::{create_tt_func_with_divisibility, load_triton_dialect};
 
 use crate::mlir::MlirModule;
@@ -90,6 +95,7 @@ impl<'a> TritonCodegen<'a> {
             ret_types
         );
 
+        // Iterate over MIR basic blocks and codegen each one
         let func_op = create_tt_func_with_divisibility(
             self.module.context(),
             Location::unknown(self.module.context()),
@@ -99,9 +105,127 @@ impl<'a> TritonCodegen<'a> {
             16,
         );
 
+        let mir = tcx.instance_mir(instance.def);
+        for (bb, bb_data) in mir.basic_blocks.iter_enumerated() {
+            self.codegen_basic_block(tcx, bb, bb_data, &func_op)?;
+        }
+
         self.module.llmod().body().append_operation(func_op.into());
 
         Ok(())
+    }
+
+    fn codegen_basic_block<'tcx>(
+        &mut self,
+        tcx: TyCtxt<'tcx>,
+        _bb: BasicBlock,
+        bb_data: &BasicBlockData<'tcx>,
+        func_op: &FuncOperation<'a>,
+    ) -> Result<(), MlirError> {
+        // Create an empty MLIR block and append it to the function body region.
+        // Block arguments will be added when argument-passing lowering is implemented.
+        let mlir_block = Block::new(&[]);
+        let mlir_block =
+            func_op.body().expect("tt.func must have a body region").append_block(mlir_block);
+
+        // Codegen each MIR statement in order.
+        for stmt in &bb_data.statements {
+            self.codegen_statement(tcx, stmt, &mlir_block)?;
+        }
+
+        // Codegen the block terminator.
+        self.codegen_terminator(tcx, bb_data.terminator(), &mlir_block)?;
+
+        Ok(())
+    }
+
+    fn codegen_statement<'tcx, 'blk>(
+        &mut self,
+        tcx: TyCtxt<'tcx>,
+        stmt: &Statement<'tcx>,
+        mlir_block: &BlockRef<'a, 'blk>,
+    ) -> Result<(), MlirError> {
+        match &stmt.kind {
+            StatementKind::Assign(assign) => {
+                let (place, rvalue) = assign.as_ref();
+                self.codegen_assign(tcx, place, rvalue, mlir_block)
+            }
+            StatementKind::SetDiscriminant { place, variant_index } => {
+                self.codegen_set_discriminant(tcx, place, *variant_index, mlir_block)
+            }
+            StatementKind::StorageLive(local) => self.codegen_storage_live(tcx, *local, mlir_block),
+            StatementKind::StorageDead(local) => self.codegen_storage_dead(tcx, *local, mlir_block),
+            StatementKind::Intrinsic(intrinsic) => {
+                self.codegen_intrinsic(tcx, intrinsic, mlir_block)
+            }
+            // Runtime no-ops or analysis-only statements that require no codegen.
+            StatementKind::Nop
+            | StatementKind::ConstEvalCounter
+            | StatementKind::FakeRead(_)
+            | StatementKind::PlaceMention(_)
+            | StatementKind::AscribeUserType(..)
+            | StatementKind::Coverage(_)
+            | StatementKind::BackwardIncompatibleDropHint { .. }
+            | StatementKind::Retag(..) => Ok(()),
+        }
+    }
+
+    fn codegen_assign<'tcx, 'blk>(
+        &mut self,
+        _tcx: TyCtxt<'tcx>,
+        _place: &Place<'tcx>,
+        _rvalue: &Rvalue<'tcx>,
+        _mlir_block: &BlockRef<'a, 'blk>,
+    ) -> Result<(), MlirError> {
+        todo!("[TODO] TritonCodegen::codegen_assign")
+    }
+
+    fn codegen_set_discriminant<'tcx, 'blk>(
+        &mut self,
+        _tcx: TyCtxt<'tcx>,
+        _place: &Place<'tcx>,
+        _variant_index: rustc_abi::VariantIdx,
+        _mlir_block: &BlockRef<'a, 'blk>,
+    ) -> Result<(), MlirError> {
+        todo!("[TODO] TritonCodegen::codegen_set_discriminant")
+    }
+
+    fn codegen_storage_live<'tcx, 'blk>(
+        &mut self,
+        _tcx: TyCtxt<'tcx>,
+        _local: Local,
+        _mlir_block: &BlockRef<'a, 'blk>,
+    ) -> Result<(), MlirError> {
+        // NO-OP: In the context of Triton and MLIR, storage live is a no-op.
+        Ok(())
+    }
+
+    fn codegen_storage_dead<'tcx, 'blk>(
+        &mut self,
+        _tcx: TyCtxt<'tcx>,
+        _local: Local,
+        _mlir_block: &BlockRef<'a, 'blk>,
+    ) -> Result<(), MlirError> {
+        // NO-OP: In the context of Triton and MLIR, storage dead is a no-op.
+        Ok(())
+    }
+
+    fn codegen_intrinsic<'tcx, 'blk>(
+        &mut self,
+        _tcx: TyCtxt<'tcx>,
+        _intrinsic: &NonDivergingIntrinsic<'tcx>,
+        _mlir_block: &BlockRef<'a, 'blk>,
+    ) -> Result<(), MlirError> {
+        todo!("[TODO] TritonCodegen::codegen_intrinsic")
+    }
+
+    fn codegen_terminator<'tcx, 'blk>(
+        &mut self,
+        _tcx: TyCtxt<'tcx>,
+        _terminator: &Terminator<'tcx>,
+        _mlir_block: &BlockRef<'a, 'blk>,
+    ) -> Result<(), MlirError> {
+        todo!("[TODO] TritonCodegen::codegen_terminator")
     }
 }
 
