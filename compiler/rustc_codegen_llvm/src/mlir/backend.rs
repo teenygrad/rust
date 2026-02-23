@@ -253,6 +253,8 @@ impl WriteBackendMethods for MlirCodegenBackend {
         _config: &ModuleConfig,
     ) {
         info!("MLIR: optimize module '{}'", module.name);
+        let module = module.module_llvm.llmod();
+        info!("MLIR module: {:?}", module.as_operation().to_string());
         // TODO: Implement MLIR optimization passes
     }
 

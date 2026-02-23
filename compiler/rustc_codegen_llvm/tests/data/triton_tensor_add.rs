@@ -433,7 +433,7 @@ pub mod triton {
         pub trait Comparison<I: Num> {
             type BoolTensor: BoolTensor;
 
-            fn lt(&self, other: I) -> Self::BoolTensor;
+            fn lt(self, other: I) -> Self::BoolTensor;
         }
         pub trait I32Tensor: Tensor<Self::I32> + Add<Self::I32> + Comparison<Self::I32> {
             type I32: I32;
@@ -829,7 +829,7 @@ pub mod triton {
 
                     #[inline(never)]
                     #[allow(clippy::zero_ptr)]
-                    fn lt(&self, _other: I32) -> Self::BoolTensor {
+                    fn lt(self, _other: I32) -> Self::BoolTensor {
                         // dummy implementation not used in final output
                         Tensor(0 as *mut Bool)
                     }

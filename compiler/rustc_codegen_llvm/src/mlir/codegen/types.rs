@@ -18,10 +18,15 @@ use melior::Context;
 use melior::ir::Type;
 use melior::ir::r#type::{IntegerType, TupleType};
 use rustc_ast::{FloatTy, IntTy, UintTy};
-use rustc_middle::ty::{
-    AdtDef, AliasTy, AliasTyKind, GenericArg, GenericArgKind, Ty, TyCtxt, TyKind, TypingEnv,
-};
+use rustc_middle::ty::{AdtDef, AliasTy, AliasTyKind, GenericArg, Ty, TyCtxt, TyKind, TypingEnv};
 use rustc_mlir::triton::{create_triton_pointer, create_triton_ranked_tensor};
+
+type AdtHandler = for<'a, 'tcx> fn(&TypeMapper<'a>, &TyCtxt<'tcx>, &[GenericArg<'tcx>]) -> Type<'a>;
+
+use std::collections::HashMap;
+use std::sync::OnceLock;
+
+static ADT_HANDLER_MAP: OnceLock<HashMap<&'static str, AdtHandler>> = OnceLock::new();
 
 pub struct TypeMapper<'a> {
     context: &'a Context,
@@ -87,25 +92,10 @@ impl<'a> TypeMapper<'a> {
         args: &[GenericArg<'tcx>],
     ) -> Type<'a> {
         let name = tcx.def_path_str(def.did());
+        println!("map_adt_ty: name:{:?} {:?} {:?}", name, def, args);
 
-        if name == "triton::llvm::triton::tensor::Tensor" {
-            debug_assert_eq!(args.len(), 1, "Tensor should have 1 argument");
-
-            let arg_ty = args[0].expect_ty();
-            let arg_type = self.map_type(tcx, &arg_ty);
-            return self.create_tensor_type(arg_type);
-        } else if name == "triton::llvm::triton::pointer::Pointer" {
-            debug_assert_eq!(args.len(), 1, "Pointer should have 1 argument");
-            let arg_ty = args[0].expect_ty();
-            let arg_type = self.map_type(tcx, &arg_ty);
-            return self.create_pointer_type(arg_type);
-        } else if name == "triton::llvm::triton::num::F32" {
-            return self.create_f32_type();
-        } else if name == "triton::llvm::triton::types::Bool" {
-            return self.create_bool_type();
-        }
-
-        todo!("map_adt_ty: name:{:?} {:?} {:?}", name, def, args);
+        let handler = get_adt_handler(&name);
+        handler(self, tcx, args)
     }
 
     fn map_alias_ty<'tcx>(
@@ -118,41 +108,6 @@ impl<'a> TypeMapper<'a> {
         let typing_env = TypingEnv::post_analysis(*tcx, alias_ty.def_id);
         let normalized = tcx.normalize_erasing_regions(typing_env, *ty);
         self.map_type(tcx, &normalized)
-    }
-
-    fn map_projection_alias_ty<'tcx>(
-        &self,
-        _ty: &Ty<'tcx>,
-        tcx: &TyCtxt<'tcx>,
-        alias_ty: &AliasTy<'tcx>,
-    ) -> Type<'a> {
-        // Get the definition from the definition id of alias_ty
-        let def_id = alias_ty.def_id;
-
-        // Use the TyCtxt if available to fetch definition, otherwise just return a placeholder
-        // For now, just print the def_id for debugging
-        eprintln!("[DEBUG] map_projection_alias_ty: def_id={:?}", def_id);
-
-        for ty in alias_ty.args.iter() {
-            match ty.kind() {
-                GenericArgKind::Lifetime(_region) => eprintln!("Lifetime: {:?}", _region),
-                GenericArgKind::Type(ty) => {
-                    eprintln!("Ty: {:?}", ty);
-                    self.map_type(tcx, &ty);
-                }
-                GenericArgKind::Const(_const) => eprintln!("Const: {:?}", _const),
-            }
-        }
-
-        todo!()
-    }
-
-    fn create_tensor_type(&self, arg_type: Type<'a>) -> Type<'a> {
-        create_triton_ranked_tensor(&arg_type)
-    }
-
-    fn create_pointer_type(&self, arg_type: Type<'a>) -> Type<'a> {
-        create_triton_pointer(&arg_type)
     }
 
     fn create_int_type<'tcx>(&self, _tcx: &TyCtxt<'tcx>, int_ty: &IntTy) -> Type<'a> {
@@ -191,10 +146,6 @@ impl<'a> TypeMapper<'a> {
         }
     }
 
-    fn create_f32_type(&self) -> Type<'a> {
-        Type::float32(self.context)
-    }
-
     fn create_bool_type(&self) -> Type<'a> {
         // bools are 1-bit integers
         IntegerType::new(self.context, 1).into()
@@ -204,4 +155,74 @@ impl<'a> TypeMapper<'a> {
         let types = tys.iter().map(|ty| self.map_type(tcx, ty)).collect::<Vec<_>>();
         TupleType::new(self.context, &types).into()
     }
+}
+
+fn get_adt_handler(adt: &str) -> AdtHandler {
+    let map = ADT_HANDLER_MAP.get_or_init(|| {
+        let entries: Vec<(&'static str, AdtHandler)> = vec![
+            ("triton::llvm::triton::tensor::Tensor", triton_tensor_handler),
+            ("triton::llvm::triton::pointer::Pointer", triton_pointer_handler),
+            ("triton::llvm::triton::num::I32", triton_i32_handler),
+            ("triton::llvm::triton::num::F32", triton_f32_handler),
+            ("triton::llvm::triton::types::Bool", triton_bool_handler),
+            ("triton::ProgramAxis", triton_program_axis_handler),
+        ];
+        entries.into_iter().collect()
+    });
+
+    map.get(adt).copied().unwrap_or_else(|| panic!("Handler not found: {:?}", adt))
+}
+
+pub fn triton_tensor_handler<'a, 'tcx>(
+    type_mapper: &TypeMapper<'a>,
+    tcx: &TyCtxt<'tcx>,
+    args: &[GenericArg<'tcx>],
+) -> Type<'a> {
+    debug_assert_eq!(args.len(), 1, "Tensor should have 1 argument");
+    let arg_ty = args[0].expect_ty();
+    let arg_type = type_mapper.map_type(tcx, &arg_ty);
+    create_triton_ranked_tensor(&arg_type)
+}
+
+pub fn triton_pointer_handler<'a, 'tcx>(
+    type_mapper: &TypeMapper<'a>,
+    tcx: &TyCtxt<'tcx>,
+    args: &[GenericArg<'tcx>],
+) -> Type<'a> {
+    debug_assert_eq!(args.len(), 1, "Pointer should have 1 argument");
+    let arg_ty = args[0].expect_ty();
+    let arg_type = type_mapper.map_type(tcx, &arg_ty);
+    create_triton_pointer(&arg_type)
+}
+
+pub fn triton_i32_handler<'a, 'tcx>(
+    type_mapper: &TypeMapper<'a>,
+    _tcx: &TyCtxt<'tcx>,
+    _args: &[GenericArg<'tcx>],
+) -> Type<'a> {
+    IntegerType::new(type_mapper.context, 32).into()
+}
+
+pub fn triton_f32_handler<'a, 'tcx>(
+    type_mapper: &TypeMapper<'a>,
+    _tcx: &TyCtxt<'tcx>,
+    _args: &[GenericArg<'tcx>],
+) -> Type<'a> {
+    Type::float32(type_mapper.context)
+}
+
+pub fn triton_bool_handler<'a, 'tcx>(
+    type_mapper: &TypeMapper<'a>,
+    _tcx: &TyCtxt<'tcx>,
+    _args: &[GenericArg<'tcx>],
+) -> Type<'a> {
+    type_mapper.create_bool_type()
+}
+
+pub fn triton_program_axis_handler<'a, 'tcx>(
+    type_mapper: &TypeMapper<'a>,
+    _tcx: &TyCtxt<'tcx>,
+    _args: &[GenericArg<'tcx>],
+) -> Type<'a> {
+    IntegerType::new(type_mapper.context, 32).into()
 }
