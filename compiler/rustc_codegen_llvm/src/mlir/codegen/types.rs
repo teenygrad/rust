@@ -16,7 +16,8 @@
 
 use melior::Context;
 use melior::ir::Type;
-use melior::ir::r#type::IntegerType;
+use melior::ir::r#type::{IntegerType, TupleType};
+use rustc_ast::{FloatTy, IntTy, UintTy};
 use rustc_middle::ty::{
     AdtDef, AliasTy, AliasTyKind, GenericArg, GenericArgKind, Ty, TyCtxt, TyKind, TypingEnv,
 };
@@ -33,10 +34,10 @@ impl<'a> TypeMapper<'a> {
 
     pub fn map_type<'tcx>(&self, tcx: &TyCtxt<'tcx>, ty: &Ty<'tcx>) -> Type<'a> {
         match ty.kind() {
-            TyKind::Int(_bits) => todo!("Int: {:?}", _bits),
-            TyKind::Uint(_uint_ty) => todo!("Uint: {:?}", _uint_ty),
-            TyKind::Float(_bits) => todo!("Float: {:?}", _bits),
-            TyKind::Bool => todo!(),
+            TyKind::Int(int_ty) => self.create_int_type(tcx, int_ty),
+            TyKind::Uint(uint_ty) => self.create_uint_type(tcx, uint_ty),
+            TyKind::Float(float_ty) => self.create_float_type(tcx, float_ty),
+            TyKind::Bool => self.create_bool_type(),
             TyKind::Array(_elem_ty, _len) => todo!("Array: {:?} {:?}", _elem_ty, _len),
             TyKind::Char => todo!("Char"),
             TyKind::Adt(def, args) => self.map_adt_ty(tcx, def, args.as_slice()),
@@ -65,7 +66,7 @@ impl<'a> TypeMapper<'a> {
                 todo!("CoroutineWitness: {:?} {:?}", _def, _args)
             }
             TyKind::Never => todo!("Never"),
-            TyKind::Tuple(_tys) => todo!("Tuple: {:?}", _tys),
+            TyKind::Tuple(tys) => self.create_tuple_type(tcx, tys.as_slice()),
             TyKind::Alias(alias_ty_kind, alias_ty) => {
                 self.map_alias_ty(ty, tcx, alias_ty_kind, alias_ty)
             }
@@ -154,6 +155,42 @@ impl<'a> TypeMapper<'a> {
         create_triton_pointer(&arg_type)
     }
 
+    fn create_int_type<'tcx>(&self, _tcx: &TyCtxt<'tcx>, int_ty: &IntTy) -> Type<'a> {
+        let num_bits = match int_ty {
+            IntTy::Isize => unimplemented!("isize is not supported as it is device-dependent"),
+            IntTy::I8 => 8,
+            IntTy::I16 => 16,
+            IntTy::I32 => 32,
+            IntTy::I64 => 64,
+            IntTy::I128 => 128,
+        };
+
+        IntegerType::new(self.context, num_bits).into()
+    }
+
+    fn create_uint_type<'tcx>(&self, _tcx: &TyCtxt<'tcx>, uint_ty: &UintTy) -> Type<'a> {
+        let num_bits = match uint_ty {
+            UintTy::Usize => unimplemented!("usize is not supported as it is device-dependent"),
+            UintTy::U8 => 8,
+            UintTy::U16 => 16,
+            UintTy::U32 => 32,
+            UintTy::U64 => 64,
+            UintTy::U128 => 128,
+        };
+
+        // for the moment we use the signless variant of the integer type
+        IntegerType::new(self.context, num_bits).into()
+    }
+
+    fn create_float_type<'tcx>(&self, _tcx: &TyCtxt<'tcx>, float_ty: &FloatTy) -> Type<'a> {
+        match float_ty {
+            FloatTy::F16 => Type::float16(self.context),
+            FloatTy::F32 => Type::float32(self.context),
+            FloatTy::F64 => Type::float64(self.context),
+            FloatTy::F128 => unimplemented!("f128 is not supported"),
+        }
+    }
+
     fn create_f32_type(&self) -> Type<'a> {
         Type::float32(self.context)
     }
@@ -161,5 +198,10 @@ impl<'a> TypeMapper<'a> {
     fn create_bool_type(&self) -> Type<'a> {
         // bools are 1-bit integers
         IntegerType::new(self.context, 1).into()
+    }
+
+    fn create_tuple_type<'tcx>(&self, tcx: &TyCtxt<'tcx>, tys: &[Ty<'tcx>]) -> Type<'a> {
+        let types = tys.iter().map(|ty| self.map_type(tcx, ty)).collect::<Vec<_>>();
+        TupleType::new(self.context, &types).into()
     }
 }

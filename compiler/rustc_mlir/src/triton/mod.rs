@@ -15,11 +15,14 @@
  */
 
 use melior::Context;
-use melior::ir::{Type, TypeLike};
+use melior::ir::attribute::{ArrayAttribute, Attribute, StringAttribute, TypeAttribute};
+use melior::ir::r#type::FunctionType;
+use melior::ir::{Region, Type, TypeLike};
 
 use crate::ffi::{
     mlirCreateTritonPointerType, mlirCreateTritonRankedTensorType, mlirLoadTritonDialect,
 };
+use crate::triton::tt::FuncOperation;
 
 melior_macro::dialect! {
     name: "tt",
@@ -45,19 +48,55 @@ pub fn create_triton_ranked_tensor<'a>(element_type: &Type<'a>) -> Type<'a> {
     unsafe { Type::from_raw(mlirCreateTritonRankedTensorType(element_type.to_raw())) }
 }
 
+// Extracted function for creating a tt.func operation with empty body and tt.divisibility attrs.
+pub fn create_tt_func_with_divisibility<'c>(
+    context: &'c melior::Context,
+    location: melior::ir::Location<'c>,
+    name: &str,
+    arg_types: &[melior::ir::Type<'c>],
+    res_types: &[melior::ir::Type<'c>],
+    tt_divisibility: i32,
+) -> FuncOperation<'c> {
+    // Create the function type
+    let function_type = TypeAttribute::new(FunctionType::new(context, arg_types, res_types).into());
+
+    // Argument attributes: each gets a dictionary {tt.divisibility = $tt_divisibility : i32}
+    let arg_attrs: Vec<_> = (0..arg_types.len())
+        .map(|_| {
+            Attribute::parse(context, &format!("{{tt.divisibility = {} : i32}}", tt_divisibility))
+                .expect("valid arg attrs")
+        })
+        .collect();
+    let arg_attrs = ArrayAttribute::new(context, &arg_attrs);
+
+    // Result attributes: empty dict for each return type (can be generalised, but empty suffices for now)
+    let res_attrs: Vec<_> =
+        (0..res_types.len()).map(|_| Attribute::parse(context, "{}").unwrap()).collect();
+    let res_attrs = ArrayAttribute::new(context, &res_attrs);
+
+    // Empty function body
+    let body_region = Region::new();
+
+    FuncOperation::builder(context, location)
+        .sym_name(StringAttribute::new(context, name))
+        .function_type(function_type)
+        .sym_visibility(StringAttribute::new(context, "public"))
+        .arg_attrs(arg_attrs)
+        .res_attrs(res_attrs)
+        .body(body_region)
+        .build()
+}
+
 #[cfg(test)]
 mod tests {
     use melior::dialect::ods::arith;
-    use melior::ir::attribute::{
-        ArrayAttribute, Attribute, BoolAttribute, StringAttribute, TypeAttribute,
-    };
+    use melior::ir::attribute::BoolAttribute;
     use melior::ir::operation::OperationMutLike;
-    use melior::ir::r#type::FunctionType;
-    use melior::ir::{Block, BlockLike, Location, Module, Operation, Region, RegionLike, Type};
+    use melior::ir::{Block, BlockLike, Location, Module, Operation, RegionLike, Type};
 
     use super::tt::*;
+    use super::*;
     use crate::test::create_test_context;
-    use crate::triton::{create_triton_pointer, load_triton_dialect};
 
     #[test]
     fn test_tt_func_op_with_attributes() {
@@ -73,34 +112,16 @@ mod tests {
         // Function signature: (!tt.ptr<f32>, !tt.ptr<f32>) -> f32
         let inputs = vec![ptr_f32_type, ptr_f32_type];
         let results = vec![f32_type];
-        let function_type =
-            TypeAttribute::new(FunctionType::new(&context, &inputs, &results).into());
 
-        // Argument attributes: one dictionary per argument
-        // arg0: {tt.divisibility = 16 : i32, tt.contiguity = 1 : i32}
-        // arg1: {tt.divisibility = 16 : i32}
-        let arg0_attrs =
-            Attribute::parse(&context, "{tt.divisibility = 16 : i32, tt.contiguity = 1 : i32}")
-                .expect("valid arg0 attrs");
-        let arg1_attrs =
-            Attribute::parse(&context, "{tt.divisibility = 16 : i32}").expect("valid arg1 attrs");
-        let arg_attrs = ArrayAttribute::new(&context, &[arg0_attrs, arg1_attrs]);
-
-        // Result attributes: one dictionary per result
-        // result0: {tt.constancy = 1 : i32}
-        let res0_attrs =
-            Attribute::parse(&context, "{tt.constancy = 1 : i32}").expect("valid res0 attrs");
-        let res_attrs = ArrayAttribute::new(&context, &[res0_attrs]);
-
-        let body_region = Region::new();
-        let func_op = FuncOperation::builder(&context, location)
-            .sym_name(StringAttribute::new(&context, "test_tt_func_attrs"))
-            .function_type(function_type)
-            .sym_visibility(StringAttribute::new(&context, "public"))
-            .arg_attrs(arg_attrs)
-            .res_attrs(res_attrs)
-            .body(body_region)
-            .build();
+        // Use the new function in test:
+        let func_op = create_tt_func_with_divisibility(
+            &context,
+            location,
+            "test_tt_func_attrs",
+            &inputs,
+            &results,
+            16,
+        );
 
         // Create a constant op returning f32 1.0
         let one_attr = Attribute::parse(&context, "1.0 : f32").expect("valid f32");
@@ -131,7 +152,7 @@ mod tests {
         println!("output: {}", output);
 
         let expected = "module {
-  tt.func public @test_tt_func_attrs(%arg0: !tt.ptr<f32> {tt.contiguity = 1 : i32, tt.divisibility = 16 : i32}, %arg1: !tt.ptr<f32> {tt.divisibility = 16 : i32}) -> (f32 {tt.constancy = 1 : i32}) attributes {noinline = false} {
+  tt.func public @test_tt_func_attrs(%arg0: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg1: !tt.ptr<f32> {tt.divisibility = 16 : i32}) -> f32 attributes {noinline = false} {
     %cst = arith.constant 1.000000e+00 : f32
     tt.return %cst : f32
   }

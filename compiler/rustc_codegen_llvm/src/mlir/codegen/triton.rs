@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
+use melior::ir::{BlockLike, Location, Operation};
 use melior::utility::register_all_llvm_translations;
 use rustc_middle::mir::mono::MonoItem;
+use rustc_middle::ty::layout::MaybeResult;
 use rustc_middle::ty::{Instance, Ty, TyCtxt, TypingEnv};
 use rustc_mlir::load_all_dialects;
-use rustc_mlir::triton::load_triton_dialect;
+use rustc_mlir::triton::{create_tt_func_with_divisibility, load_triton_dialect};
 
 use crate::mlir::MlirModule;
 use crate::mlir::codegen::Codegen;
@@ -51,13 +53,6 @@ impl<'a> TritonCodegen<'a> {
         let fn_sig = fn_ty.fn_sig(tcx);
         let fn_sig = fn_sig.skip_binder(); // Remove late-bound lifetimes
 
-        // Arguments
-        let arg_types: Vec<_> =
-            fn_sig.inputs().iter().map(|ty| self.type_mapper.map_type(&tcx, ty)).collect();
-
-        // Result type
-        let ret_type = self.type_mapper.map_type(&tcx, &fn_sig.output());
-
         // Extract a friendly function name, preferring unmangled if possible
         let func_name = tcx.symbol_name(*instance).name;
 
@@ -77,15 +72,36 @@ impl<'a> TritonCodegen<'a> {
             friendly_name, func_name
         );
 
+        // Arguments
+        let arg_types: Vec<_> =
+            fn_sig.inputs().iter().map(|ty| self.type_mapper.map_type(&tcx, ty)).collect();
+
+        // Result type
+        let ret_types = self.type_mapper.map_type(&tcx, &fn_sig.output()).to_result().ok();
+        let ret_types = ret_types.as_slice();
+
         // DEBUG output: print argument and result types
         eprintln!("[DEBUG] TritonCodegen: instance function signature (argument types):");
         for (i, arg_ty) in arg_types.iter().enumerate() {
             eprintln!("    arg[{}]: {}", i, arg_ty);
         }
-        eprintln!("[DEBUG] TritonCodegen: instance function signature (return type): {}", ret_type);
+        eprintln!(
+            "[DEBUG] TritonCodegen: instance function signature (return type): {:?}",
+            ret_types
+        );
 
-        // TODO: Implement Triton codegen
-        todo!()
+        let func_op = create_tt_func_with_divisibility(
+            self.module.context(),
+            Location::unknown(self.module.context()),
+            func_name,
+            &arg_types,
+            ret_types,
+            16,
+        );
+
+        self.module.llmod().body().append_operation(func_op.into());
+
+        Ok(())
     }
 }
 
