@@ -148,6 +148,7 @@ impl<'a> TritonCodegen<'a> {
         match &stmt.kind {
             StatementKind::Assign(assign) => {
                 let (place, rvalue) = assign.as_ref();
+                println!("[DEBUG] TritonCodegen::codegen_statement: Assign: {:?}", stmt);
                 self.codegen_assign(tcx, place, rvalue, mlir_block)
             }
             StatementKind::SetDiscriminant { place, variant_index } => {
@@ -173,11 +174,11 @@ impl<'a> TritonCodegen<'a> {
     fn codegen_assign<'tcx, 'blk>(
         &mut self,
         _tcx: TyCtxt<'tcx>,
-        _place: &Place<'tcx>,
-        _rvalue: &Rvalue<'tcx>,
+        place: &Place<'tcx>,
+        rvalue: &Rvalue<'tcx>,
         _mlir_block: &BlockRef<'a, 'blk>,
     ) -> Result<(), MlirError> {
-        todo!("[TODO] TritonCodegen::codegen_assign")
+        todo!("[TODO] TritonCodegen::codegen_assign: {:?} {:?}", place, rvalue)
     }
 
     fn codegen_set_discriminant<'tcx, 'blk>(

@@ -48,6 +48,7 @@ pub mod builder;
 pub mod context;
 pub mod errors;
 pub mod ffi;
+pub mod shared;
 
 #[cfg(test)]
 mod test;

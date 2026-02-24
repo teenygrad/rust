@@ -22,7 +22,7 @@ use melior::ir::{Region, Type, TypeLike};
 use crate::ffi::{
     mlirCreateTritonPointerType, mlirCreateTritonRankedTensorType, mlirLoadTritonDialect,
 };
-use crate::triton::tt::FuncOperation;
+use crate::triton::tt::{FuncOperation, IntToPtrOperation};
 
 melior_macro::dialect! {
     name: "tt",
@@ -40,7 +40,7 @@ pub fn load_triton_dialect(context: &Context) {
     }
 }
 
-pub fn create_triton_pointer<'a>(pointee: &Type<'a>) -> Type<'a> {
+pub fn create_triton_pointer<'a>(pointee: Type<'a>) -> Type<'a> {
     unsafe { Type::from_raw(mlirCreateTritonPointerType(pointee.to_raw(), 1)) }
 }
 
@@ -87,6 +87,15 @@ pub fn create_tt_func_with_divisibility<'c>(
         .build()
 }
 
+pub fn create_tt_int_to_ptr_cast<'ctx, 'b>(
+    context: &'ctx Context,
+    location: melior::ir::Location<'ctx>,
+    src: melior::ir::Value<'ctx, 'b>,
+    dest: Type<'ctx>,
+) -> IntToPtrOperation<'ctx> {
+    IntToPtrOperation::builder(context, location).result(dest).src(src).build()
+}
+
 #[cfg(test)]
 mod tests {
     use melior::dialect::ods::arith;
@@ -96,6 +105,7 @@ mod tests {
 
     use super::tt::*;
     use super::*;
+    use crate::shared::arith::{Int, create_constant};
     use crate::test::create_test_context;
 
     #[test]
@@ -107,7 +117,7 @@ mod tests {
         let module = Module::new(location);
 
         let f32_type = Type::float32(&context);
-        let ptr_f32_type = create_triton_pointer(&f32_type);
+        let ptr_f32_type = create_triton_pointer(f32_type);
 
         // Function signature: (!tt.ptr<f32>, !tt.ptr<f32>) -> f32
         let inputs = vec![ptr_f32_type, ptr_f32_type];
@@ -149,13 +159,43 @@ mod tests {
 
         let output = module.as_operation().to_string();
 
-        println!("output: {}", output);
-
         let expected = "module {
   tt.func public @test_tt_func_attrs(%arg0: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg1: !tt.ptr<f32> {tt.divisibility = 16 : i32}) -> f32 attributes {noinline = false} {
     %cst = arith.constant 1.000000e+00 : f32
     tt.return %cst : f32
   }
+}
+";
+        assert_eq!(expected, output);
+    }
+
+    #[test]
+    fn test_create_tt_int_to_ptr_cast() {
+        // MLIR context and location
+        let context = create_test_context();
+        load_triton_dialect(&context);
+
+        let location = Location::unknown(&context);
+        let module = Module::new(location);
+
+        // f32 type as MLIR type
+        let f32_type = Type::float32(&context);
+        let f32_ptr_type = create_triton_pointer(f32_type);
+        let i64_zero = create_constant(&context, location, Int::I64(0));
+        let i64_zero_value = i64_zero.result().unwrap();
+
+        // Call the function under test
+        let cast_op =
+            create_tt_int_to_ptr_cast(&context, location, i64_zero_value.into(), f32_ptr_type);
+
+        module.body().append_operation(i64_zero.into());
+        module.body().append_operation(cast_op.into());
+
+        let output = module.as_operation().to_string();
+
+        let expected = "module {
+  %c0_i64 = arith.constant 0 : i64
+  %0 = tt.int_to_ptr %c0_i64 : i64 -> !tt.ptr<f32>
 }
 ";
         assert_eq!(expected, output);
