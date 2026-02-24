@@ -181,7 +181,7 @@ pub fn triton_tensor_handler<'a, 'tcx>(
     debug_assert_eq!(args.len(), 1, "Tensor should have 1 argument");
     let arg_ty = args[0].expect_ty();
     let arg_type = type_mapper.map_type(tcx, &arg_ty);
-    create_triton_ranked_tensor(&arg_type)
+    create_triton_ranked_tensor(arg_type)
 }
 
 pub fn triton_pointer_handler<'a, 'tcx>(
@@ -192,7 +192,7 @@ pub fn triton_pointer_handler<'a, 'tcx>(
     debug_assert_eq!(args.len(), 1, "Pointer should have 1 argument");
     let arg_ty = args[0].expect_ty();
     let arg_type = type_mapper.map_type(tcx, &arg_ty);
-    create_triton_pointer(&arg_type)
+    create_triton_pointer(arg_type)
 }
 
 pub fn triton_i32_handler<'a, 'tcx>(

@@ -44,7 +44,7 @@ pub fn create_triton_pointer<'a>(pointee: Type<'a>) -> Type<'a> {
     unsafe { Type::from_raw(mlirCreateTritonPointerType(pointee.to_raw(), 1)) }
 }
 
-pub fn create_triton_ranked_tensor<'a>(element_type: &Type<'a>) -> Type<'a> {
+pub fn create_triton_ranked_tensor<'a>(element_type: Type<'a>) -> Type<'a> {
     unsafe { Type::from_raw(mlirCreateTritonRankedTensorType(element_type.to_raw())) }
 }
 

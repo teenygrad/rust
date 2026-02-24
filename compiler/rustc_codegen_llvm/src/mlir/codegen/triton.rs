@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
+use std::collections::HashMap;
+
 use melior::ir::{Block, BlockLike, BlockRef, Location, Operation, RegionLike};
 use melior::utility::register_all_llvm_translations;
 use rustc_middle::mir::mono::MonoItem;
 use rustc_middle::mir::{
-    BasicBlock, BasicBlockData, Local, NonDivergingIntrinsic, Place, Rvalue, Statement,
-    StatementKind, Terminator,
+    BasicBlock, BasicBlockData, CastKind, Local, NonDivergingIntrinsic, Operand, Place, Rvalue,
+    Statement, StatementKind, Terminator,
 };
 use rustc_middle::ty::layout::MaybeResult;
 use rustc_middle::ty::{Instance, Ty, TyCtxt, TypingEnv};
@@ -54,6 +56,9 @@ impl<'a> TritonCodegen<'a> {
         fn_ty: Ty<'tcx>,
         instance: &Instance<'tcx>,
     ) -> Result<(), MlirError> {
+        let mut ssa_values: HashMap<rustc_middle::mir::Local, melior::ir::Value<'tcx, 'static>> =
+            HashMap::new();
+
         // Downcast to a FnSig
         let fn_sig = fn_ty.fn_sig(tcx);
         let fn_sig = fn_sig.skip_binder(); // Remove late-bound lifetimes
@@ -107,7 +112,7 @@ impl<'a> TritonCodegen<'a> {
 
         let mir = tcx.instance_mir(instance.def);
         for (bb, bb_data) in mir.basic_blocks.iter_enumerated() {
-            self.codegen_basic_block(tcx, bb, bb_data, &func_op)?;
+            self.codegen_basic_block(tcx, bb, bb_data, &func_op, &mut ssa_values)?;
         }
 
         self.module.llmod().body().append_operation(func_op.into());
@@ -121,6 +126,7 @@ impl<'a> TritonCodegen<'a> {
         _bb: BasicBlock,
         bb_data: &BasicBlockData<'tcx>,
         func_op: &FuncOperation<'a>,
+        ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'tcx, 'static>>,
     ) -> Result<(), MlirError> {
         // Create an empty MLIR block and append it to the function body region.
         // Block arguments will be added when argument-passing lowering is implemented.
@@ -130,7 +136,7 @@ impl<'a> TritonCodegen<'a> {
 
         // Codegen each MIR statement in order.
         for stmt in &bb_data.statements {
-            self.codegen_statement(tcx, stmt, &mlir_block)?;
+            self.codegen_statement(tcx, stmt, &mlir_block, ssa_values)?;
         }
 
         // Codegen the block terminator.
@@ -144,12 +150,16 @@ impl<'a> TritonCodegen<'a> {
         tcx: TyCtxt<'tcx>,
         stmt: &Statement<'tcx>,
         mlir_block: &BlockRef<'a, 'blk>,
+        ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'tcx, 'static>>,
     ) -> Result<(), MlirError> {
         match &stmt.kind {
             StatementKind::Assign(assign) => {
                 let (place, rvalue) = assign.as_ref();
-                println!("[DEBUG] TritonCodegen::codegen_statement: Assign: {:?}", stmt);
-                self.codegen_assign(tcx, place, rvalue, mlir_block)
+                println!(
+                    "[DEBUG] TritonCodegen::codegen_statement: Assign: {:?}, {:?} {:?}",
+                    stmt, place, rvalue
+                );
+                self.codegen_assign(tcx, place, rvalue, mlir_block, ssa_values)
             }
             StatementKind::SetDiscriminant { place, variant_index } => {
                 self.codegen_set_discriminant(tcx, place, *variant_index, mlir_block)
@@ -173,12 +183,49 @@ impl<'a> TritonCodegen<'a> {
 
     fn codegen_assign<'tcx, 'blk>(
         &mut self,
-        _tcx: TyCtxt<'tcx>,
+        tcx: TyCtxt<'tcx>,
         place: &Place<'tcx>,
         rvalue: &Rvalue<'tcx>,
-        _mlir_block: &BlockRef<'a, 'blk>,
+        mlir_block: &BlockRef<'a, 'blk>,
+        ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'tcx, 'static>>,
     ) -> Result<(), MlirError> {
-        todo!("[TODO] TritonCodegen::codegen_assign: {:?} {:?}", place, rvalue)
+        let _rvalue_op: Operation<'tcx> = match rvalue {
+            Rvalue::Use(operand) => todo!("Use operand: {:?}", operand),
+            Rvalue::Repeat(operand, _) => todo!("Repeat operand: {:?}", operand),
+            Rvalue::Ref(region, borrow_kind, place) => todo!(
+                "Ref region: {:?}, borrow_kind: {:?}, place: {:?}",
+                region,
+                borrow_kind,
+                place
+            ),
+            Rvalue::ThreadLocalRef(def_id) => todo!("ThreadLocalRef def_id: {:?}", def_id),
+            Rvalue::RawPtr(raw_ptr_kind, place) => {
+                todo!("RawPtr raw_ptr_kind: {:?}, place: {:?}", raw_ptr_kind, place)
+            }
+            Rvalue::Cast(cast_kind, operand, ty) => {
+                println!("Cast cast_kind: {:?}, operand: {:?}, ty: {:?}", cast_kind, operand, ty);
+                self.codegen_cast(tcx, cast_kind, operand, ty, mlir_block, ssa_values)
+            }
+            Rvalue::BinaryOp(bin_op, _) => todo!("BinaryOp bin_op: {:?}", bin_op),
+            Rvalue::NullaryOp(null_op) => todo!("NullaryOp null_op: {:?}", null_op),
+            Rvalue::UnaryOp(un_op, operand) => {
+                todo!("UnaryOp un_op: {:?}, operand: {:?}", un_op, operand)
+            }
+            Rvalue::Discriminant(place) => todo!("Discriminant place: {:?}", place),
+            Rvalue::Aggregate(aggregate_kind, index_vec) => {
+                todo!("Aggregate aggregate_kind: {:?}, index_vec: {:?}", aggregate_kind, index_vec)
+            }
+            Rvalue::ShallowInitBox(operand, ty) => {
+                todo!("ShallowInitBox operand: {:?}, ty: {:?}", operand, ty)
+            }
+            Rvalue::CopyForDeref(place) => todo!("CopyForDeref place: {:?}", place),
+            Rvalue::WrapUnsafeBinder(operand, ty) => {
+                todo!("WrapUnsafeBinder operand: {:?}, ty: {:?}", operand, ty)
+            }
+        };
+
+        // todo!("[TODO] TritonCodegen::codegen_assign: {:?} {:?}", place, rvalue)
+        Ok(())
     }
 
     fn codegen_set_discriminant<'tcx, 'blk>(
@@ -227,6 +274,46 @@ impl<'a> TritonCodegen<'a> {
         _mlir_block: &BlockRef<'a, 'blk>,
     ) -> Result<(), MlirError> {
         todo!("[TODO] TritonCodegen::codegen_terminator")
+    }
+
+    fn codegen_cast<'tcx, 'blk>(
+        &mut self,
+        tcx: TyCtxt<'tcx>,
+        cast_kind: &CastKind,
+        operand: &Operand<'tcx>,
+        ty: &Ty<'tcx>,
+        mlir_block: &BlockRef<'a, 'blk>,
+        ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'tcx, 'static>>,
+    ) -> Operation<'tcx> {
+        match cast_kind {
+            CastKind::PointerExposeProvenance => todo!("PointerExposeProvenance"),
+            CastKind::PointerWithExposedProvenance => self
+                .codegen_pointer_with_exposed_provenance(tcx, operand, ty, mlir_block, ssa_values),
+            CastKind::PointerCoercion(pointer_coercion, coercion_source) => todo!(
+                "PointerCoercion pointer_coercion: {:?}, coercion_source: {:?}",
+                pointer_coercion,
+                coercion_source
+            ),
+            CastKind::IntToInt => todo!("IntToInt"),
+            CastKind::FloatToInt => todo!("FloatToInt"),
+            CastKind::FloatToFloat => todo!("FloatToFloat"),
+            CastKind::IntToFloat => todo!("IntToFloat"),
+            CastKind::PtrToPtr => todo!("PtrToPtr"),
+            CastKind::FnPtrToPtr => todo!("FnPtrToPtr"),
+            CastKind::Transmute => todo!("Transmute"),
+            CastKind::Subtype => todo!("Subtype"),
+        }
+    }
+
+    fn codegen_pointer_with_exposed_provenance<'tcx, 'blk>(
+        &mut self,
+        _tcx: TyCtxt<'tcx>,
+        _operand: &Operand<'tcx>,
+        _ty: &Ty<'tcx>,
+        _mlir_block: &BlockRef<'a, 'blk>,
+        _ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'tcx, 'static>>,
+    ) -> Operation<'tcx> {
+        todo!("[TODO] TritonCodegen::codegen_pointer_with_exposed_provenance")
     }
 }
 

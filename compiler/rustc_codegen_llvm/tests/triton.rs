@@ -109,7 +109,6 @@ mod tests {
 
     #[test]
     fn test_triton_tensor_add() {
-        // Initialize logging for the test - only show warnings and errors by default
         // Set RUST_LOG=debug in environment to see debug output
         let _ = fmt()
             .with_env_filter(
