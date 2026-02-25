@@ -18,7 +18,9 @@ use melior::Context;
 use melior::ir::Type;
 use melior::ir::r#type::{IntegerType, TupleType};
 use rustc_ast::{FloatTy, IntTy, UintTy};
-use rustc_middle::ty::{AdtDef, AliasTy, AliasTyKind, GenericArg, Ty, TyCtxt, TyKind, TypingEnv};
+use rustc_middle::ty::{
+    AdtDef, AliasTy, AliasTyKind, GenericArg, ParamTy, Ty, TyCtxt, TyKind, TypingEnv,
+};
 use rustc_mlir::triton::{create_triton_pointer, create_triton_ranked_tensor};
 
 type AdtHandler = for<'a, 'tcx> fn(&TypeMapper<'a>, &TyCtxt<'tcx>, &[GenericArg<'tcx>]) -> Type<'a>;
@@ -50,7 +52,7 @@ impl<'a> TypeMapper<'a> {
             TyKind::Str => todo!("Str"),
             TyKind::Pat(_ty, _pat) => todo!("Pat: {:?} {:?}", _ty, _pat),
             TyKind::Slice(_ty) => todo!("Slice: {:?}", _ty),
-            TyKind::RawPtr(_ty, _mutability) => todo!("RawPtr: {:?} {:?}", _ty, _mutability),
+            TyKind::RawPtr(ty, _mutability) => self.create_raw_ptr_type(tcx, ty),
             TyKind::Ref(_region, _ty, _mutability) => {
                 todo!("Ref: {:?} {:?} {:?}", _region, _ty, _mutability)
             }
@@ -75,7 +77,7 @@ impl<'a> TypeMapper<'a> {
             TyKind::Alias(alias_ty_kind, alias_ty) => {
                 self.map_alias_ty(ty, tcx, alias_ty_kind, alias_ty)
             }
-            TyKind::Param(_param_ty) => todo!("Param: {:?}", _param_ty),
+            TyKind::Param(_param_ty) => self.create_param_type(tcx, _param_ty),
             TyKind::Bound(bound_var_index_kind, _bound_ty) => {
                 todo!("Bound: {:?} {:?}", bound_var_index_kind, _bound_ty)
             }
@@ -108,6 +110,10 @@ impl<'a> TypeMapper<'a> {
         let typing_env = TypingEnv::post_analysis(*tcx, alias_ty.def_id);
         let normalized = tcx.normalize_erasing_regions(typing_env, *ty);
         self.map_type(tcx, &normalized)
+    }
+
+    fn create_param_type<'tcx>(&self, _tcx: &TyCtxt<'tcx>, param_ty: &ParamTy) -> Type<'a> {
+        todo!("Param: {:?}", param_ty);
     }
 
     fn create_int_type<'tcx>(&self, _tcx: &TyCtxt<'tcx>, int_ty: &IntTy) -> Type<'a> {
@@ -154,6 +160,11 @@ impl<'a> TypeMapper<'a> {
     fn create_tuple_type<'tcx>(&self, tcx: &TyCtxt<'tcx>, tys: &[Ty<'tcx>]) -> Type<'a> {
         let types = tys.iter().map(|ty| self.map_type(tcx, ty)).collect::<Vec<_>>();
         TupleType::new(self.context, &types).into()
+    }
+
+    fn create_raw_ptr_type<'tcx>(&self, tcx: &TyCtxt<'tcx>, ty: &Ty<'tcx>) -> Type<'a> {
+        let ty = self.map_type(tcx, ty);
+        create_triton_pointer(ty)
     }
 }
 

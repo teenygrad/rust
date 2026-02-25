@@ -22,7 +22,7 @@ use melior::ir::{Region, Type, TypeLike};
 use crate::ffi::{
     mlirCreateTritonPointerType, mlirCreateTritonRankedTensorType, mlirLoadTritonDialect,
 };
-use crate::triton::tt::{FuncOperation, IntToPtrOperation};
+use crate::triton::tt::{FuncOperation, IntToPtrOperation, ReturnOperation};
 
 melior_macro::dialect! {
     name: "tt",
@@ -85,6 +85,14 @@ pub fn create_tt_func_with_divisibility<'c>(
         .res_attrs(res_attrs)
         .body(body_region)
         .build()
+}
+
+pub fn create_tt_return<'ctx, 'b>(
+    context: &'ctx Context,
+    location: melior::ir::Location<'ctx>,
+    value: &[melior::ir::Value<'ctx, 'b>],
+) -> ReturnOperation<'ctx> {
+    ReturnOperation::builder(context, location).srcs(value).build()
 }
 
 pub fn create_tt_int_to_ptr_cast<'ctx, 'b>(

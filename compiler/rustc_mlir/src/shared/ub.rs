@@ -14,5 +14,16 @@
  * limitations under the License.
  */
 
-pub mod arith;
-pub mod ub;
+use melior::Context;
+use melior::ir::{Location, Operation, Type};
+
+pub fn create_ub_poison<'ctx>(
+    context: &'ctx Context,
+    location: Location<'ctx>,
+    result: Type<'ctx>,
+) -> Operation<'ctx> {
+    melior::dialect::ods::ub::PoisonOperationBuilder::new(context, location)
+        .result(result)
+        .build()
+        .into()
+}
