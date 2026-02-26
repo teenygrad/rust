@@ -134,8 +134,9 @@ impl<'a> TritonCodegen<'a> {
             let block = Block::new(&[]);
             if bb.index() == 0 {
                 // Add function arguments as block arguments to the entry block
-                for ty in &arg_types {
-                    block.add_argument(*ty, location);
+                for (i, ty) in arg_types.iter().enumerate() {
+                    let value = block.add_argument(*ty, location);
+                    ssa_values.insert(Local::from_usize(i + 1), value);
                 }
             }
 
@@ -155,6 +156,7 @@ impl<'a> TritonCodegen<'a> {
             )?;
         }
 
+        println!("[DEBUG] TritonCodegen::codegen_function end: ssa_values: {:?}", ssa_values);
         self.module.llmod().body().append_operation(func_op.into());
 
         Ok(())
@@ -197,6 +199,7 @@ impl<'a> TritonCodegen<'a> {
         mlir_block: &BlockRef<'a, 'blk>,
         ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'a, 'a>>,
     ) -> Result<(), MlirError> {
+        println!("[DEBUG] TritonCodegen::codegen_statement: ssa_values: {:?}", ssa_values);
         match &stmt.kind {
             StatementKind::Assign(assign) => {
                 let (place, rvalue) = assign.as_ref();
@@ -223,7 +226,10 @@ impl<'a> TritonCodegen<'a> {
             | StatementKind::Coverage(_)
             | StatementKind::BackwardIncompatibleDropHint { .. }
             | StatementKind::Retag(..) => Ok(()),
-        }
+        };
+
+        println!("[DEBUG] TritonCodegen::codegen_statement: ssa_values: {:?}", ssa_values);
+        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -255,6 +261,10 @@ impl<'a> TritonCodegen<'a> {
                     mlir_block,
                     ssa_values,
                 );
+                println!(
+                    "[DEBUG] TritonCodegen::codegen_assign ssa_values_insert 1: result: Place: {:?}, Result: {:?}",
+                    place, result
+                );
                 ssa_values.insert(place.local, result);
             }
             Rvalue::Cast(cast_kind, operand, ty) => {
@@ -262,12 +272,27 @@ impl<'a> TritonCodegen<'a> {
                 let result = self
                     .codegen_cast(tcx, instance, cast_kind, operand, ty, mlir_block, ssa_values);
 
+                println!(
+                    "[DEBUG] TritonCodegen::codegen_assign ssa_values_insert 2: result: Place: {:?}, Result: {:?}",
+                    place, result
+                );
+
                 ssa_values.insert(place.local, result);
             }
             Rvalue::Aggregate(aggregate_kind, index_vec) => {
+                println!(
+                    "[DEBUG] TritonCodegen::codegen_assign: Aggregate: {:?}, index_vec: {:?}",
+                    aggregate_kind, index_vec
+                );
+                println!("[DEBUG] TritonCodegen::codegen_assign: ssa_values: {:?}", ssa_values);
                 let aggregate_op =
                     self.codegen_aggregate(tcx, instance, aggregate_kind, index_vec, mlir_block);
                 let result = aggregate_op.result(0).unwrap();
+                println!(
+                    "[DEBUG] TritonCodegen::codegen_assign ssa_values_insert 3: result: Place: {:?}, Result: {:?}",
+                    place, result
+                );
+
                 ssa_values.insert(place.local, result.into());
                 mlir_block.append_operation(aggregate_op);
             }
@@ -287,24 +312,15 @@ impl<'a> TritonCodegen<'a> {
         _mlir_block: &BlockRef<'a, 'blk>,
     ) -> Operation<'a> {
         match aggregate_kind {
-            AggregateKind::Array(ty) => todo!("Array ty: {:?}", ty),
-            AggregateKind::Tuple => todo!("Tuple"),
             AggregateKind::Adt(def_id, _, raw_list, _, _) => {
+                println!(
+                    "[DEBUG] TritonCodegen::codegen_aggregate: Adt: {:?}, def_id: {:?}, raw_list: {:?}",
+                    aggregate_kind, def_id, raw_list
+                );
                 let adt_def = tcx.adt_def(*def_id);
                 self.codegen_adt(tcx, instance, &adt_def, raw_list.as_slice())
             }
-            AggregateKind::Closure(def_id, raw_list) => {
-                todo!("Closure def_id: {:?}, raw_list: {:?}", def_id, raw_list)
-            }
-            AggregateKind::Coroutine(def_id, raw_list) => {
-                todo!("Coroutine def_id: {:?}, raw_list: {:?}", def_id, raw_list)
-            }
-            AggregateKind::CoroutineClosure(def_id, raw_list) => {
-                todo!("CoroutineClosure def_id: {:?}, raw_list: {:?}", def_id, raw_list)
-            }
-            AggregateKind::RawPtr(ty, mutability) => {
-                todo!("RawPtr ty: {:?}, mutability: {:?}", ty, mutability)
-            }
+            _ => todo!("AggregateKind: {:?}", aggregate_kind),
         }
     }
 
@@ -344,16 +360,6 @@ impl<'a> TritonCodegen<'a> {
             .into()
         } else {
             todo!("Adt: {:?}", adt_def)
-            // todo!(
-            //     "name: {:?}, Adt: {:?}, adt_def: {:?}, variant_idx: {:?}, raw_list: {:?}, user_type_annotation_index: {:?}, field_idx: {:?}",
-            //     name,
-            //     def_id,
-            //     adt_def,
-            //     variant_idx,
-            //     raw_list,
-            //     user_type_annotation_index,
-            //     field_idx
-            // )
         }
     }
 
@@ -373,6 +379,7 @@ impl<'a> TritonCodegen<'a> {
         _local: Local,
         _mlir_block: &BlockRef<'a, 'blk>,
     ) -> Result<(), MlirError> {
+        println!("[DEBUG] TritonCodegen::codegen_storage_live: local: {:?}", _local);
         // NO-OP: In the context of Triton and MLIR, storage live is a no-op.
         Ok(())
     }
@@ -383,6 +390,7 @@ impl<'a> TritonCodegen<'a> {
         _local: Local,
         _mlir_block: &BlockRef<'a, 'blk>,
     ) -> Result<(), MlirError> {
+        println!("[DEBUG] TritonCodegen::codegen_storage_dead: local: {:?}", _local);
         // NO-OP: In the context of Triton and MLIR, storage dead is a no-op.
         Ok(())
     }
@@ -501,6 +509,7 @@ impl<'a> TritonCodegen<'a> {
         mlir_block: &BlockRef<'a, 'blk>,
         ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'a, 'a>>,
     ) -> Value<'a, 'a> {
+        println!("[DEBUG] TritonCodegen::codegen_operand: ssa_values: {:?}", ssa_values,);
         match operand {
             Operand::Copy(place) => self.codegen_copy(tcx, instance, place, ssa_values),
             Operand::Move(place) => todo!("Move place: {:?}", place),
@@ -510,13 +519,17 @@ impl<'a> TritonCodegen<'a> {
         }
     }
 
-    fn codegen_copy<'tcx, 'blk>(
+    fn codegen_copy<'tcx>(
         &mut self,
         _tcx: TyCtxt<'tcx>,
         _instance: &Instance<'tcx>,
         place: &Place<'tcx>,
         ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'a, 'a>>,
     ) -> Value<'a, 'a> {
+        println!(
+            "[DEBUG] TritonCodegen::codegen_copy: ssa_values: Local: {:?}, SsaValues: {:?}",
+            place.local, ssa_values
+        );
         ssa_values.get(&place.local).copied().expect("Value not found for local")
     }
 
@@ -528,11 +541,13 @@ impl<'a> TritonCodegen<'a> {
         normalized_ty: Ty<'tcx>,
         mlir_block: &BlockRef<'a, 'blk>,
     ) -> Value<'a, 'a> {
+        println!("[DEBUG] TritonCodegen::codegen_constant_cast");
         match const_operand.const_ {
             Const::Val(const_val, ty) => {
                 let const_op = self.codegen_const_value(tcx, instance, const_val, ty);
                 match normalized_ty.kind() {
                     TyKind::RawPtr(_, _) => {
+                        println!("[DEBUG] TritonCodegen::codegen_constant_cast: RawPtr");
                         let result = const_op.result(0).unwrap();
                         let result_ty = result.r#type();
                         debug_assert!(
@@ -548,13 +563,17 @@ impl<'a> TritonCodegen<'a> {
                         )
                         .into();
 
+                        let result = cast_op.result(0).unwrap();
                         mlir_block.append_operation(const_op);
-                        cast_op.result(0).unwrap().into()
+                        mlir_block.append_operation(cast_op);
+                        result.into()
                     }
                     TyKind::Adt(adt_def, args) => {
+                        println!("[DEBUG] TritonCodegen::codegen_constant_cast: Adt");
                         let const_op = self.codegen_adt(tcx, instance, adt_def, args.as_slice());
-                        mlir_block.append_operation(const_op.clone());
-                        const_op.result(0).unwrap().into()
+                        let result = const_op.result(0).unwrap();
+                        mlir_block.append_operation(const_op);
+                        result.into()
                     }
                     _ => todo!("Constant cast normalized_ty: {:?}", normalized_ty),
                 }
