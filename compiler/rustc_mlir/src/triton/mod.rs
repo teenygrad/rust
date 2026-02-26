@@ -19,9 +19,7 @@ use melior::ir::attribute::{ArrayAttribute, Attribute, StringAttribute, TypeAttr
 use melior::ir::r#type::FunctionType;
 use melior::ir::{Region, Type, TypeLike};
 
-use crate::ffi::{
-    mlirCreateTritonPointerType, mlirCreateTritonRankedTensorType, mlirLoadTritonDialect,
-};
+use crate::ffi::{mlirCreateTritonPointerType, mlirLoadTritonDialect};
 use crate::triton::tt::{FuncOperation, IntToPtrOperation, ReturnOperation};
 
 melior_macro::dialect! {
@@ -42,10 +40,6 @@ pub fn load_triton_dialect(context: &Context) {
 
 pub fn create_triton_pointer<'a>(pointee: Type<'a>) -> Type<'a> {
     unsafe { Type::from_raw(mlirCreateTritonPointerType(pointee.to_raw(), 1)) }
-}
-
-pub fn create_triton_ranked_tensor<'a>(element_type: Type<'a>) -> Type<'a> {
-    unsafe { Type::from_raw(mlirCreateTritonRankedTensorType(element_type.to_raw())) }
 }
 
 // Extracted function for creating a tt.func operation with empty body and tt.divisibility attrs.

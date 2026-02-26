@@ -29,11 +29,3 @@ extern "C" MlirType mlirCreateTritonPointerType(MlirType pointee,
 
   return wrap(pointer_type);
 }
-
-extern "C" MlirType mlirCreateTritonRankedTensorType(MlirType elementType) {
-  auto type = unwrap(elementType);
-
-  auto tensor_type = mlir::RankedTensorType::get({ShapedType::kDynamic}, type);
-
-  return wrap(tensor_type);
-}

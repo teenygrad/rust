@@ -14,7 +14,14 @@
  * limitations under the License.
  */
 
-pub mod arith;
-pub mod builtin;
-pub mod cf;
-pub mod ub;
+use melior::Context;
+use melior::dialect::ods::cf::{self, BranchOperation};
+use melior::ir::{Block, Location};
+
+pub fn create_cf_br<'ctx>(
+    context: &'ctx Context,
+    location: Location<'ctx>,
+    target: &Block<'ctx>,
+) -> BranchOperation<'ctx> {
+    cf::BranchOperation::builder(context, location).dest(target).dest_operands(&[]).build()
+}

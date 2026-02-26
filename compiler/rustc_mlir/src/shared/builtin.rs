@@ -14,7 +14,12 @@
  * limitations under the License.
  */
 
-pub mod arith;
-pub mod builtin;
-pub mod cf;
-pub mod ub;
+use melior::ir::Type;
+use melior::ir::r#type::RankedTensorType;
+
+pub fn create_tensor_type<'ctx>(
+    dimensions: &[i64],
+    element_type: Type<'ctx>,
+) -> RankedTensorType<'ctx> {
+    RankedTensorType::new(dimensions, element_type, None)
+}

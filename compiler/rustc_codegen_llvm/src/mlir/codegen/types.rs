@@ -21,7 +21,8 @@ use rustc_ast::{FloatTy, IntTy, UintTy};
 use rustc_middle::ty::{
     AdtDef, AliasTy, AliasTyKind, GenericArg, ParamTy, Ty, TyCtxt, TyKind, TypingEnv,
 };
-use rustc_mlir::triton::{create_triton_pointer, create_triton_ranked_tensor};
+use rustc_mlir::shared::builtin::create_tensor_type;
+use rustc_mlir::triton::create_triton_pointer;
 
 type AdtHandler = for<'a, 'tcx> fn(&TypeMapper<'a>, &TyCtxt<'tcx>, &[GenericArg<'tcx>]) -> Type<'a>;
 
@@ -192,7 +193,7 @@ pub fn triton_tensor_handler<'a, 'tcx>(
     debug_assert_eq!(args.len(), 1, "Tensor should have 1 argument");
     let arg_ty = args[0].expect_ty();
     let arg_type = type_mapper.map_type(tcx, &arg_ty);
-    create_triton_ranked_tensor(arg_type)
+    create_tensor_type(&[i64::MIN], arg_type).into()
 }
 
 pub fn triton_pointer_handler<'a, 'tcx>(
