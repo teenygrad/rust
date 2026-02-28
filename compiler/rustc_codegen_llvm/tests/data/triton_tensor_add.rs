@@ -865,7 +865,6 @@ pub extern "C" fn entry_point(n_elements: i32) {
 
     tensor_add::<triton::llvm::triton::LlvmTriton, F32, 128>(x_ptr, y_ptr, output_ptr, n_elements);
 }
-#[no_mangle]
 pub extern "C" fn tensor_add<T: Triton, D: types::Dtype, const BLOCK_SIZE: u32>(
     x_ptr: T::Pointer<D>,
     y_ptr: T::Pointer<D>,
