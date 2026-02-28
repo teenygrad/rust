@@ -20,4 +20,7 @@ use rustc_macros::Diagnostic;
 pub enum MlirError {
     #[diag(codegen_llvm_mlir_codegen_failed)]
     CodegenFailed { err: String },
+
+    #[diag(codegen_llvm_mlir_create_operation_failed)]
+    CreateOperation { err: rustc_mlir::errors::Error },
 }

@@ -14,18 +14,19 @@
  * limitations under the License.
  */
 
-use melior::Context;
-use melior::ir::{Location, Operation, Type};
+use melior::ir::{Operation, Value};
 
-use crate::errors::Error;
+use crate::mlir::errors::MlirError;
 
-pub fn create_ub_poison<'ctx>(
-    context: &'ctx Context,
-    location: Location<'ctx>,
-    result: Type<'ctx>,
-) -> Result<Operation<'ctx>, Error> {
-    Ok(melior::dialect::ods::ub::PoisonOperationBuilder::new(context, location)
-        .result(result)
-        .build()
-        .into())
+pub trait BinaryOps<'ctx, 'a> {
+    fn codegen_mul(
+        &self,
+        lhs: Value<'ctx, 'a>,
+        rhs: Value<'ctx, 'a>,
+    ) -> Result<Operation<'a>, MlirError>
+    where
+        'ctx: 'a,
+    {
+        todo!("TritonCodegen::codegen_mul: {:?} {:?}", lhs, rhs);
+    }
 }

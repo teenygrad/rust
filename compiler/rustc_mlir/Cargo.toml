@@ -15,7 +15,9 @@ triton = []
 melior = { path = "../../src/melior/melior", features = ["ods-dialects"] }
 melior-macro = { path = "../../src/melior/macro" }
 mlir-sys = { path = "../../src/mlir-sys" }
-thiserror = "2.0.18"
+rustc_macros = { path = "../rustc_macros" }
+rustc_errors = { path = "../rustc_errors" }
+rustc_fluent_macro = { path = "../rustc_fluent_macro" }
 
 [build-dependencies]
 cc = "1.2.16"

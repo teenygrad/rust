@@ -14,18 +14,4 @@
  * limitations under the License.
  */
 
-use melior::Context;
-use melior::ir::{Location, Operation, Type};
-
-use crate::errors::Error;
-
-pub fn create_ub_poison<'ctx>(
-    context: &'ctx Context,
-    location: Location<'ctx>,
-    result: Type<'ctx>,
-) -> Result<Operation<'ctx>, Error> {
-    Ok(melior::dialect::ods::ub::PoisonOperationBuilder::new(context, location)
-        .result(result)
-        .build()
-        .into())
-}
+pub(crate) mod binaryop;

@@ -62,6 +62,8 @@ use melior::Context;
 use melior::dialect::DialectRegistry;
 use melior::utility::register_all_dialects;
 
+rustc_fluent_macro::fluent_messages! { "../messages.ftl" }
+
 pub fn load_all_dialects(context: &Context) {
     let registry = DialectRegistry::new();
     register_all_dialects(&registry);

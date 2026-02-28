@@ -19,6 +19,7 @@ use melior::ir::attribute::{ArrayAttribute, Attribute, StringAttribute, TypeAttr
 use melior::ir::r#type::FunctionType;
 use melior::ir::{Region, Type, TypeLike};
 
+use crate::errors::Error;
 use crate::ffi::{mlirCreateTritonPointerType, mlirLoadTritonDialect};
 use crate::triton::tt::{FuncOperation, IntToPtrOperation, ReturnOperation};
 
@@ -50,7 +51,7 @@ pub fn create_tt_func_with_divisibility<'c>(
     arg_types: &[melior::ir::Type<'c>],
     res_types: &[melior::ir::Type<'c>],
     tt_divisibility: i32,
-) -> FuncOperation<'c> {
+) -> Result<FuncOperation<'c>, Error> {
     // Create the function type
     let function_type = TypeAttribute::new(FunctionType::new(context, arg_types, res_types).into());
 
@@ -71,22 +72,22 @@ pub fn create_tt_func_with_divisibility<'c>(
     // Empty function body
     let body_region = Region::new();
 
-    FuncOperation::builder(context, location)
+    Ok(FuncOperation::builder(context, location)
         .sym_name(StringAttribute::new(context, name))
         .function_type(function_type)
         .sym_visibility(StringAttribute::new(context, "public"))
         .arg_attrs(arg_attrs)
         .res_attrs(res_attrs)
         .body(body_region)
-        .build()
+        .build())
 }
 
 pub fn create_tt_return<'ctx, 'b>(
     context: &'ctx Context,
     location: melior::ir::Location<'ctx>,
     value: &[melior::ir::Value<'ctx, 'b>],
-) -> ReturnOperation<'ctx> {
-    ReturnOperation::builder(context, location).srcs(value).build()
+) -> Result<ReturnOperation<'ctx>, Error> {
+    Ok(ReturnOperation::builder(context, location).srcs(value).build())
 }
 
 pub fn create_tt_int_to_ptr_cast<'ctx, 'b>(
@@ -94,8 +95,8 @@ pub fn create_tt_int_to_ptr_cast<'ctx, 'b>(
     location: melior::ir::Location<'ctx>,
     src: melior::ir::Value<'ctx, 'b>,
     dest: Type<'ctx>,
-) -> IntToPtrOperation<'ctx> {
-    IntToPtrOperation::builder(context, location).result(dest).src(src).build()
+) -> Result<IntToPtrOperation<'ctx>, Error> {
+    Ok(IntToPtrOperation::builder(context, location).result(dest).src(src).build())
 }
 
 #[cfg(test)]
@@ -133,7 +134,8 @@ mod tests {
             &inputs,
             &results,
             16,
-        );
+        )
+        .unwrap();
 
         // Create a constant op returning f32 1.0
         let one_attr = Attribute::parse(&context, "1.0 : f32").expect("valid f32");
@@ -183,12 +185,13 @@ mod tests {
         // f32 type as MLIR type
         let f32_type = Type::float32(&context);
         let f32_ptr_type = create_triton_pointer(f32_type);
-        let i64_zero = create_constant(&context, location, Int::I64(0));
+        let i64_zero = create_constant(&context, location, Int::I64(0)).unwrap();
         let i64_zero_value = i64_zero.result().unwrap();
 
         // Call the function under test
         let cast_op =
-            create_tt_int_to_ptr_cast(&context, location, i64_zero_value.into(), f32_ptr_type);
+            create_tt_int_to_ptr_cast(&context, location, i64_zero_value.into(), f32_ptr_type)
+                .unwrap();
 
         module.body().append_operation(i64_zero.into());
         module.body().append_operation(cast_op.into());

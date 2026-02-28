@@ -14,27 +14,32 @@
  * limitations under the License.
  */
 
-/// Error type for MLIR operations
-#[derive(Debug, Clone, thiserror::Error)]
+use std::fmt;
+
+use rustc_errors::into_diag_arg_using_display;
+use rustc_macros::Diagnostic;
+
+#[derive(Debug, Diagnostic)]
 pub enum Error {
-    #[error("MLIR operation failed")]
-    OperationFailed,
+    #[diag(mlir_invalid_type)]
+    InvalidType { msg: String },
 
-    #[error("Triton dialects not available (compiled without TRITON_ENABLED)")]
-    TritonNotAvailable,
-
-    #[error("Invalid type: {0}")]
-    InvalidType(String),
-
-    #[error("Invalid attribute: {0}")]
-    InvalidAttribute(String),
-
-    #[error("Module verification failed")]
-    VerificationFailed,
-
-    #[error("Parse error: {0}")]
-    ParseError(String),
+    #[diag(mlir_incompatible_types)]
+    IncompatibleTypes { lhs: String, rhs: String },
 }
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::InvalidType { msg } => write!(f, "invalid type: {msg}"),
+            Error::IncompatibleTypes { lhs, rhs } => {
+                write!(f, "incompatible types: {lhs} vs {rhs}")
+            }
+        }
+    }
+}
+
+into_diag_arg_using_display!(Error);
 
 /// Result type for MLIR operations
 pub type Result<T> = std::result::Result<T, Error>;

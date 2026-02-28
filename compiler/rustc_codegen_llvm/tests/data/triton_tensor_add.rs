@@ -623,9 +623,10 @@ pub mod triton {
                     type Output = Tensor<Self>;
 
                     #[inline(never)]
+                    #[allow(clippy::zero_ptr)]
                     fn add_offsets(self, _offsets: I32Tensor) -> Self::Output {
                         // dummy implementation not used in final output
-                        Tensor(self.0 as *mut Self)
+                        Tensor(0 as *mut Self)
                     }
                 }
 
