@@ -545,7 +545,80 @@ impl<'a> TritonCodegen<'a> {
             rustc_middle::mir::TerminatorKind::Goto { target } => {
                 self.codegen_goto(target, mlir_block, basic_blocks)
             }
-            _ => todo!("Not yet implemented - terminator: {:?}", terminator.kind),
+            rustc_middle::mir::TerminatorKind::SwitchInt { discr, targets } => {
+                todo!("SwitchInt: {:?} {:?}", discr, targets)
+            }
+            rustc_middle::mir::TerminatorKind::UnwindResume => todo!("UnwindResume"),
+            rustc_middle::mir::TerminatorKind::UnwindTerminate(unwind_terminate_reason) => {
+                todo!("UnwindTerminate: {:?}", unwind_terminate_reason)
+            }
+            rustc_middle::mir::TerminatorKind::Unreachable => todo!("Unreachable"),
+            rustc_middle::mir::TerminatorKind::Drop {
+                place,
+                target,
+                unwind,
+                replace,
+                drop,
+                async_fut,
+            } => todo!(
+                "Drop: {:?} {:?} {:?} {:?} {:?} {:?}",
+                place,
+                target,
+                unwind,
+                replace,
+                drop,
+                async_fut
+            ),
+            rustc_middle::mir::TerminatorKind::Call {
+                func,
+                args,
+                destination,
+                target,
+                unwind,
+                call_source,
+                fn_span,
+            } => todo!(
+                "Call: {:?} {:?} {:?} {:?} {:?} {:?} {:?}",
+                func,
+                args,
+                destination,
+                target,
+                unwind,
+                call_source,
+                fn_span
+            ),
+            rustc_middle::mir::TerminatorKind::TailCall { func, args, fn_span } => {
+                todo!("TailCall: {:?} {:?} {:?}", func, args, fn_span)
+            }
+            rustc_middle::mir::TerminatorKind::Assert { cond, expected, msg, target, unwind } => {
+                todo!("Assert: {:?} {:?} {:?} {:?} {:?}", cond, expected, msg, target, unwind)
+            }
+            rustc_middle::mir::TerminatorKind::Yield { value, resume, resume_arg, drop } => todo!(),
+            rustc_middle::mir::TerminatorKind::CoroutineDrop => todo!("CoroutineDrop"),
+            rustc_middle::mir::TerminatorKind::FalseEdge { real_target, imaginary_target } => {
+                todo!("FalseEdge: {:?} {:?}", real_target, imaginary_target)
+            }
+            rustc_middle::mir::TerminatorKind::FalseUnwind { real_target, unwind } => {
+                todo!("FalseUnwind: {:?} {:?}", real_target, unwind)
+            }
+            rustc_middle::mir::TerminatorKind::InlineAsm {
+                asm_macro,
+                template,
+                operands,
+                options,
+                line_spans,
+                targets,
+                unwind,
+            } => todo!(
+                "InlineAsm: {:?} {:?} {:?} {:?} {:?} {:?} {:?}",
+                asm_macro,
+                template,
+                operands,
+                options,
+                line_spans,
+                targets,
+                unwind
+            ),
         }
     }
 
