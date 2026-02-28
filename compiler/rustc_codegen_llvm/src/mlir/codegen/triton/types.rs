@@ -22,7 +22,7 @@ use rustc_middle::ty::{
     AdtDef, AliasTy, AliasTyKind, GenericArg, ParamTy, Ty, TyCtxt, TyKind, TypingEnv,
 };
 use rustc_mlir::shared::builtin::create_tensor_type;
-use rustc_mlir::triton::create_triton_pointer;
+use rustc_mlir::triton::create_triton_pointer_type;
 
 type AdtHandler = for<'a, 'tcx> fn(&TypeMapper<'a>, &TyCtxt<'tcx>, &[GenericArg<'tcx>]) -> Type<'a>;
 
@@ -165,7 +165,7 @@ impl<'a> TypeMapper<'a> {
 
     fn create_raw_ptr_type<'tcx>(&self, tcx: &TyCtxt<'tcx>, ty: &Ty<'tcx>) -> Type<'a> {
         let ty = self.map_type(tcx, ty);
-        create_triton_pointer(ty)
+        create_triton_pointer_type(ty)
     }
 }
 
@@ -204,7 +204,7 @@ pub fn triton_pointer_handler<'a, 'tcx>(
     debug_assert_eq!(args.len(), 1, "Pointer should have 1 argument");
     let arg_ty = args[0].expect_ty();
     let arg_type = type_mapper.map_type(tcx, &arg_ty);
-    create_triton_pointer(arg_type)
+    create_triton_pointer_type(arg_type)
 }
 
 pub fn triton_i32_handler<'a, 'tcx>(

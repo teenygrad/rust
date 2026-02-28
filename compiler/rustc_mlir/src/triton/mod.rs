@@ -39,7 +39,7 @@ pub fn load_triton_dialect(context: &Context) {
     }
 }
 
-pub fn create_triton_pointer<'a>(pointee: Type<'a>) -> Type<'a> {
+pub fn create_triton_pointer_type<'a>(pointee: Type<'a>) -> Type<'a> {
     unsafe { Type::from_raw(mlirCreateTritonPointerType(pointee.to_raw(), 1)) }
 }
 
@@ -120,7 +120,7 @@ mod tests {
         let module = Module::new(location);
 
         let f32_type = Type::float32(&context);
-        let ptr_f32_type = create_triton_pointer(f32_type);
+        let ptr_f32_type = create_triton_pointer_type(f32_type);
 
         // Function signature: (!tt.ptr<f32>, !tt.ptr<f32>) -> f32
         let inputs = vec![ptr_f32_type, ptr_f32_type];
@@ -184,7 +184,7 @@ mod tests {
 
         // f32 type as MLIR type
         let f32_type = Type::float32(&context);
-        let f32_ptr_type = create_triton_pointer(f32_type);
+        let f32_ptr_type = create_triton_pointer_type(f32_type);
         let i64_zero = create_constant(&context, location, Int::I64(0)).unwrap();
         let i64_zero_value = i64_zero.result().unwrap();
 

@@ -36,14 +36,14 @@ use rustc_middle::mir::{
 use rustc_middle::ty::layout::MaybeResult;
 use rustc_middle::ty::{AdtDef, EarlyBinder, GenericArg, Instance, Ty, TyCtxt, TyKind, TypingEnv};
 use rustc_mlir::load_all_dialects;
-use rustc_mlir::shared::arith::{Int, create_constant};
+use rustc_mlir::shared::arith::{Int, create_constant, create_muli};
 use rustc_mlir::shared::builtin::create_tensor_type;
 use rustc_mlir::shared::cf::create_cf_br;
 use rustc_mlir::shared::ub::create_ub_poison;
 use rustc_mlir::triton::tt::FuncOperation;
 use rustc_mlir::triton::{
-    create_tt_func_with_divisibility, create_tt_int_to_ptr_cast, create_tt_return,
-    load_triton_dialect,
+    create_triton_pointer_type, create_tt_func_with_divisibility, create_tt_int_to_ptr_cast,
+    create_tt_return, load_triton_dialect,
 };
 
 use crate::mlir::MlirModule;
@@ -306,9 +306,12 @@ impl<'a> TritonCodegen<'a> {
             }
             Rvalue::ThreadLocalRef(def_id) => todo!("ThreadLocalRef: {:?}", def_id),
             Rvalue::RawPtr(raw_ptr_kind, place) => todo!("RawPtr: {:?} {:?}", raw_ptr_kind, place),
-            Rvalue::BinaryOp(bin_op, operands) => self.codegen_binary_op(
-                tcx, instance, mir, place, bin_op, operands, mlir_block, ssa_values,
-            )?,
+            Rvalue::BinaryOp(bin_op, operands) => {
+                let value = self.codegen_binary_op(
+                    tcx, instance, mir, place, bin_op, operands, mlir_block, ssa_values,
+                )?;
+                ssa_values.insert(place.local, value);
+            }
             Rvalue::NullaryOp(null_op) => todo!("NullaryOp: {:?}", null_op),
             Rvalue::UnaryOp(un_op, operand) => todo!("UnaryOp: {:?} {:?}", un_op, operand),
             Rvalue::Discriminant(place) => todo!("Discriminant: {:?}", place),
@@ -352,17 +355,20 @@ impl<'a> TritonCodegen<'a> {
         raw_list: &[GenericArg<'tcx>],
     ) -> Result<Operation<'a>, MlirError> {
         let name = format!("{:?}", adt_def);
+        let map_ty = |idx: usize| {
+            let ty = instance.instantiate_mir_and_normalize_erasing_regions(
+                tcx,
+                TypingEnv::fully_monomorphized(),
+                EarlyBinder::bind(raw_list[idx].expect_ty()),
+            );
+            self.type_mapper.map_type(&tcx, &ty)
+        };
 
         // If the name of the ADT is tensor, then we create a poison operation.
         // This is because the tensor creation is part of the dsl dead code which
         // will be eliminated by the optimizer.
         if name == "triton::llvm::triton::tensor::Tensor" {
-            let ty = instance.instantiate_mir_and_normalize_erasing_regions(
-                tcx,
-                TypingEnv::fully_monomorphized(),
-                EarlyBinder::bind(raw_list[0].expect_ty()),
-            );
-            let ty = self.type_mapper.map_type(&tcx, &ty);
+            let ty = map_ty(0);
             let tensor_type = create_tensor_type(&[i64::MIN], ty).into();
 
             Ok(create_ub_poison(
@@ -370,8 +376,17 @@ impl<'a> TritonCodegen<'a> {
                 Location::unknown(self.module.context()),
                 tensor_type,
             )
-            .map_err(|e| MlirError::CreateOperation { err: e })?
-            .into())
+            .map_err(|e| MlirError::CreateOperation { err: e })?)
+        } else if name == "triton::llvm::triton::pointer::Pointer" {
+            let ty = map_ty(0);
+            let pointer_type = create_triton_pointer_type(ty);
+
+            Ok(create_ub_poison(
+                self.module.context(),
+                Location::unknown(self.module.context()),
+                pointer_type,
+            )
+            .map_err(|e| MlirError::CreateOperation { err: e })?)
         } else if name == "triton::llvm::triton::num::I32" {
             debug_assert_eq!(raw_list.len(), 0, "I32 should have no arguments");
             Ok(create_constant(
@@ -396,7 +411,7 @@ impl<'a> TritonCodegen<'a> {
         operands: &(Operand<'tcx>, Operand<'tcx>),
         mlir_block: &BlockRef<'a, 'blk>,
         ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'a, 'a>>,
-    ) -> Result<(), MlirError> {
+    ) -> Result<Value<'a, 'a>, MlirError> {
         let (lhs_op, rhs_op) = operands;
         let lhs_ty = instance.instantiate_mir_and_normalize_erasing_regions(
             tcx,
@@ -451,20 +466,27 @@ impl<'a> TritonCodegen<'a> {
         place: &Place<'tcx>,
         lhs: Value<'a, 'a>,
         rhs: Value<'a, 'a>,
-        _mlir_block: &BlockRef<'a, 'blk>,
+        mlir_block: &BlockRef<'a, 'blk>,
         _ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'a, 'a>>,
-    ) -> Result<(), MlirError> {
-        let mlir_lhs_ty = lhs.r#type();
-        let mlir_rhs_ty = rhs.r#type();
-        if mlir_lhs_ty != mlir_rhs_ty {
-            todo!(
-                "TritonCodegen::codegen_mul: lhs_ty != rhs_ty: {:?} != {:?}",
-                mlir_lhs_ty,
-                mlir_rhs_ty
-            );
-        }
+    ) -> Result<Value<'a, 'a>, MlirError> {
+        let lhs_ty = lhs.r#type();
+        let rhs_ty = rhs.r#type();
 
-        todo!("TritonCodegen::codegen_mul: {:?} {:?} {:?}", mlir_lhs_ty, mlir_rhs_ty, place);
+        if lhs_ty.is_integer() {
+            let mul_op: Operation<'a> = create_muli(
+                self.module.context(),
+                Location::unknown(self.module.context()),
+                lhs,
+                rhs,
+            )
+            .map_err(|e| MlirError::CreateOperation { err: e })?
+            .into();
+            let result = mul_op.result(0).unwrap().into();
+            mlir_block.append_operation(mul_op.into());
+            Ok(result)
+        } else {
+            todo!("TritonCodegen::codegen_mul: {:?} {:?} {:?}", lhs_ty, rhs_ty, place);
+        }
     }
 
     fn codegen_set_discriminant<'tcx, 'blk>(
