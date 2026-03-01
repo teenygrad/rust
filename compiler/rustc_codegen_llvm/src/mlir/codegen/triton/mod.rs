@@ -16,6 +16,7 @@
 
 use std::collections::HashMap;
 
+use melior::Context;
 use melior::dialect::ods::arith::ConstantOperation;
 use melior::ir::operation::{OperationLike, OperationResult};
 use melior::ir::{
@@ -29,9 +30,9 @@ use rustc_index::IndexVec;
 use rustc_middle::mir::interpret::Scalar;
 use rustc_middle::mir::mono::MonoItem;
 use rustc_middle::mir::{
-    AggregateKind, BasicBlock, BasicBlockData, BinOp, Body, CastKind, Const, ConstOperand,
-    ConstValue, Local, NonDivergingIntrinsic, Operand, Place, Rvalue, Statement, StatementKind,
-    Terminator,
+    AggregateKind, BasicBlock, BasicBlockData, BinOp, Body, CallSource, CastKind, Const,
+    ConstOperand, ConstValue, Local, NonDivergingIntrinsic, Operand, Place, Rvalue, Statement,
+    StatementKind, Terminator, UnwindAction,
 };
 use rustc_middle::ty::layout::MaybeResult;
 use rustc_middle::ty::{AdtDef, EarlyBinder, GenericArg, Instance, Ty, TyCtxt, TyKind, TypingEnv};
@@ -45,14 +46,18 @@ use rustc_mlir::triton::{
     create_triton_pointer_type, create_tt_func_with_divisibility, create_tt_int_to_ptr_cast,
     create_tt_return, load_triton_dialect,
 };
+use rustc_span::Span;
+use rustc_span::source_map::Spanned;
 
 use crate::mlir::MlirModule;
 use crate::mlir::codegen::Codegen;
 use crate::mlir::codegen::triton::types::TypeMapper;
 use crate::mlir::errors::MlirError;
 
-mod ops;
 mod types;
+
+type SsaValues<'c, 'a> = HashMap<Local, Value<'c, 'a>>;
+
 pub(crate) struct TritonCodegen<'a> {
     module: &'a MlirModule<'static>,
     type_mapper: TypeMapper<'a>,
@@ -75,8 +80,7 @@ impl<'a> TritonCodegen<'a> {
         fn_ty: Ty<'tcx>,
         instance: &Instance<'tcx>,
     ) -> Result<(), MlirError> {
-        let mut ssa_values: HashMap<rustc_middle::mir::Local, melior::ir::Value<'a, 'a>> =
-            HashMap::new();
+        let mut ssa_values: SsaValues = HashMap::new();
         let mut basic_blocks: HashMap<BasicBlock, Block> = HashMap::new();
 
         // Downcast to a FnSig
@@ -174,7 +178,7 @@ impl<'a> TritonCodegen<'a> {
         _bb: BasicBlock,
         bb_data: &BasicBlockData<'tcx>,
         func_op: &FuncOperation<'a>,
-        ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'a, 'a>>,
+        ssa_values: &mut SsaValues<'a, 'a>,
         basic_blocks: &HashMap<BasicBlock, Block>,
     ) -> Result<(), MlirError> {
         // Create an empty MLIR block and append it to the function body region.
@@ -189,7 +193,15 @@ impl<'a> TritonCodegen<'a> {
         }
 
         // Codegen the block terminator.
-        self.codegen_terminator(tcx, bb_data.terminator(), &mlir_block, ssa_values, basic_blocks)?;
+        self.codegen_terminator(
+            tcx,
+            instance,
+            mir,
+            bb_data.terminator(),
+            &mlir_block,
+            ssa_values,
+            basic_blocks,
+        )?;
 
         Ok(())
     }
@@ -201,7 +213,7 @@ impl<'a> TritonCodegen<'a> {
         mir: &Body<'tcx>,
         stmt: &Statement<'tcx>,
         mlir_block: &BlockRef<'a, 'blk>,
-        ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'a, 'a>>,
+        ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<(), MlirError> {
         println!("[DEBUG] TritonCodegen::codegen_statement: ssa_values: {:?}", ssa_values);
         match &stmt.kind {
@@ -245,7 +257,7 @@ impl<'a> TritonCodegen<'a> {
         place: &Place<'tcx>,
         rvalue: &Rvalue<'tcx>,
         mlir_block: &BlockRef<'a, 'blk>,
-        ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'a, 'a>>,
+        ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<(), MlirError> {
         match rvalue {
             Rvalue::Use(operand) => {
@@ -410,7 +422,7 @@ impl<'a> TritonCodegen<'a> {
         bin_op: &BinOp,
         operands: &(Operand<'tcx>, Operand<'tcx>),
         mlir_block: &BlockRef<'a, 'blk>,
-        ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'a, 'a>>,
+        ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Value<'a, 'a>, MlirError> {
         let (lhs_op, rhs_op) = operands;
         let lhs_ty = instance.instantiate_mir_and_normalize_erasing_regions(
@@ -467,7 +479,7 @@ impl<'a> TritonCodegen<'a> {
         lhs: Value<'a, 'a>,
         rhs: Value<'a, 'a>,
         mlir_block: &BlockRef<'a, 'blk>,
-        _ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'a, 'a>>,
+        _ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Value<'a, 'a>, MlirError> {
         let lhs_ty = lhs.r#type();
         let rhs_ty = rhs.r#type();
@@ -532,10 +544,12 @@ impl<'a> TritonCodegen<'a> {
 
     fn codegen_terminator<'tcx, 'blk>(
         &mut self,
-        _tcx: TyCtxt<'tcx>,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        mir: &Body<'tcx>,
         terminator: &Terminator<'tcx>,
         mlir_block: &BlockRef<'a, 'blk>,
-        ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'a, 'a>>,
+        ssa_values: &mut SsaValues<'a, 'a>,
         basic_blocks: &HashMap<BasicBlock, Block>,
     ) -> Result<(), MlirError> {
         match &terminator.kind {
@@ -577,15 +591,19 @@ impl<'a> TritonCodegen<'a> {
                 unwind,
                 call_source,
                 fn_span,
-            } => todo!(
-                "Call: {:?} {:?} {:?} {:?} {:?} {:?} {:?}",
+            } => self.codegen_terminator_call(
+                tcx,
+                instance,
+                mir,
                 func,
                 args,
                 destination,
                 target,
                 unwind,
                 call_source,
-                fn_span
+                fn_span,
+                mlir_block,
+                ssa_values,
             ),
             rustc_middle::mir::TerminatorKind::TailCall { func, args, fn_span } => {
                 todo!("TailCall: {:?} {:?} {:?}", func, args, fn_span)
@@ -622,11 +640,41 @@ impl<'a> TritonCodegen<'a> {
         }
     }
 
+    fn codegen_terminator_call<'tcx, 'blk>(
+        &mut self,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        mir: &Body<'tcx>,
+        func: &Operand<'tcx>,
+        args: &[Spanned<Operand<'tcx>>],
+        destination: &Place<'tcx>,
+        target: &Option<BasicBlock>,
+        unwind: &UnwindAction,
+        call_source: &CallSource,
+        fn_span: &Span,
+        mlir_block: &BlockRef<'a, 'blk>,
+        ssa_values: &mut SsaValues<'a, 'a>,
+    ) -> Result<(), MlirError> {
+        let _func_name =
+            self.codegen_operand(tcx, instance, func, func.ty(mir, tcx), mlir_block, ssa_values);
+
+        todo!(
+            "TritonCodegen::codegen_terminator_call: {:?} {:?} {:?} {:?} {:?} {:?} {:?}",
+            func,
+            args,
+            destination,
+            target,
+            unwind,
+            call_source,
+            fn_span
+        )
+    }
+
     fn codegen_return<'tcx, 'blk>(
         &mut self,
         _terminator: &Terminator<'tcx>,
         mlir_block: &BlockRef<'a, 'blk>,
-        ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'a, 'a>>,
+        ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<(), MlirError> {
         println!("[DEBUG] TritonCodegen::codegen_return: ssa_values: {:?}", ssa_values);
         let value = ssa_values.get(&Local::ZERO).copied();
@@ -665,7 +713,7 @@ impl<'a> TritonCodegen<'a> {
         operand: &Operand<'tcx>,
         ty: &Ty<'tcx>,
         mlir_block: &BlockRef<'a, 'blk>,
-        ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'a, 'a>>,
+        ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Value<'a, 'a>, MlirError> {
         match cast_kind {
             CastKind::PointerWithExposedProvenance => self.codegen_pointer_with_exposed_provenance(
@@ -688,7 +736,7 @@ impl<'a> TritonCodegen<'a> {
         operand: &Operand<'tcx>,
         ty: &Ty<'tcx>,
         mlir_block: &BlockRef<'a, 'blk>,
-        ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'a, 'a>>,
+        ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Value<'a, 'a>, MlirError> {
         // Resolve function-level type parameters (e.g. D) using this instance's generic args,
         // then normalize (e.g. associated types).
@@ -714,7 +762,7 @@ impl<'a> TritonCodegen<'a> {
         operand: &Operand<'tcx>,
         ty: &Ty<'tcx>,
         mlir_block: &BlockRef<'a, 'blk>,
-        ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'a, 'a>>,
+        ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Value<'a, 'a>, MlirError> {
         let typing_env = TypingEnv::fully_monomorphized();
         let normalized_ty = instance.instantiate_mir_and_normalize_erasing_regions(
@@ -733,7 +781,7 @@ impl<'a> TritonCodegen<'a> {
         operand: &Operand<'tcx>,
         ty: &Ty<'tcx>,
         mlir_block: &BlockRef<'a, 'blk>,
-        ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'a, 'a>>,
+        ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Value<'a, 'a>, MlirError> {
         let typing_env = TypingEnv::fully_monomorphized();
         let normalized_ty = instance.instantiate_mir_and_normalize_erasing_regions(
@@ -751,7 +799,7 @@ impl<'a> TritonCodegen<'a> {
         operand: &Operand<'tcx>,
         normalized_ty: Ty<'tcx>,
         mlir_block: &BlockRef<'a, 'blk>,
-        ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'a, 'a>>,
+        ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Value<'a, 'a>, MlirError> {
         println!("[DEBUG] TritonCodegen::codegen_operand: ssa_values: {:?}", ssa_values,);
         match operand {
@@ -774,7 +822,7 @@ impl<'a> TritonCodegen<'a> {
         _instance: &Instance<'tcx>,
         place: &Place<'tcx>,
         normalized_ty: Ty<'tcx>,
-        ssa_values: &mut HashMap<rustc_middle::mir::Local, melior::ir::Value<'a, 'a>>,
+        ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Value<'a, 'a>, MlirError> {
         println!(
             "[DEBUG] TritonCodegen::codegen_copy: ssa_values: Local: {:?}, SsaValues: {:?}",
