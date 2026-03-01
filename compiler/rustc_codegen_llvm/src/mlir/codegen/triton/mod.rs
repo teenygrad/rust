@@ -552,6 +552,11 @@ impl<'a> TritonCodegen<'a> {
         ssa_values: &mut SsaValues<'a, 'a>,
         basic_blocks: &HashMap<BasicBlock, Block>,
     ) -> Result<(), MlirError> {
+        println!(
+            "[DEBUG] TritonCodegen::codegen_terminator: ssa_values: {:?} terminator: {:?}",
+            ssa_values, terminator
+        );
+
         match &terminator.kind {
             rustc_middle::mir::TerminatorKind::Return => {
                 self.codegen_return(terminator, mlir_block, ssa_values)
@@ -655,19 +660,69 @@ impl<'a> TritonCodegen<'a> {
         mlir_block: &BlockRef<'a, 'blk>,
         ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<(), MlirError> {
-        let _func_name =
-            self.codegen_operand(tcx, instance, func, func.ty(mir, tcx), mlir_block, ssa_values);
+        // Attempt to print out the function name as a string
+        // For direct function references, print def_id name; otherwise fallback to debug print
+        let func_name = match func {
+            Operand::Constant(c) => {
+                if let TyKind::FnDef(def_id, _) = c.ty().kind() {
+                    tcx.def_path_str(*def_id)
+                } else {
+                    format!("{:?}", func)
+                }
+            }
+            _ => format!("XX{:?}", func),
+        };
 
-        todo!(
-            "TritonCodegen::codegen_terminator_call: {:?} {:?} {:?} {:?} {:?} {:?} {:?}",
-            func,
-            args,
-            destination,
-            target,
-            unwind,
-            call_source,
-            fn_span
-        )
+        if func_name == "triton::Triton::program_id" {
+            self.codegen_program_id(
+                tcx,
+                instance,
+                mir,
+                func,
+                args,
+                destination,
+                target,
+                unwind,
+                call_source,
+                fn_span,
+                mlir_block,
+                ssa_values,
+            )
+        } else {
+            todo!(
+                "TritonCodegen::codegen_terminator_call: {:?} {:?} {:?} {:?} {:?} {:?} {:?}",
+                func,
+                args,
+                destination,
+                target,
+                unwind,
+                call_source,
+                fn_span
+            )
+        }
+    }
+
+    fn codegen_program_id<'tcx, 'blk>(
+        &mut self,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        mir: &Body<'tcx>,
+        func: &Operand<'tcx>,
+        args: &[Spanned<Operand<'tcx>>],
+        destination: &Place<'tcx>,
+        target: &Option<BasicBlock>,
+        unwind: &UnwindAction,
+        call_source: &CallSource,
+        fn_span: &Span,
+        mlir_block: &BlockRef<'a, 'blk>,
+        ssa_values: &mut SsaValues<'a, 'a>,
+    ) -> Result<(), MlirError> {
+        println!(
+            "[DEBUG] TritonCodegen::codegen_program_id: func: {:?} args: {:?} destination: {:?} target: {:?} unwind: {:?} call_source: {:?} fn_span: {:?}",
+            func, args, destination, target, unwind, call_source, fn_span
+        );
+
+        todo!("TritonCodegen::codegen_program_id")
     }
 
     fn codegen_return<'tcx, 'blk>(
@@ -801,7 +856,10 @@ impl<'a> TritonCodegen<'a> {
         mlir_block: &BlockRef<'a, 'blk>,
         ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Value<'a, 'a>, MlirError> {
-        println!("[DEBUG] TritonCodegen::codegen_operand: ssa_values: {:?}", ssa_values,);
+        println!(
+            "[DEBUG] TritonCodegen::codegen_operand: ssa_values: {:?} operand: {:?}",
+            ssa_values, operand
+        );
         match operand {
             Operand::Copy(place) => {
                 self.codegen_copy(tcx, instance, place, normalized_ty, ssa_values)
