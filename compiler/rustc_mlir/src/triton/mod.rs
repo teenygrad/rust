@@ -16,12 +16,12 @@
 
 use melior::Context;
 use melior::ir::attribute::{ArrayAttribute, Attribute, StringAttribute, TypeAttribute};
-use melior::ir::r#type::FunctionType;
+use melior::ir::r#type::{FunctionType, IntegerType};
 use melior::ir::{Region, Type, TypeLike};
 
 use crate::errors::Error;
 use crate::ffi::{mlirCreateTritonPointerType, mlirLoadTritonDialect};
-use crate::triton::tt::{FuncOperation, IntToPtrOperation, ReturnOperation};
+use crate::triton::tt::{FuncOperation, GetProgramIdOperation, IntToPtrOperation, ReturnOperation};
 
 melior_macro::dialect! {
     name: "tt",
@@ -31,6 +31,24 @@ melior_macro::dialect! {
         "triton/Dialect/Triton/IR/TritonTypes.td"
     ],
     include_directories: ["TRITON_INCLUDE_DIRECTORY"],
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ProgramAxis {
+    Axis0 = 0,
+    Axis1 = 1,
+    Axis2 = 2,
+}
+
+impl From<i32> for ProgramAxis {
+    fn from(value: i32) -> Self {
+        match value {
+            0 => ProgramAxis::Axis0,
+            1 => ProgramAxis::Axis1,
+            2 => ProgramAxis::Axis2,
+            _ => panic!("Invalid program axis: {}", value),
+        }
+    }
 }
 
 pub fn load_triton_dialect(context: &Context) {
@@ -97,6 +115,17 @@ pub fn create_tt_int_to_ptr_cast<'ctx, 'b>(
     dest: Type<'ctx>,
 ) -> Result<IntToPtrOperation<'ctx>, Error> {
     Ok(IntToPtrOperation::builder(context, location).result(dest).src(src).build())
+}
+
+pub fn create_tt_program_id<'ctx>(
+    context: &'ctx Context,
+    location: melior::ir::Location<'ctx>,
+    axis: ProgramAxis,
+) -> Result<GetProgramIdOperation<'ctx>, Error> {
+    let axis_attr =
+        Attribute::parse(context, &format!("{} : i32", axis as i32)).expect("valid axis attribute");
+    let result = IntegerType::new(context, 32).into();
+    Ok(GetProgramIdOperation::builder(context, location).axis(axis_attr).result(result).build())
 }
 
 #[cfg(test)]

@@ -43,8 +43,8 @@ use rustc_mlir::shared::cf::create_cf_br;
 use rustc_mlir::shared::ub::create_ub_poison;
 use rustc_mlir::triton::tt::FuncOperation;
 use rustc_mlir::triton::{
-    create_triton_pointer_type, create_tt_func_with_divisibility, create_tt_int_to_ptr_cast,
-    create_tt_return, load_triton_dialect,
+    ProgramAxis, create_triton_pointer_type, create_tt_func_with_divisibility,
+    create_tt_int_to_ptr_cast, create_tt_program_id, create_tt_return, load_triton_dialect,
 };
 use rustc_span::Span;
 use rustc_span::source_map::Spanned;
@@ -425,6 +425,7 @@ impl<'a> TritonCodegen<'a> {
         ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Value<'a, 'a>, MlirError> {
         let (lhs_op, rhs_op) = operands;
+
         let lhs_ty = instance.instantiate_mir_and_normalize_erasing_regions(
             tcx,
             TypingEnv::fully_monomorphized(),
@@ -673,7 +674,7 @@ impl<'a> TritonCodegen<'a> {
             _ => format!("XX{:?}", func),
         };
 
-        if func_name == "triton::Triton::program_id" {
+        let op = if func_name == "triton::Triton::program_id" {
             self.codegen_program_id(
                 tcx,
                 instance,
@@ -687,7 +688,7 @@ impl<'a> TritonCodegen<'a> {
                 fn_span,
                 mlir_block,
                 ssa_values,
-            )
+            )?
         } else {
             todo!(
                 "TritonCodegen::codegen_terminator_call: {:?} {:?} {:?} {:?} {:?} {:?} {:?}",
@@ -699,7 +700,10 @@ impl<'a> TritonCodegen<'a> {
                 call_source,
                 fn_span
             )
-        }
+        };
+
+        mlir_block.append_operation(op);
+        Ok(())
     }
 
     fn codegen_program_id<'tcx, 'blk>(
@@ -716,13 +720,40 @@ impl<'a> TritonCodegen<'a> {
         fn_span: &Span,
         mlir_block: &BlockRef<'a, 'blk>,
         ssa_values: &mut SsaValues<'a, 'a>,
-    ) -> Result<(), MlirError> {
+    ) -> Result<Operation<'a>, MlirError> {
         println!(
             "[DEBUG] TritonCodegen::codegen_program_id: func: {:?} args: {:?} destination: {:?} target: {:?} unwind: {:?} call_source: {:?} fn_span: {:?}",
             func, args, destination, target, unwind, call_source, fn_span
         );
 
-        todo!("TritonCodegen::codegen_program_id")
+        debug_assert!(args.len() == 1, "TritonCodegen::codegen_program_id: args length must be 1");
+
+        let axis = match &args[0].node {
+            Operand::Constant(c) => {
+                // We expect the constant to have a value that tells us the discriminant/variant
+                match c.const_ {
+                    Const::Val(ConstValue::Scalar(Scalar::Int(scalar_int)), _) => {
+                        <ProgramAxis as From<i32>>::from(
+                            scalar_int.to_bits(scalar_int.size()) as i32
+                        )
+                    }
+                    _ => {
+                        todo!(
+                            "TritonCodegen::codegen_program_id: axis does not have scalar discriminant value"
+                        );
+                    }
+                }
+            }
+            _ => todo!("TritonCodegen::codegen_program_id: axis must be a constant"),
+        };
+
+        let program_id_op = create_tt_program_id(
+            self.module.context(),
+            Location::unknown(self.module.context()),
+            axis,
+        )
+        .map_err(|e| MlirError::CreateOperation { err: e })?;
+        Ok(program_id_op.into())
     }
 
     fn codegen_return<'tcx, 'blk>(
