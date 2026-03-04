@@ -18,6 +18,8 @@ mlir-sys = { path = "../../src/mlir-sys" }
 rustc_macros = { path = "../rustc_macros" }
 rustc_errors = { path = "../rustc_errors" }
 rustc_fluent_macro = { path = "../rustc_fluent_macro" }
+rustc_middle = { path = "../rustc_middle" }
+rustc_ast = { path = "../rustc_ast" }
 
 [build-dependencies]
 cc = "1.2.16"

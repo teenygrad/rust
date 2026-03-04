@@ -24,36 +24,40 @@ use rustc_middle::ty::{
 use rustc_mlir::shared::builtin::create_tensor_type;
 use rustc_mlir::triton::create_triton_pointer_type;
 
-type AdtHandler = for<'a, 'tcx> fn(&TypeMapper<'a>, &TyCtxt<'tcx>, &[GenericArg<'tcx>]) -> Type<'a>;
+type AdtHandler =
+    for<'tcx, 'c> fn(&TypeMapper, &'c Context, &TyCtxt<'tcx>, &[GenericArg<'tcx>]) -> Type<'c>;
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
 static ADT_HANDLER_MAP: OnceLock<HashMap<&'static str, AdtHandler>> = OnceLock::new();
 
-pub struct TypeMapper<'a> {
-    context: &'a Context,
-}
+pub struct TypeMapper {}
 
-impl<'a> TypeMapper<'a> {
-    pub fn new(context: &'a Context) -> Self {
-        Self { context }
+impl TypeMapper {
+    pub fn new() -> Self {
+        Self {}
     }
 
-    pub fn map_type<'tcx>(&self, tcx: &TyCtxt<'tcx>, ty: &Ty<'tcx>) -> Type<'a> {
+    pub fn map_type<'tcx, 'c>(
+        &self,
+        context: &'c Context,
+        tcx: &TyCtxt<'tcx>,
+        ty: &Ty<'tcx>,
+    ) -> Type<'c> {
         match ty.kind() {
-            TyKind::Int(int_ty) => self.create_int_type(tcx, int_ty),
-            TyKind::Uint(uint_ty) => self.create_uint_type(tcx, uint_ty),
-            TyKind::Float(float_ty) => self.create_float_type(tcx, float_ty),
-            TyKind::Bool => self.create_bool_type(),
+            TyKind::Int(int_ty) => self.create_int_type(context, tcx, int_ty),
+            TyKind::Uint(uint_ty) => self.create_uint_type(context, tcx, uint_ty),
+            TyKind::Float(float_ty) => self.create_float_type(context, tcx, float_ty),
+            TyKind::Bool => self.create_bool_type(context),
             TyKind::Array(_elem_ty, _len) => todo!("Array: {:?} {:?}", _elem_ty, _len),
             TyKind::Char => todo!("Char"),
-            TyKind::Adt(def, args) => self.map_adt_ty(tcx, def, args.as_slice()),
+            TyKind::Adt(def, args) => self.map_adt_ty(context, tcx, def, args.as_slice()),
             TyKind::Foreign(_id) => todo!("Foreign: {:?}", _id),
             TyKind::Str => todo!("Str"),
             TyKind::Pat(_ty, _pat) => todo!("Pat: {:?} {:?}", _ty, _pat),
             TyKind::Slice(_ty) => todo!("Slice: {:?}", _ty),
-            TyKind::RawPtr(ty, _mutability) => self.create_raw_ptr_type(tcx, ty),
+            TyKind::RawPtr(ty, _mutability) => self.create_raw_ptr_type(context, tcx, ty),
             TyKind::Ref(_region, _ty, _mutability) => {
                 todo!("Ref: {:?} {:?} {:?}", _region, _ty, _mutability)
             }
@@ -74,11 +78,11 @@ impl<'a> TypeMapper<'a> {
                 todo!("CoroutineWitness: {:?} {:?}", _def, _args)
             }
             TyKind::Never => todo!("Never"),
-            TyKind::Tuple(tys) => self.create_tuple_type(tcx, tys.as_slice()),
+            TyKind::Tuple(tys) => self.create_tuple_type(context, tcx, tys.as_slice()),
             TyKind::Alias(alias_ty_kind, alias_ty) => {
-                self.map_alias_ty(ty, tcx, alias_ty_kind, alias_ty)
+                self.map_alias_ty(context, tcx, ty, alias_ty_kind, alias_ty)
             }
-            TyKind::Param(_param_ty) => self.create_param_type(tcx, _param_ty),
+            TyKind::Param(_param_ty) => self.create_param_type(context, tcx, _param_ty),
             TyKind::Bound(bound_var_index_kind, _bound_ty) => {
                 todo!("Bound: {:?} {:?}", bound_var_index_kind, _bound_ty)
             }
@@ -88,36 +92,52 @@ impl<'a> TypeMapper<'a> {
         }
     }
 
-    fn map_adt_ty<'tcx>(
+    fn map_adt_ty<'tcx, 'c>(
         &self,
+        context: &'c Context,
         tcx: &TyCtxt<'tcx>,
         def: &AdtDef,
         args: &[GenericArg<'tcx>],
-    ) -> Type<'a> {
+    ) -> Type<'c> {
         let name = tcx.def_path_str(def.did());
         println!("map_adt_ty: name:{:?} {:?} {:?}", name, def, args);
 
         let handler = get_adt_handler(&name);
-        handler(self, tcx, args)
+        handler(self, context, tcx, args)
     }
 
-    fn map_alias_ty<'tcx>(
+    fn map_alias_ty<'tcx, 'c>(
         &self,
-        ty: &Ty<'tcx>,
+        context: &'c Context,
         tcx: &TyCtxt<'tcx>,
+        ty: &Ty<'tcx>,
         _alias_ty_kind: &AliasTyKind,
         alias_ty: &AliasTy<'tcx>,
-    ) -> Type<'a> {
+    ) -> Type<'c> {
         let typing_env = TypingEnv::post_analysis(*tcx, alias_ty.def_id);
-        let normalized = tcx.normalize_erasing_regions(typing_env, *ty);
-        self.map_type(tcx, &normalized)
+        let normalized = tcx.try_normalize_erasing_regions(typing_env, *ty);
+        if let Ok(normalized) = normalized {
+            self.map_type(context, tcx, &normalized)
+        } else {
+            panic!("Could not normalize Alias: {:?} {:?}", ty, alias_ty);
+        }
     }
 
-    fn create_param_type<'tcx>(&self, _tcx: &TyCtxt<'tcx>, param_ty: &ParamTy) -> Type<'a> {
+    fn create_param_type<'tcx, 'c>(
+        &self,
+        _context: &'c Context,
+        _tcx: &TyCtxt<'tcx>,
+        param_ty: &ParamTy,
+    ) -> Type<'c> {
         todo!("Param: {:?}", param_ty);
     }
 
-    fn create_int_type<'tcx>(&self, _tcx: &TyCtxt<'tcx>, int_ty: &IntTy) -> Type<'a> {
+    fn create_int_type<'tcx, 'c>(
+        &self,
+        context: &'c Context,
+        _tcx: &TyCtxt<'tcx>,
+        int_ty: &IntTy,
+    ) -> Type<'c> {
         let num_bits = match int_ty {
             IntTy::Isize => unimplemented!("isize is not supported as it is device-dependent"),
             IntTy::I8 => 8,
@@ -127,10 +147,15 @@ impl<'a> TypeMapper<'a> {
             IntTy::I128 => 128,
         };
 
-        IntegerType::new(self.context, num_bits).into()
+        IntegerType::new(context, num_bits).into()
     }
 
-    fn create_uint_type<'tcx>(&self, _tcx: &TyCtxt<'tcx>, uint_ty: &UintTy) -> Type<'a> {
+    fn create_uint_type<'tcx, 'c>(
+        &self,
+        context: &'c Context,
+        _tcx: &TyCtxt<'tcx>,
+        uint_ty: &UintTy,
+    ) -> Type<'c> {
         let num_bits = match uint_ty {
             UintTy::Usize => unimplemented!("usize is not supported as it is device-dependent"),
             UintTy::U8 => 8,
@@ -141,30 +166,45 @@ impl<'a> TypeMapper<'a> {
         };
 
         // for the moment we use the signless variant of the integer type
-        IntegerType::new(self.context, num_bits).into()
+        IntegerType::new(context, num_bits).into()
     }
 
-    fn create_float_type<'tcx>(&self, _tcx: &TyCtxt<'tcx>, float_ty: &FloatTy) -> Type<'a> {
+    fn create_float_type<'tcx, 'c>(
+        &self,
+        context: &'c Context,
+        _tcx: &TyCtxt<'tcx>,
+        float_ty: &FloatTy,
+    ) -> Type<'c> {
         match float_ty {
-            FloatTy::F16 => Type::float16(self.context),
-            FloatTy::F32 => Type::float32(self.context),
-            FloatTy::F64 => Type::float64(self.context),
+            FloatTy::F16 => Type::float16(context),
+            FloatTy::F32 => Type::float32(context),
+            FloatTy::F64 => Type::float64(context),
             FloatTy::F128 => unimplemented!("f128 is not supported"),
         }
     }
 
-    fn create_bool_type(&self) -> Type<'a> {
+    fn create_bool_type<'c>(&self, context: &'c Context) -> Type<'c> {
         // bools are 1-bit integers
-        IntegerType::new(self.context, 1).into()
+        IntegerType::new(context, 1).into()
     }
 
-    fn create_tuple_type<'tcx>(&self, tcx: &TyCtxt<'tcx>, tys: &[Ty<'tcx>]) -> Type<'a> {
-        let types = tys.iter().map(|ty| self.map_type(tcx, ty)).collect::<Vec<_>>();
-        TupleType::new(self.context, &types).into()
+    fn create_tuple_type<'tcx, 'c>(
+        &self,
+        context: &'c Context,
+        tcx: &TyCtxt<'tcx>,
+        tys: &[Ty<'tcx>],
+    ) -> Type<'c> {
+        let types = tys.iter().map(|ty| self.map_type(context, tcx, ty)).collect::<Vec<_>>();
+        TupleType::new(context, &types).into()
     }
 
-    fn create_raw_ptr_type<'tcx>(&self, tcx: &TyCtxt<'tcx>, ty: &Ty<'tcx>) -> Type<'a> {
-        let ty = self.map_type(tcx, ty);
+    fn create_raw_ptr_type<'tcx, 'c>(
+        &self,
+        context: &'c Context,
+        tcx: &TyCtxt<'tcx>,
+        ty: &Ty<'tcx>,
+    ) -> Type<'c> {
+        let ty = self.map_type(context, tcx, ty);
         create_triton_pointer_type(ty)
     }
 }
@@ -185,56 +225,62 @@ fn get_adt_handler(adt: &str) -> AdtHandler {
     map.get(adt).copied().unwrap_or_else(|| panic!("Handler not found: {:?}", adt))
 }
 
-pub fn triton_tensor_handler<'a, 'tcx>(
-    type_mapper: &TypeMapper<'a>,
+pub fn triton_tensor_handler<'tcx, 'c>(
+    type_mapper: &TypeMapper,
+    context: &'c Context,
     tcx: &TyCtxt<'tcx>,
     args: &[GenericArg<'tcx>],
-) -> Type<'a> {
+) -> Type<'c> {
     debug_assert_eq!(args.len(), 1, "Tensor should have 1 argument");
     let arg_ty = args[0].expect_ty();
-    let arg_type = type_mapper.map_type(tcx, &arg_ty);
+    let arg_type = type_mapper.map_type(context, tcx, &arg_ty);
     create_tensor_type(&[i64::MIN], arg_type).into()
 }
 
-pub fn triton_pointer_handler<'a, 'tcx>(
-    type_mapper: &TypeMapper<'a>,
+pub fn triton_pointer_handler<'tcx, 'c>(
+    type_mapper: &TypeMapper,
+    context: &'c Context,
     tcx: &TyCtxt<'tcx>,
     args: &[GenericArg<'tcx>],
-) -> Type<'a> {
+) -> Type<'c> {
     debug_assert_eq!(args.len(), 1, "Pointer should have 1 argument");
     let arg_ty = args[0].expect_ty();
-    let arg_type = type_mapper.map_type(tcx, &arg_ty);
+    let arg_type = type_mapper.map_type(context, tcx, &arg_ty);
     create_triton_pointer_type(arg_type)
 }
 
-pub fn triton_i32_handler<'a, 'tcx>(
-    type_mapper: &TypeMapper<'a>,
+pub fn triton_i32_handler<'tcx, 'c>(
+    _type_mapper: &TypeMapper,
+    context: &'c Context,
     _tcx: &TyCtxt<'tcx>,
     _args: &[GenericArg<'tcx>],
-) -> Type<'a> {
-    IntegerType::new(type_mapper.context, 32).into()
+) -> Type<'c> {
+    IntegerType::new(context, 32).into()
 }
 
-pub fn triton_f32_handler<'a, 'tcx>(
-    type_mapper: &TypeMapper<'a>,
+pub fn triton_f32_handler<'tcx, 'c>(
+    _type_mapper: &TypeMapper,
+    context: &'c Context,
     _tcx: &TyCtxt<'tcx>,
     _args: &[GenericArg<'tcx>],
-) -> Type<'a> {
-    Type::float32(type_mapper.context)
+) -> Type<'c> {
+    Type::float32(context)
 }
 
-pub fn triton_bool_handler<'a, 'tcx>(
-    type_mapper: &TypeMapper<'a>,
+pub fn triton_bool_handler<'tcx, 'c>(
+    type_mapper: &TypeMapper,
+    context: &'c Context,
     _tcx: &TyCtxt<'tcx>,
     _args: &[GenericArg<'tcx>],
-) -> Type<'a> {
-    type_mapper.create_bool_type()
+) -> Type<'c> {
+    type_mapper.create_bool_type(context)
 }
 
-pub fn triton_program_axis_handler<'a, 'tcx>(
-    type_mapper: &TypeMapper<'a>,
+pub fn triton_program_axis_handler<'tcx, 'c>(
+    _type_mapper: &TypeMapper,
+    context: &'c Context,
     _tcx: &TyCtxt<'tcx>,
     _args: &[GenericArg<'tcx>],
-) -> Type<'a> {
-    IntegerType::new(type_mapper.context, 32).into()
+) -> Type<'c> {
+    IntegerType::new(context, 32).into()
 }

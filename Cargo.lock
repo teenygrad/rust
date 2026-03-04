@@ -2543,11 +2543,13 @@ dependencies = [
  "melior",
  "melior-macro",
  "mlir-sys",
+ "rustc_ast",
  "rustc_errors",
  "rustc_fluent_macro",
  "rustc_helper",
  "rustc_llvm",
  "rustc_macros",
+ "rustc_middle",
 ]
 
 [[package]]

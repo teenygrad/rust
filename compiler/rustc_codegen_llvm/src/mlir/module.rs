@@ -20,27 +20,26 @@ use melior::Context;
 use melior::ir::{Location, Module};
 use rustc_codegen_ssa::back::write::CodegenContext;
 use rustc_errors::DiagCtxtHandle;
-use rustc_middle::ty::TyCtxt;
 
 use crate::mlir::backend::MlirCodegenBackend;
 
 /// Represents an MLIR module during codegen
-pub struct MlirModule<'a> {
+pub struct MlirModule<'c> {
     pub name: String,
-    pub(crate) context: Context,
-    pub(crate) llmod_raw: Module<'a>,
+    pub mlir: Module<'c>,
+    pub context: Context,
 }
 
-unsafe impl<'a> Send for MlirModule<'a> {}
-unsafe impl<'a> Sync for MlirModule<'a> {}
+unsafe impl<'c> Send for MlirModule<'c> {}
+unsafe impl<'c> Sync for MlirModule<'c> {}
 
-impl<'a> MlirModule<'a> {
-    pub fn new(_tcx: TyCtxt<'_>, mod_name: &str) -> Self {
+impl<'c> MlirModule<'c> {
+    pub fn new(mod_name: &str) -> Self {
         let context = Context::new();
         let location = Location::unknown(&context);
         let module = Module::new(location);
 
-        Self { name: mod_name.to_string(), context, llmod_raw: module }
+        Self { name: mod_name.to_string(), context, mlir: module }
     }
 
     pub fn context(&self) -> &Context {
@@ -57,14 +56,14 @@ impl<'a> MlirModule<'a> {
         let location = Location::unknown(&context);
         let module = Module::new(location);
 
-        Self { name: name.to_string_lossy().to_string(), context, llmod_raw: module }
+        Self { name: name.to_string_lossy().to_string(), context, mlir: module }
     }
 
-    pub fn set_llmod(&mut self, llmod: Module<'a>) {
-        self.llmod_raw = llmod;
+    pub fn set_llmod(&mut self, llmod: Module<'c>) {
+        self.mlir = llmod;
     }
 
-    pub fn llmod(&self) -> &Module<'a> {
-        &self.llmod_raw
+    pub fn llmod(&self) -> &Module<'c> {
+        &self.mlir
     }
 }

@@ -14,19 +14,4 @@
  * limitations under the License.
  */
 
-use melior::Context;
-use melior::dialect::ods::cf::{self, BranchOperation};
-use melior::ir::{Block, Location};
-
-use crate::errors::Error;
-
-pub fn create_cf_br<'ctx>(
-    context: &'ctx Context,
-    location: Location<'ctx>,
-    target: &Block<'ctx>,
-) -> Result<BranchOperation<'ctx>, Error> {
-    Ok(cf::BranchOperation::builder(context, location)
-        .dest(target)
-        .dest_operands(&[])
-        .build())
-}
+pub mod binaryops;

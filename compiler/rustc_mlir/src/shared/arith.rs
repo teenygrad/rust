@@ -26,6 +26,71 @@ pub enum Int {
     I16(i16),
     I32(i32),
     I64(i64),
+    I128(i128),
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+    U128(u128),
+}
+
+use rustc_middle::ty::{ScalarInt, Ty, TyCtxt, TyKind};
+
+/// Creates a MLIR arith.constant operation for the given ScalarInt value and Rust type.
+///
+/// # Arguments
+/// - `context`: MLIR context
+/// - `location`: MLIR location for the operation
+/// - `ty`: Rust type (`Ty<'tcx>`) describing the integer type
+/// - `scalar`: The constant value as ScalarInt
+///
+/// # Returns
+/// On success, returns a `ConstantOperation` representing the constant integer.
+/// On failure (type not supported or kind mismatch), returns an Error.
+pub fn create_constant_from_scalar<'ctx, 'tcx>(
+    context: &'ctx Context,
+    location: melior::ir::Location<'ctx>,
+    ty: Ty<'tcx>,
+    scalar: ScalarInt,
+) -> Result<ConstantOperation<'ctx>, Error> {
+    // AXM: TODO: fix this with the correct integer type for unsigned integers, we need to
+    // to use the signless variant of the integer type
+
+    // Only support integer types for now
+    match ty.kind() {
+        TyKind::Int(int_ty) => {
+            let value = match int_ty {
+                rustc_ast::IntTy::I8 => Int::I8(scalar.to_i8()),
+                rustc_ast::IntTy::I16 => Int::I16(scalar.to_i16()),
+                rustc_ast::IntTy::I32 => Int::I32(scalar.to_i32()),
+                rustc_ast::IntTy::I64 => Int::I64(scalar.to_i64()),
+                rustc_ast::IntTy::I128 => Int::I128(scalar.to_i128()),
+                rustc_ast::IntTy::Isize => {
+                    // Not supported or device-dependent, so error here
+                    return Err(Error::InvalidType {
+                        msg: "isize is device-dependent and not supported".to_string(),
+                    });
+                }
+            };
+            create_constant(context, location, value)
+        }
+        TyKind::Uint(uint_ty) => {
+            let value = match uint_ty {
+                rustc_ast::UintTy::U8 => Int::U8(scalar.to_u8()),
+                rustc_ast::UintTy::U16 => Int::U16(scalar.to_u16()),
+                rustc_ast::UintTy::U32 => Int::U32(scalar.to_u32()),
+                rustc_ast::UintTy::U64 => Int::U64(scalar.to_u64()),
+                rustc_ast::UintTy::U128 => Int::U128(scalar.to_u128()),
+                rustc_ast::UintTy::Usize => {
+                    return Err(Error::InvalidType {
+                        msg: "usize is device-dependent and not supported".to_string(),
+                    });
+                }
+            };
+            create_constant(context, location, value)
+        }
+        _ => Err(Error::InvalidType { msg: format!("Unsupported type for constant: {:?}", ty) }),
+    }
 }
 
 pub fn create_constant<'ctx>(
@@ -33,16 +98,23 @@ pub fn create_constant<'ctx>(
     location: melior::ir::Location<'ctx>,
     value: Int,
 ) -> Result<ConstantOperation<'ctx>, Error> {
+    // AXM: TODO: fix this with the correct integer type for unsigned integers
     let attr_source = match value {
         Int::I8(value) => (format!("{} : i8", value), IntegerType::new(context, 8).into()),
         Int::I16(value) => (format!("{} : i16", value), IntegerType::new(context, 16).into()),
         Int::I32(value) => (format!("{} : i32", value), IntegerType::new(context, 32).into()),
         Int::I64(value) => (format!("{} : i64", value), IntegerType::new(context, 64).into()),
+        Int::I128(value) => (format!("{} : i128", value), IntegerType::new(context, 128).into()),
+        Int::U8(value) => (format!("{} : i8", value), IntegerType::new(context, 8).into()),
+        Int::U16(value) => (format!("{} : i16", value), IntegerType::new(context, 16).into()),
+        Int::U32(value) => (format!("{} : i32", value), IntegerType::new(context, 32).into()),
+        Int::U64(value) => (format!("{} : i64", value), IntegerType::new(context, 64).into()),
+        Int::U128(value) => (format!("{} : i128", value), IntegerType::new(context, 128).into()),
     };
 
     // Create a zero constant of type i64 using the arith dialect
-    let attr =
-        melior::ir::Attribute::parse(context, &attr_source.0).expect("failed to parse attribute");
+    let attr = melior::ir::Attribute::parse(context, &attr_source.0)
+        .unwrap_or_else(|| panic!("failed to parse attribute: {}", attr_source.0));
 
     Ok(melior::dialect::ods::arith::ConstantOperation::builder(context, location)
         .value(attr)
@@ -50,15 +122,12 @@ pub fn create_constant<'ctx>(
         .build())
 }
 
-pub fn create_muli<'ctx, 'a>(
-    context: &'a Context,
-    location: melior::ir::Location<'a>,
-    lhs: Value<'ctx, 'a>,
-    rhs: Value<'ctx, 'a>,
-) -> Result<MulIOperation<'a>, Error>
-where
-    'ctx: 'a,
-{
+pub fn create_muli<'ctx>(
+    context: &'ctx Context,
+    location: melior::ir::Location<'ctx>,
+    lhs: Value<'ctx, 'ctx>,
+    rhs: Value<'ctx, 'ctx>,
+) -> Result<MulIOperation<'ctx>, Error> {
     let lhs_ty = lhs.r#type();
     let rhs_ty = rhs.r#type();
 

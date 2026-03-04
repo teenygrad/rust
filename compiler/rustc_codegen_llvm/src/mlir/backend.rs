@@ -61,7 +61,7 @@ impl MlirCodegenBackend {
 impl ExtraBackendMethods for MlirCodegenBackend {
     fn codegen_allocator<'tcx>(
         &self,
-        tcx: TyCtxt<'tcx>,
+        _tcx: TyCtxt<'tcx>,
         module_name: &str,
         _methods: &[rustc_ast::expand::allocator::AllocatorMethod],
     ) -> Self::Module {
@@ -69,7 +69,7 @@ impl ExtraBackendMethods for MlirCodegenBackend {
         info!("Module name: {}", module_name);
 
         // Create a placeholder module for the allocator
-        MlirModule::new(tcx, module_name)
+        MlirModule::new(module_name)
     }
 
     fn compile_codegen_unit(
@@ -129,7 +129,7 @@ fn compile_codegen_unit_impl(
     info!("========================================");
 
     // Create the MLIR module
-    let mut mlir_module = MlirModule::new(tcx, cgu_name.as_str());
+    let mut mlir_module = MlirModule::new(cgu_name.as_str());
     let mut triton_codegen = TritonCodegen::new(&mut mlir_module);
 
     // Get all mono items in deterministic order
