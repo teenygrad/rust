@@ -356,7 +356,11 @@ pub mod triton {
 
         fn num_programs(axis: ProgramAxis) -> Self::I32;
 
-        fn arange(start: impl Into<Self::I32>, end: impl Into<Self::I32>) -> Self::I32Tensor;
+        fn arange(
+            start: impl Into<Self::I32>,
+            end: impl Into<Self::I32>,
+            step: impl Into<Self::I32>,
+        ) -> Self::I32Tensor;
 
         fn load<D: ty::Dtype>(
             ptr: Self::Tensor<Self::Pointer<D>>,
@@ -523,6 +527,7 @@ pub mod triton {
                 fn arange(
                     _start: impl Into<Self::I32>,
                     _end: impl Into<Self::I32>,
+                    _step: impl Into<Self::I32>,
                 ) -> Self::I32Tensor {
                     loop {}
                 }
@@ -873,7 +878,7 @@ pub extern "C" fn tensor_add<T: Triton, D: types::Dtype, const BLOCK_SIZE: u32>(
 ) {
     let pid = T::program_id(ProgramAxis::Axis0);
     let block_start = pid * BLOCK_SIZE;
-    let offsets = T::arange(0, BLOCK_SIZE) + block_start;
+    let offsets = T::arange(0, BLOCK_SIZE, 1) + block_start;
     let mask = offsets.lt(n_elements);
     let x = T::load(x_ptr.add_offsets(offsets), mask);
     let y = T::load(y_ptr.add_offsets(offsets), mask);

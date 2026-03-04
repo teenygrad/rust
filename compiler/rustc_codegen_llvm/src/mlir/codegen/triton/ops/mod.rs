@@ -15,3 +15,5 @@
  */
 
 pub mod binaryops;
+pub mod terminator;
+pub mod triton;
