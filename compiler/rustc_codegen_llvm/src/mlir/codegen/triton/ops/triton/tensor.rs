@@ -50,8 +50,8 @@ impl<'a> TritonCodegen<'a> {
         );
 
         debug_assert!(
-            args.len() == 3,
-            "TritonCodegen::codegen_arange: args length must be 3: {:?}",
+            args.len() == 2,
+            "TritonCodegen::codegen_arange: args length must be 2: {:?}",
             args
         );
 
