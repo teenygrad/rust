@@ -22,7 +22,7 @@ use melior::ir::{
 };
 use melior::utility::register_all_llvm_translations;
 use rustc_abi::FieldIdx;
-use rustc_ast::UintTy;
+use rustc_ast::{IntTy, UintTy};
 use rustc_index::IndexVec;
 use rustc_middle::mir::interpret::Scalar;
 use rustc_middle::mir::mono::MonoItem;
@@ -32,16 +32,15 @@ use rustc_middle::mir::{
 };
 use rustc_middle::ty::layout::MaybeResult;
 use rustc_middle::ty::{
-    self, AdtDef, ConstKind, EarlyBinder, GenericArg, Instance, ParamConst, Ty, TyCtxt, TyKind,
-    TypingEnv,
+    self, AdtDef, ConstKind, EarlyBinder, GenericArg, Instance, ParamConst, ScalarInt, Ty, TyCtxt,
+    TyKind, TypingEnv,
 };
 use rustc_mlir::load_all_dialects;
 use rustc_mlir::shared::arith::{Int, create_constant, create_constant_from_scalar};
 use rustc_mlir::shared::builtin::create_tensor_type;
 use rustc_mlir::shared::ub::create_ub_poison;
 use rustc_mlir::triton::{
-    create_triton_pointer_type, create_tt_func_with_divisibility, create_tt_int_to_ptr_cast,
-    load_triton_dialect,
+    create_func, create_tt_int_to_ptr_cast, load_triton_dialect, pointer_type,
 };
 
 use crate::mlir::MlirModule;
@@ -60,7 +59,7 @@ pub(crate) struct TritonCodegen<'a> {
 }
 
 impl<'a> TritonCodegen<'a> {
-    pub(crate) fn new(module: &'a MlirModule<'static>) -> Self {
+    pub fn new(module: &'a MlirModule<'static>) -> Self {
         let context = module.context();
 
         load_all_dialects(context);
@@ -68,6 +67,49 @@ impl<'a> TritonCodegen<'a> {
         load_triton_dialect(context);
 
         Self { module, type_mapper: TypeMapper::new() }
+    }
+
+    fn to_scalar_int<'tcx>(
+        &self,
+        _tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        node: &Operand<'tcx>,
+    ) -> Result<ScalarInt, MlirError> {
+        match node {
+            Operand::Constant(c) => {
+                // We expect the constant to have a value that tells us the discriminant/variant
+                match c.const_ {
+                    Const::Val(ConstValue::Scalar(Scalar::Int(scalar_int)), _) => Ok(scalar_int),
+                    Const::Ty(ty, const_val) => {
+                        // Handle const generic parameters of integer type
+                        if !ty.is_integral() {
+                            return Err(MlirError::InvalidScalarOperand {
+                                node: format!("{:?}", node),
+                            });
+                        }
+                        match const_val.kind() {
+                            ConstKind::Param(param) => {
+                                let value = instance.args.const_at(param.index as usize).to_value();
+                                let scalar = value.valtree.try_to_scalar().ok_or_else(|| {
+                                    MlirError::InvalidScalarOperand { node: format!("{:?}", node) }
+                                })?;
+                                match scalar {
+                                    Scalar::Int(scalar_int) => Ok(scalar_int),
+                                    _ => Err(MlirError::InvalidScalarOperand {
+                                        node: format!("{:?}", node),
+                                    }),
+                                }
+                            }
+                            _ => {
+                                Err(MlirError::InvalidScalarOperand { node: format!("{:?}", node) })
+                            }
+                        }
+                    }
+                    _ => Err(MlirError::InvalidScalarOperand { node: format!("{:?}", node) }),
+                }
+            }
+            _ => Err(MlirError::InvalidScalarOperand { node: format!("{:?}", node) }),
+        }
     }
 
     fn codegen_function<'tcx>(
@@ -128,7 +170,7 @@ impl<'a> TritonCodegen<'a> {
         );
 
         // Iterate over MIR basic blocks and codegen each one
-        let func_op: Operation = create_tt_func_with_divisibility(
+        let func_op: Operation = create_func(
             self.module.context(),
             Location::unknown(self.module.context()),
             func_name,
@@ -393,7 +435,7 @@ impl<'a> TritonCodegen<'a> {
             .map_err(|e| MlirError::CreateOperation { err: e })?)
         } else if name == "triton::llvm::triton::pointer::Pointer" {
             let ty = map_ty(0);
-            let pointer_type = create_triton_pointer_type(ty);
+            let pointer_type = pointer_type(ty);
 
             Ok(create_ub_poison(
                 self.module.context(),
@@ -643,7 +685,11 @@ impl<'a> TritonCodegen<'a> {
         normalized_ty: Ty<'tcx>,
         mlir_block: &BlockRef,
     ) -> Result<Value<'a, 'a>, MlirError> {
-        println!("[DEBUG] TritonCodegen::codegen_constant_cast");
+        println!(
+            "[DEBUG] TritonCodegen::codegen_constant_cast: {:?}, {:?}",
+            const_operand, normalized_ty
+        );
+
         match const_operand.const_ {
             Const::Val(const_val, ty) => {
                 let const_op = self.codegen_const_value(tcx, instance, const_val, ty)?;
@@ -781,6 +827,20 @@ impl<'a> TritonCodegen<'a> {
             Scalar::Int(int) => match ty.kind() {
                 TyKind::Uint(UintTy::Usize) => {
                     let value = int.to_i64();
+                    Ok(create_constant(
+                        self.module.context(),
+                        Location::unknown(self.module.context()),
+                        Int::I64(value),
+                    )
+                    .map_err(|e| MlirError::CreateOperation { err: e })?
+                    .into())
+                }
+                TyKind::Int(IntTy::I32) => {
+                    println!(
+                        "[DEBUG] TritonCodegen::codegen_scalar_const_value: {:?} int: {:?}",
+                        ty, int
+                    );
+                    let value = int.to_i32() as i64;
                     Ok(create_constant(
                         self.module.context(),
                         Location::unknown(self.module.context()),

@@ -15,13 +15,18 @@
  */
 
 use melior::Context;
-use melior::ir::attribute::{ArrayAttribute, Attribute, StringAttribute, TypeAttribute};
+use melior::ir::attribute::{
+    ArrayAttribute, Attribute, IntegerAttribute, StringAttribute, TypeAttribute,
+};
 use melior::ir::r#type::{FunctionType, IntegerType};
-use melior::ir::{Region, Type, TypeLike};
+use melior::ir::{Location, Region, Type, TypeLike, Value};
 
 use crate::errors::Error;
 use crate::ffi::{mlirCreateTritonPointerType, mlirLoadTritonDialect};
-use crate::triton::tt::{FuncOperation, GetProgramIdOperation, IntToPtrOperation, ReturnOperation};
+use crate::triton::tt::{FuncOperation, IntToPtrOperation, ReturnOperation};
+
+pub mod program;
+pub mod tensor;
 
 melior_macro::dialect! {
     name: "tt",
@@ -33,41 +38,27 @@ melior_macro::dialect! {
     include_directories: ["TRITON_INCLUDE_DIRECTORY"],
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum ProgramAxis {
-    Axis0 = 0,
-    Axis1 = 1,
-    Axis2 = 2,
-}
-
-impl From<i32> for ProgramAxis {
-    fn from(value: i32) -> Self {
-        match value {
-            0 => ProgramAxis::Axis0,
-            1 => ProgramAxis::Axis1,
-            2 => ProgramAxis::Axis2,
-            _ => panic!("Invalid program axis: {}", value),
-        }
-    }
-}
-
 pub fn load_triton_dialect(context: &Context) {
     unsafe {
         mlirLoadTritonDialect(context.to_raw());
     }
 }
 
-pub fn create_triton_pointer_type<'a>(pointee: Type<'a>) -> Type<'a> {
+pub fn attr_i32<'ctx>(context: &'ctx Context, value: i32) -> IntegerAttribute<'ctx> {
+    IntegerAttribute::new(IntegerType::new(context, 32).into(), value as i64)
+}
+
+pub fn pointer_type<'a>(pointee: Type<'a>) -> Type<'a> {
     unsafe { Type::from_raw(mlirCreateTritonPointerType(pointee.to_raw(), 1)) }
 }
 
 // Extracted function for creating a tt.func operation with empty body and tt.divisibility attrs.
-pub fn create_tt_func_with_divisibility<'c>(
+pub fn create_func<'c>(
     context: &'c melior::Context,
-    location: melior::ir::Location<'c>,
+    location: Location<'c>,
     name: &str,
-    arg_types: &[melior::ir::Type<'c>],
-    res_types: &[melior::ir::Type<'c>],
+    arg_types: &[Type<'c>],
+    res_types: &[Type<'c>],
     tt_divisibility: i32,
 ) -> Result<FuncOperation<'c>, Error> {
     // Create the function type
@@ -102,30 +93,19 @@ pub fn create_tt_func_with_divisibility<'c>(
 
 pub fn create_tt_return<'ctx, 'b>(
     context: &'ctx Context,
-    location: melior::ir::Location<'ctx>,
-    value: &[melior::ir::Value<'ctx, 'b>],
+    location: Location<'ctx>,
+    value: &[Value<'ctx, 'b>],
 ) -> Result<ReturnOperation<'ctx>, Error> {
     Ok(ReturnOperation::builder(context, location).srcs(value).build())
 }
 
 pub fn create_tt_int_to_ptr_cast<'ctx, 'b>(
     context: &'ctx Context,
-    location: melior::ir::Location<'ctx>,
-    src: melior::ir::Value<'ctx, 'b>,
+    location: Location<'ctx>,
+    src: Value<'ctx, 'b>,
     dest: Type<'ctx>,
 ) -> Result<IntToPtrOperation<'ctx>, Error> {
     Ok(IntToPtrOperation::builder(context, location).result(dest).src(src).build())
-}
-
-pub fn create_tt_program_id<'ctx>(
-    context: &'ctx Context,
-    location: melior::ir::Location<'ctx>,
-    axis: ProgramAxis,
-) -> Result<GetProgramIdOperation<'ctx>, Error> {
-    let axis_attr =
-        Attribute::parse(context, &format!("{} : i32", axis as i32)).expect("valid axis attribute");
-    let result = IntegerType::new(context, 32).into();
-    Ok(GetProgramIdOperation::builder(context, location).axis(axis_attr).result(result).build())
 }
 
 #[cfg(test)]
@@ -135,7 +115,6 @@ mod tests {
     use melior::ir::operation::OperationMutLike;
     use melior::ir::{Block, BlockLike, Location, Module, Operation, RegionLike, Type};
 
-    use super::tt::*;
     use super::*;
     use crate::shared::arith::{Int, create_constant};
     use crate::test::create_test_context;
@@ -149,22 +128,15 @@ mod tests {
         let module = Module::new(location);
 
         let f32_type = Type::float32(&context);
-        let ptr_f32_type = create_triton_pointer_type(f32_type);
+        let ptr_f32_type = pointer_type(f32_type);
 
         // Function signature: (!tt.ptr<f32>, !tt.ptr<f32>) -> f32
         let inputs = vec![ptr_f32_type, ptr_f32_type];
         let results = vec![f32_type];
 
         // Use the new function in test:
-        let func_op = create_tt_func_with_divisibility(
-            &context,
-            location,
-            "test_tt_func_attrs",
-            &inputs,
-            &results,
-            16,
-        )
-        .unwrap();
+        let func_op =
+            create_func(&context, location, "test_tt_func_attrs", &inputs, &results, 16).unwrap();
 
         // Create a constant op returning f32 1.0
         let one_attr = Attribute::parse(&context, "1.0 : f32").expect("valid f32");
@@ -213,7 +185,7 @@ mod tests {
 
         // f32 type as MLIR type
         let f32_type = Type::float32(&context);
-        let f32_ptr_type = create_triton_pointer_type(f32_type);
+        let f32_ptr_type = pointer_type(f32_type);
         let i64_zero = create_constant(&context, location, Int::I64(0)).unwrap();
         let i64_zero_value = i64_zero.result().unwrap();
 

@@ -56,6 +56,7 @@ impl LlvmCompiler {
         let exe_name = "/home/arshadm/.cargo/bin/rustc".to_string(); // AXM FIXME: remove this once API changes
         let output = format!("-o{}", working_dir.join("kernel.mlir").display());
         let build_type = "-Copt-level=3".to_string(); // Use opt-level=3 for release build
+        let panic_abort = "-Cpanic=abort".to_string();
         let target = format!("--target={}", target);
         let crate_type = "--crate-type=lib".to_string();
         // let emit = "--emit=llvm-ir".to_string();
@@ -86,6 +87,7 @@ impl LlvmCompiler {
             exe_name,
             filename.display().to_string(),
             build_type,
+            panic_abort,
             output,
             target,
             crate_type,

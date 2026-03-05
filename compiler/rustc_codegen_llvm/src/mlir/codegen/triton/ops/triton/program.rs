@@ -16,12 +16,9 @@
 
 use melior::ir::operation::OperationLike;
 use melior::ir::{BlockLike, BlockRef, Location, Operation, Value};
-use rustc_middle::mir::interpret::Scalar;
-use rustc_middle::mir::{
-    BasicBlock, Body, CallSource, Const, ConstValue, Operand, Place, UnwindAction,
-};
+use rustc_middle::mir::{BasicBlock, Body, CallSource, Operand, Place, UnwindAction};
 use rustc_middle::ty::{Instance, TyCtxt};
-use rustc_mlir::triton::{ProgramAxis, create_tt_program_id};
+use rustc_mlir::triton::program::{ProgramAxis, create_get_program_id};
 use rustc_span::Span;
 use rustc_span::source_map::Spanned;
 
@@ -33,7 +30,7 @@ impl<'a> TritonCodegen<'a> {
         &self,
         tcx: TyCtxt<'tcx>,
         instance: &Instance<'tcx>,
-        mir: &Body<'tcx>,
+        _mir: &Body<'tcx>,
         func: &Operand<'tcx>,
         args: &[Spanned<Operand<'tcx>>],
         destination: &Place<'tcx>,
@@ -42,35 +39,14 @@ impl<'a> TritonCodegen<'a> {
         call_source: &CallSource,
         fn_span: &Span,
         mlir_block: &BlockRef,
-        ssa_values: &mut SsaValues<'a, 'a>,
+        _ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Value<'a, 'a>, MlirError> {
-        println!(
-            "[DEBUG] TritonCodegen::codegen_program_id: func: {:?} args: {:?} destination: {:?} target: {:?} unwind: {:?} call_source: {:?} fn_span: {:?}",
-            func, args, destination, target, unwind, call_source, fn_span
-        );
-
         debug_assert!(args.len() == 1, "TritonCodegen::codegen_program_id: args length must be 1");
 
-        let axis = match &args[0].node {
-            Operand::Constant(c) => {
-                // We expect the constant to have a value that tells us the discriminant/variant
-                match c.const_ {
-                    Const::Val(ConstValue::Scalar(Scalar::Int(scalar_int)), _) => {
-                        <ProgramAxis as From<i32>>::from(
-                            scalar_int.to_bits(scalar_int.size()) as i32
-                        )
-                    }
-                    _ => {
-                        todo!(
-                            "TritonCodegen::codegen_program_id: axis does not have scalar discriminant value"
-                        );
-                    }
-                }
-            }
-            _ => todo!("TritonCodegen::codegen_program_id: axis must be a constant"),
-        };
+        let value = self.to_scalar_int(tcx, instance, &args[0].node)?;
+        let axis = <ProgramAxis as From<i32>>::from(value.to_bits(value.size()) as i32);
 
-        let program_id_op: Operation<'a> = create_tt_program_id(
+        let program_id_op: Operation<'a> = create_get_program_id(
             self.module.context(),
             Location::unknown(self.module.context()),
             axis,

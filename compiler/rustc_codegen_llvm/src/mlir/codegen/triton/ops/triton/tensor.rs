@@ -21,7 +21,8 @@ use rustc_middle::mir::{
     BasicBlock, Body, CallSource, Const, ConstValue, Operand, Place, UnwindAction,
 };
 use rustc_middle::ty::{Instance, TyCtxt};
-use rustc_mlir::triton::{ProgramAxis, create_tt_program_id};
+use rustc_mlir::triton::program::{ProgramAxis, create_get_program_id};
+use rustc_mlir::triton::tensor::create_arange;
 use rustc_span::Span;
 use rustc_span::source_map::Spanned;
 
@@ -55,36 +56,20 @@ impl<'a> TritonCodegen<'a> {
             args
         );
 
-        let start = self.codegen_operand(
-            tcx,
-            instance,
-            &args[0].node,
-            args[0].node.ty(mir, tcx),
-            mlir_block,
-            ssa_values,
-        )?;
-        let end = self.codegen_operand(
-            tcx,
-            instance,
-            &args[1].node,
-            args[1].node.ty(mir, tcx),
-            mlir_block,
-            ssa_values,
-        )?;
-        let step = self.codegen_operand(
-            tcx,
-            instance,
-            &args[2].node,
-            args[2].node.ty(mir, tcx),
-            mlir_block,
-            ssa_values,
-        )?;
+        let start = self.to_scalar_int(tcx, instance, &args[0].node)?.to_i32();
+        let end = self.to_scalar_int(tcx, instance, &args[1].node)?.to_i32();
 
-        todo!(
-            "TritonCodegen::codegen_arange: start: {:?}, end: {:?}, step: {:?}",
+        let arange_op: Operation<'a> = create_arange(
+            self.module.context(),
+            Location::unknown(self.module.context()),
             start,
             end,
-            step
-        );
+        )
+        .map_err(|e| MlirError::CreateOperation { err: e })?
+        .into();
+
+        let result = arange_op.result(0).expect("Arange operation result not found");
+        mlir_block.append_operation(arange_op);
+        Ok(result.into())
     }
 }
