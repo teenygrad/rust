@@ -15,13 +15,13 @@
  */
 
 use melior::Context;
-use melior::ir::Location;
-use melior::ir::r#type::IntegerType;
+use melior::ir::r#type::{IntegerType, RankedTensorType};
+use melior::ir::{Location, Type, Value};
 
 use crate::errors::Error;
 use crate::shared::builtin::create_tensor_type;
 use crate::triton::attr_i32;
-use crate::triton::tt::MakeRangeOperation;
+use crate::triton::tt::{MakeRangeOperation, SplatOperation};
 
 pub fn create_arange<'ctx>(
     context: &'ctx Context,
@@ -42,12 +42,31 @@ pub fn create_arange<'ctx>(
         .build())
 }
 
+pub fn splat<'ctx>(
+    context: &'ctx Context,
+    location: Location<'ctx>,
+    src: Value<'ctx, 'ctx>,
+    result_ty: Type<'ctx>,
+) -> Result<SplatOperation<'ctx>, Error> {
+    // Ensure the result type is a ranked tensor; detailed element type compatibility
+    // is enforced by the Triton dialect/type verifier.
+    let _result_tensor: RankedTensorType<'ctx> = result_ty
+        .try_into()
+        .map_err(|_| Error::InvalidType { msg: "result is not a tensor".to_string() })?;
+
+    Ok(SplatOperation::builder(context, location).src(src).result(result_ty).build())
+}
+
 #[cfg(test)]
 mod tests {
     use melior::Context;
-    use melior::ir::Location;
+    use melior::ir::operation::OperationLike;
+    use melior::ir::{BlockLike, Location, Module, Operation};
 
     use super::*;
+    use crate::shared::arith::{Int, create_constant};
+    use crate::test::create_test_context;
+    use crate::triton::load_triton_dialect;
 
     #[test]
     fn test_create_arange() {
@@ -63,6 +82,30 @@ mod tests {
         let output = op.as_operation().to_string();
         let expected =
             "%0 = \"tt.make_range\"() {end = 5 : i32, start = 0 : i32} : () -> tensor<5xi32>\n";
+        assert_eq!(expected, output);
+    }
+
+    #[test]
+    fn test_create_splat() {
+        let context = create_test_context();
+        load_triton_dialect(&context);
+
+        let location = Location::unknown(&context);
+        let module = Module::new(location);
+
+        let src_op: Operation<'_> =
+            create_constant(&context, location, Int::I32(0)).unwrap().into();
+        let src = src_op.result(0).unwrap().into();
+        let result = create_tensor_type(&[5], IntegerType::new(&context, 32).into()).into();
+        let splat_op = splat(&context, location, src, result);
+        assert!(splat_op.is_ok());
+        let splat_op = splat_op.unwrap().into();
+
+        module.body().append_operation(src_op);
+        module.body().append_operation(splat_op);
+
+        let output = module.as_operation().to_string();
+        let expected = "\"builtin.module\"() ({\n  %0 = \"arith.constant\"() <{value = 0 : i32}> : () -> i32\n  %1 = \"tt.splat\"(%0) : (i32) -> tensor<5xi32>\n}) : () -> ()\n";
         assert_eq!(expected, output);
     }
 }

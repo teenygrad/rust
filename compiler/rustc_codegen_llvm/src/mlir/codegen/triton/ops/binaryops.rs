@@ -16,15 +16,79 @@
 
 use melior::ir::operation::OperationLike;
 use melior::ir::{BlockLike, BlockRef, Location, Operation, TypeLike, Value, ValueLike};
-use rustc_middle::mir::{Body, Place};
+use rustc_middle::mir::{BasicBlock, Body, CallSource, Operand, Place, UnwindAction};
 use rustc_middle::ty::{Instance, TyCtxt};
 use rustc_mlir::shared::arith::create_muli;
+use rustc_span::Span;
+use rustc_span::source_map::Spanned;
 
 use crate::mlir::codegen::triton::{SsaValues, TritonCodegen};
 use crate::mlir::errors::MlirError;
 
 impl<'a> TritonCodegen<'a> {
-    pub fn codegen_mul<'tcx>(
+    pub fn codegen_mul_call<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        mir: &Body<'tcx>,
+        _func: &Operand<'tcx>,
+        args: &[Spanned<Operand<'tcx>>],
+        _destination: &Place<'tcx>,
+        _target: &Option<BasicBlock>,
+        _unwind: &UnwindAction,
+        _call_source: &CallSource,
+        _fn_span: &Span,
+        mlir_block: &BlockRef,
+        ssa_values: &mut SsaValues<'a, 'a>,
+    ) -> Result<Value<'a, 'a>, MlirError> {
+        debug_assert!(args.len() == 2, "TritonCodegen::codegen_mul_call: args length must be 2");
+
+        let arg0 = &args[0].node;
+        let arg1 = &args[1].node;
+
+        println!("[DEBUG] TritonCodegen::codegen_mul_call: arg0: {:?}", arg0);
+        println!("[DEBUG] TritonCodegen::codegen_mul_call: arg1: {:?}", arg1);
+
+        let arg0_value =
+            self.codegen_operand(tcx, instance, arg0, arg0.ty(mir, tcx), mlir_block, ssa_values)?;
+        let arg1_value =
+            self.codegen_operand(tcx, instance, arg1, arg1.ty(mir, tcx), mlir_block, ssa_values)?;
+
+        self.codegen_mul(arg0_value, arg1_value, mlir_block)
+    }
+
+    pub fn codegen_add_call<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        mir: &Body<'tcx>,
+        _func: &Operand<'tcx>,
+        args: &[Spanned<Operand<'tcx>>],
+        _destination: &Place<'tcx>,
+        _target: &Option<BasicBlock>,
+        _unwind: &UnwindAction,
+        _call_source: &CallSource,
+        _fn_span: &Span,
+        mlir_block: &BlockRef,
+        ssa_values: &mut SsaValues<'a, 'a>,
+    ) -> Result<Value<'a, 'a>, MlirError> {
+        debug_assert!(args.len() == 2, "TritonCodegen::codegen_add_call: args length must be 2");
+
+        let arg0 = &args[0].node;
+        let arg1 = &args[1].node;
+
+        println!("[DEBUG] TritonCodegen::codegen_add_call: arg0: {:?}", arg0);
+        println!("[DEBUG] TritonCodegen::codegen_add_call: arg1: {:?}", arg1);
+
+        let arg0_value =
+            self.codegen_operand(tcx, instance, arg0, arg0.ty(mir, tcx), mlir_block, ssa_values)?;
+        let arg1_value =
+            self.codegen_operand(tcx, instance, arg1, arg1.ty(mir, tcx), mlir_block, ssa_values)?;
+
+        self.codegen_add(tcx, arg0_value, arg1_value, mlir_block)
+    }
+
+    pub fn codegen_mul(
         &self,
         lhs: Value<'a, 'a>,
         rhs: Value<'a, 'a>,
@@ -42,11 +106,58 @@ impl<'a> TritonCodegen<'a> {
             )
             .map_err(|e| MlirError::CreateOperation { err: e })?
             .into();
-            let result = mul_op.result(0).unwrap().into();
-            mlir_block.append_operation(mul_op.into());
+            let result = mul_op.result(0).expect("Mul operation result not found").into();
+            mlir_block.append_operation(mul_op);
             Ok(result)
         } else {
             todo!("TritonCodegen::codegen_mul: {:?} {:?}", lhs_ty, rhs_ty);
         }
+    }
+
+    pub fn codegen_add<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        lhs: Value<'a, 'a>,
+        rhs: Value<'a, 'a>,
+        mlir_block: &BlockRef,
+    ) -> Result<Value<'a, 'a>, MlirError> {
+        let lhs_ty = lhs.r#type();
+        let rhs_ty = rhs.r#type();
+
+        let lhs_is_tensor = lhs_ty.is_tensor();
+        let rhs_is_tensor = rhs_ty.is_tensor();
+
+        let (lhs, rhs) = match (lhs_is_tensor, rhs_is_tensor) {
+            (true, true) => (lhs, rhs),
+            (true, false) => (
+                lhs,
+                self.like_tensor(
+                    tcx,
+                    Location::unknown(self.module.context()),
+                    lhs,
+                    rhs,
+                    mlir_block,
+                )?,
+            ),
+            (false, true) => (
+                self.like_tensor(
+                    tcx,
+                    Location::unknown(self.module.context()),
+                    rhs,
+                    lhs,
+                    mlir_block,
+                )?,
+                rhs,
+            ),
+            (false, false) => todo!(
+                "TritonCodegen::codegen_add: {:?}-> {:?} {:?}-> {:?}",
+                lhs,
+                lhs_ty,
+                rhs,
+                rhs_ty
+            ),
+        };
+
+        todo!("TritonCodegen::codegen_add: {:?}-> {:?} {:?}-> {:?}", lhs, lhs_ty, rhs, rhs_ty);
     }
 }

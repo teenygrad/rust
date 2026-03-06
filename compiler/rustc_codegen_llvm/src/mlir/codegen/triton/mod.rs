@@ -36,9 +36,10 @@ use rustc_middle::ty::{
     TyKind, TypingEnv,
 };
 use rustc_mlir::load_all_dialects;
-use rustc_mlir::shared::arith::{Int, create_constant, create_constant_from_scalar};
+use rustc_mlir::shared::arith::{Int, create_constant, create_scalar_attr};
 use rustc_mlir::shared::builtin::create_tensor_type;
 use rustc_mlir::shared::ub::create_ub_poison;
+use rustc_mlir::triton::tensor::splat;
 use rustc_mlir::triton::{
     create_func, create_tt_int_to_ptr_cast, load_triton_dialect, pointer_type,
 };
@@ -110,6 +111,26 @@ impl<'a> TritonCodegen<'a> {
             }
             _ => Err(MlirError::InvalidScalarOperand { node: format!("{:?}", node) }),
         }
+    }
+
+    /// The value is assumed to be a scalar of the same type as the tensor.
+    /// The result is a tensor of the same shape as the provided tensor, with the scalar values repeated.
+    fn like_tensor<'tcx>(
+        &self,
+        _tcx: TyCtxt<'tcx>,
+        location: Location<'a>,
+        tensor: Value<'a, 'a>,
+        value: Value<'a, 'a>,
+        mlir_block: &BlockRef,
+    ) -> Result<Value<'a, 'a>, MlirError> {
+        let splat_op: Operation<'_> =
+            splat(&self.module.context(), location, value, tensor.r#type())
+                .map_err(|e| MlirError::CreateOperation { err: e })?
+                .into();
+        let result = splat_op.result(0).unwrap();
+
+        mlir_block.append_operation(splat_op);
+        Ok(result.into())
     }
 
     fn codegen_function<'tcx>(
@@ -779,7 +800,7 @@ impl<'a> TritonCodegen<'a> {
     ) -> Result<Value<'a, 'a>, MlirError> {
         match scalar {
             Scalar::Int(scalar_int) => {
-                let op = create_constant_from_scalar(
+                let op = create_scalar_attr(
                     self.module.context(),
                     Location::unknown(self.module.context()),
                     ty,

@@ -183,6 +183,7 @@ impl<'a> TritonCodegen<'a> {
             }
             "triton::Triton::arange" => TritonCodegen::codegen_arange as LocalCallHandler<'a, 'tcx>,
             "std::ops::Mul::mul" => TritonCodegen::codegen_mul_call as LocalCallHandler<'a, 'tcx>,
+            "std::ops::Add::add" => TritonCodegen::codegen_add_call as LocalCallHandler<'a, 'tcx>,
             _ => todo!("TritonCodegen::codegen_terminator_call unhandled call: {:?}", func_name),
         };
 
@@ -205,37 +206,6 @@ impl<'a> TritonCodegen<'a> {
         ssa_values.insert(destination.local, value);
         self.codegen_goto(&target.expect("target must be Some"), mlir_block, basic_blocks)?;
         Ok(())
-    }
-
-    fn codegen_mul_call<'tcx>(
-        &self,
-        tcx: TyCtxt<'tcx>,
-        instance: &Instance<'tcx>,
-        mir: &Body<'tcx>,
-        _func: &Operand<'tcx>,
-        args: &[Spanned<Operand<'tcx>>],
-        _destination: &Place<'tcx>,
-        _target: &Option<BasicBlock>,
-        _unwind: &UnwindAction,
-        _call_source: &CallSource,
-        _fn_span: &Span,
-        mlir_block: &BlockRef,
-        ssa_values: &mut SsaValues<'a, 'a>,
-    ) -> Result<Value<'a, 'a>, MlirError> {
-        debug_assert!(args.len() == 2, "TritonCodegen::codegen_mul_call: args length must be 2");
-
-        let arg0 = &args[0].node;
-        let arg1 = &args[1].node;
-
-        println!("[DEBUG] TritonCodegen::codegen_mul_call: arg0: {:?}", arg0);
-        println!("[DEBUG] TritonCodegen::codegen_mul_call: arg1: {:?}", arg1);
-
-        let arg0_value =
-            self.codegen_operand(tcx, instance, arg0, arg0.ty(mir, tcx), mlir_block, ssa_values)?;
-        let arg1_value =
-            self.codegen_operand(tcx, instance, arg1, arg1.ty(mir, tcx), mlir_block, ssa_values)?;
-
-        self.codegen_mul(arg0_value, arg1_value, mlir_block)
     }
 
     fn codegen_goto(
