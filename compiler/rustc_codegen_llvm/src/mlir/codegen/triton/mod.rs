@@ -38,7 +38,7 @@ use rustc_middle::ty::{
     TyKind, TypingEnv,
 };
 use rustc_mlir::load_all_dialects;
-use rustc_mlir::shared::arith::{Int, create_constantx, create_int_constant};
+use rustc_mlir::shared::arith::{Int, create_constant, create_int_constant};
 use rustc_mlir::shared::attr::create_scalar_attr;
 use rustc_mlir::shared::builtin::create_tensor_type;
 use rustc_mlir::shared::ub::create_ub_poison;
@@ -806,7 +806,7 @@ impl<'a> TritonCodegen<'a> {
                 let scalar_attr = create_scalar_attr(self.module.context(), ty, scalar_int)
                     .map_err(|e| MlirError::CreateOperation { err: e })?;
 
-                let op = create_constantx(
+                let op = create_constant(
                     self.module.context(),
                     Location::unknown(self.module.context()),
                     scalar_attr.0,

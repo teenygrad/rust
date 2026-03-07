@@ -20,7 +20,6 @@ use melior::dialect::ods::arith::{
 };
 use melior::ir::r#type::IntegerType;
 use melior::ir::{Attribute, Location, Type, TypeLike, Value, ValueLike};
-use rustc_middle::ty::{ScalarInt, Ty, TyKind};
 
 use crate::errors::Error;
 
@@ -82,10 +81,10 @@ pub fn create_int_constant<'ctx>(
     let ty = value.ty(context).into();
     let num_attr = value.attr(context);
 
-    create_constantx(context, location, num_attr, ty)
+    create_constant(context, location, num_attr, ty)
 }
 
-pub fn create_constantx<'ctx>(
+pub fn create_constant<'ctx>(
     context: &'ctx Context,
     location: Location<'ctx>,
     attr: Attribute<'ctx>,
