@@ -20,6 +20,7 @@ use melior::dialect::ods::arith::{
 };
 use melior::ir::r#type::IntegerType;
 use melior::ir::{Attribute, Location, Type, TypeLike, Value, ValueLike};
+use rustc_middle::ty::{ScalarInt, Ty, TyKind};
 
 use crate::errors::Error;
 
@@ -36,88 +37,55 @@ pub enum Int {
     U128(u128),
 }
 
-use rustc_middle::ty::{ScalarInt, Ty, TyKind};
+impl Int {
+    pub fn ty<'ctx>(&self, context: &'ctx Context) -> IntegerType<'ctx> {
+        let num_bits = match self {
+            Int::I8(_) => 8,
+            Int::I16(_) => 16,
+            Int::I32(_) => 32,
+            Int::I64(_) => 64,
+            Int::I128(_) => 128,
+            Int::U8(_) => 8,
+            Int::U16(_) => 16,
+            Int::U32(_) => 32,
+            Int::U64(_) => 64,
+            Int::U128(_) => 128,
+        };
 
-/// Creates a MLIR arith.constant operation for the given ScalarInt value and Rust type.
-///
-/// # Arguments
-/// - `context`: MLIR context
-/// - `location`: MLIR location for the operation
-/// - `ty`: Rust type (`Ty<'tcx>`) describing the integer type
-/// - `scalar`: The constant value as ScalarInt
-///
-/// # Returns
-/// On success, returns a `ConstantOperation` representing the constant integer.
-/// On failure (type not supported or kind mismatch), returns an Error.
-pub fn create_scalar_attr<'ctx, 'tcx>(
-    context: &'ctx Context,
-    ty: Ty<'tcx>,
-    scalar: ScalarInt,
-) -> Result<(Attribute<'ctx>, Type<'ctx>), Error> {
-    // AXM: TODO: fix this with the correct integer type for unsigned integers, we need to
-    // to use the signless variant of the integer type
+        IntegerType::new(context, num_bits)
+    }
 
-    // Only support integer types for now
-    let attr_source = match ty.kind() {
-        TyKind::Int(int_ty) => match int_ty {
-            rustc_ast::IntTy::I8 => {
-                (format!("{} : i8", scalar.to_i8()), IntegerType::new(context, 8).into())
-            }
-            rustc_ast::IntTy::I16 => {
-                (format!("{} : i16", scalar.to_i16()), IntegerType::new(context, 16).into())
-            }
-            rustc_ast::IntTy::I32 => {
-                (format!("{} : i32", scalar.to_i32()), IntegerType::new(context, 32).into())
-            }
-            rustc_ast::IntTy::I64 => {
-                (format!("{} : i64", scalar.to_i64()), IntegerType::new(context, 64).into())
-            }
-            rustc_ast::IntTy::I128 => {
-                (format!("{} : i128", scalar.to_i128()), IntegerType::new(context, 128).into())
-            }
-            rustc_ast::IntTy::Isize => {
-                return Err(Error::InvalidType {
-                    msg: "isize is device-dependent and not supported".to_string(),
-                });
-            }
-        },
-        TyKind::Uint(uint_ty) => match uint_ty {
-            rustc_ast::UintTy::U8 => {
-                (format!("{} : i8", scalar.to_u8()), IntegerType::new(context, 8).into())
-            }
-            rustc_ast::UintTy::U16 => {
-                (format!("{} : i16", scalar.to_u16()), IntegerType::new(context, 16).into())
-            }
-            rustc_ast::UintTy::U32 => {
-                (format!("{} : i32", scalar.to_u32()), IntegerType::new(context, 32).into())
-            }
-            rustc_ast::UintTy::U64 => {
-                (format!("{} : i64", scalar.to_u64()), IntegerType::new(context, 64).into())
-            }
-            rustc_ast::UintTy::U128 => {
-                (format!("{} : i128", scalar.to_u128()), IntegerType::new(context, 128).into())
-            }
-            rustc_ast::UintTy::Usize => {
-                return Err(Error::InvalidType {
-                    msg: "usize is device-dependent and not supported".to_string(),
-                });
-            }
-        },
-        _ => {
-            return Err(Error::InvalidType {
-                msg: format!("Unsupported type for constant: {:?}", ty),
-            });
-        }
-    };
+    pub fn attr<'ctx>(self, context: &'ctx Context) -> Attribute<'ctx> {
+        // NOTE: unsigned values are promotied of i64
+        let source_attr = match self {
+            Int::I8(value) => format!("{} : i8", value),
+            Int::I16(value) => format!("{} : i16", value),
+            Int::I32(value) => format!("{} : i32", value),
+            Int::I64(value) => format!("{} : i64", value),
+            Int::I128(value) => format!("{} : i128", value),
+            Int::U8(value) => format!("{} : i64", value),
+            Int::U16(value) => format!("{} : i64", value),
+            Int::U32(value) => format!("{} : i64", value),
+            Int::U64(value) => format!("{} : i28", value),
+            Int::U128(value) => format!("{} : i128", value),
+        };
 
-    Ok((
-        Attribute::parse(context, &attr_source.0)
-            .unwrap_or_else(|| panic!("failed to parse attribute: {}", attr_source.0)),
-        attr_source.1,
-    ))
+        Attribute::parse(context, &source_attr).unwrap()
+    }
 }
 
-pub fn create_constant<'ctx>(
+pub fn create_int_constant<'ctx>(
+    context: &'ctx Context,
+    location: Location<'ctx>,
+    value: Int,
+) -> Result<ConstantOperation<'ctx>, Error> {
+    let ty = value.ty(context).into();
+    let num_attr = value.attr(context);
+
+    create_constantx(context, location, num_attr, ty)
+}
+
+pub fn create_constantx<'ctx>(
     context: &'ctx Context,
     location: Location<'ctx>,
     attr: Attribute<'ctx>,
@@ -169,22 +137,20 @@ mod tests {
 
     use melior::ir::operation::OperationLike;
     use melior::ir::{BlockLike, Location, Module, Operation};
-    use rustc_middle::ty::TyCtxt;
 
     use super::*;
     use crate::test::create_test_context;
 
     #[test]
     fn test_create_constant() {
-        todo!();
-        // let context = create_test_context();
-        // let location = Location::unknown(&context);
+        let context = create_test_context();
+        let location = Location::unknown(&context);
 
-        // let constant_op = create_constant(&context, location, Int::I64(0)).unwrap();
+        let constant_op = create_int_constant(&context, location, Int::I64(253)).unwrap();
 
-        // let expected = "%c0_i64 = arith.constant 0 : i64\n";
-        // let output = constant_op.as_operation().to_string();
-        // assert_eq!(expected, output);
+        let expected = "%c253_i64 = arith.constant 253 : i64\n";
+        let output = constant_op.as_operation().to_string();
+        assert_eq!(expected, output);
     }
 
     #[test]
@@ -194,8 +160,8 @@ mod tests {
         let module = Module::new(location);
 
         // Create two i32 constants
-        let lhs: Operation = create_constant(&context, location, Int::I32(4)).unwrap().into();
-        let rhs: Operation = create_constant(&context, location, Int::I32(5)).unwrap().into();
+        let lhs: Operation = create_int_constant(&context, location, Int::I32(4)).unwrap().into();
+        let rhs: Operation = create_int_constant(&context, location, Int::I32(5)).unwrap().into();
 
         // Get their values
         let lhs_value = lhs.result(0).unwrap().into();
@@ -220,8 +186,8 @@ mod tests {
         let module = Module::new(location);
 
         // Create two i32 constants
-        let lhs: Operation = create_constant(&context, location, Int::I32(4)).unwrap().into();
-        let rhs: Operation = create_constant(&context, location, Int::I32(5)).unwrap().into();
+        let lhs: Operation = create_int_constant(&context, location, Int::I32(4)).unwrap().into();
+        let rhs: Operation = create_int_constant(&context, location, Int::I32(5)).unwrap().into();
 
         // Get their values
         let lhs_value = lhs.result(0).unwrap().into();
@@ -234,7 +200,27 @@ mod tests {
         module.body().append_operation(rhs);
         module.body().append_operation(addi);
 
-        let expected = "module {\n  %c4_i32 = arith.constant 4 : i32\n  %c5_i32 = arith.constant 5 : i32\n  %0 = arith.muli %c4_i32, %c5_i32 : i32\n}\n";
+        let expected = "module {\n  %c4_i32 = arith.constant 4 : i32\n  %c5_i32 = arith.constant 5 : i32\n  %0 = arith.addi %c4_i32, %c5_i32 : i32\n}\n";
+        let output = module.as_operation().to_string();
+        assert_eq!(expected, output);
+    }
+
+    #[test]
+    fn test_create_extsi() {
+        let context = create_test_context();
+        let location = Location::unknown(&context);
+        let module = Module::new(location);
+
+        let src: Operation = create_int_constant(&context, location, Int::I32(4)).unwrap().into();
+
+        let src_value = src.result(0).unwrap().into();
+        let result_ty = IntegerType::new(&context, 64).into();
+        let extsi = create_extsi(&context, location, src_value, result_ty).unwrap().into();
+
+        module.body().append_operation(src);
+        module.body().append_operation(extsi);
+
+        let expected = "module {\n  %c4_i32 = arith.constant 4 : i32\n  %0 = arith.extsi %c4_i32 : i32 to i64\n}\n";
         let output = module.as_operation().to_string();
         assert_eq!(expected, output);
     }

@@ -116,7 +116,7 @@ mod tests {
     use melior::ir::{Block, BlockLike, Location, Module, Operation, RegionLike, Type};
 
     use super::*;
-    use crate::shared::arith::{Int, create_constant};
+    use crate::shared::arith::{Int, create_int_constant};
     use crate::test::create_test_context;
 
     #[test]
@@ -186,7 +186,7 @@ mod tests {
         // f32 type as MLIR type
         let f32_type = Type::float32(&context);
         let f32_ptr_type = pointer_type(f32_type);
-        let i64_zero = create_constant(&context, location, Int::I64(0)).unwrap();
+        let i64_zero = create_int_constant(&context, location, Int::I64(0)).unwrap();
         let i64_zero_value = i64_zero.result().unwrap();
 
         // Call the function under test

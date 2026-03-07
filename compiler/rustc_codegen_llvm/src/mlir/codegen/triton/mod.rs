@@ -17,8 +17,10 @@
 use std::collections::HashMap;
 
 use melior::ir::operation::OperationLike;
+use melior::ir::r#type::IntegerType;
 use melior::ir::{
-    Block, BlockLike, BlockRef, Location, Operation, RegionLike, TypeLike, Value, ValueLike,
+    Attribute, Block, BlockLike, BlockRef, Location, Operation, RegionLike, TypeLike, Value,
+    ValueLike,
 };
 use melior::utility::register_all_llvm_translations;
 use rustc_abi::FieldIdx;
@@ -36,7 +38,8 @@ use rustc_middle::ty::{
     TyKind, TypingEnv,
 };
 use rustc_mlir::load_all_dialects;
-use rustc_mlir::shared::arith::{Int, create_constant, create_scalar_attr};
+use rustc_mlir::shared::arith::{Int, create_constantx, create_int_constant};
+use rustc_mlir::shared::attr::create_scalar_attr;
 use rustc_mlir::shared::builtin::create_tensor_type;
 use rustc_mlir::shared::ub::create_ub_poison;
 use rustc_mlir::triton::tensor::splat;
@@ -466,7 +469,7 @@ impl<'a> TritonCodegen<'a> {
             .map_err(|e| MlirError::CreateOperation { err: e })?)
         } else if name == "triton::llvm::triton::num::I32" {
             debug_assert_eq!(raw_list.len(), 0, "I32 should have no arguments");
-            Ok(create_constant(
+            Ok(create_int_constant(
                 self.module.context(),
                 Location::unknown(self.module.context()),
                 Int::I32(0),
@@ -800,13 +803,17 @@ impl<'a> TritonCodegen<'a> {
     ) -> Result<Value<'a, 'a>, MlirError> {
         match scalar {
             Scalar::Int(scalar_int) => {
-                let op = create_scalar_attr(
+                let scalar_attr = create_scalar_attr(self.module.context(), ty, scalar_int)
+                    .map_err(|e| MlirError::CreateOperation { err: e })?;
+
+                let op = create_constantx(
                     self.module.context(),
                     Location::unknown(self.module.context()),
-                    ty,
-                    scalar_int,
+                    scalar_attr.0,
+                    scalar_attr.1,
                 )
                 .map_err(|e| MlirError::CreateOperation { err: e })?;
+
                 let op: Operation = op.into();
                 let result = op.result(0).expect("Constant operation result not found");
                 mlir_block.append_operation(op);
@@ -848,7 +855,8 @@ impl<'a> TritonCodegen<'a> {
             Scalar::Int(int) => match ty.kind() {
                 TyKind::Uint(UintTy::Usize) => {
                     let value = int.to_i64();
-                    Ok(create_constant(
+
+                    Ok(create_int_constant(
                         self.module.context(),
                         Location::unknown(self.module.context()),
                         Int::I64(value),
@@ -861,11 +869,11 @@ impl<'a> TritonCodegen<'a> {
                         "[DEBUG] TritonCodegen::codegen_scalar_const_value: {:?} int: {:?}",
                         ty, int
                     );
-                    let value = int.to_i32() as i64;
-                    Ok(create_constant(
+                    let value = int.to_i32();
+                    Ok(create_int_constant(
                         self.module.context(),
                         Location::unknown(self.module.context()),
-                        Int::I64(value),
+                        Int::I32(value),
                     )
                     .map_err(|e| MlirError::CreateOperation { err: e })?
                     .into())

@@ -64,7 +64,7 @@ mod tests {
     use melior::ir::{BlockLike, Location, Module, Operation};
 
     use super::*;
-    use crate::shared::arith::{Int, create_constant};
+    use crate::shared::arith::{Int, create_int_constant};
     use crate::test::create_test_context;
     use crate::triton::load_triton_dialect;
 
@@ -94,7 +94,7 @@ mod tests {
         let module = Module::new(location);
 
         let src_op: Operation<'_> =
-            create_constant(&context, location, Int::I32(0)).unwrap().into();
+            create_int_constant(&context, location, Int::I32(0)).unwrap().into();
         let src = src_op.result(0).unwrap().into();
         let result = create_tensor_type(&[5], IntegerType::new(&context, 32).into()).into();
         let splat_op = splat(&context, location, src, result);
