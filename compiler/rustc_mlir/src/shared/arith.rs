@@ -20,23 +20,57 @@ use melior::dialect::ods::arith::{
 };
 use melior::ir::r#type::IntegerType;
 use melior::ir::{Attribute, Location, Type, TypeLike, Value, ValueLike};
+use rustc_ast::{IntTy, UintTy};
+use rustc_middle::ty::{ScalarInt, Ty, TyKind};
 
 use crate::errors::Error;
 
+/// This enum represents integers but we use unsigned integers for the values,
+/// as we use the signless variant of the integer type in MLIR.
 pub enum Int {
-    I8(i8),
-    I16(i16),
-    I32(i32),
-    I64(i64),
-    I128(i128),
+    I8(u8),
+    I16(u16),
+    I32(u32),
+    I64(u64),
+    I128(u128),
+    Isize(u64),
     U8(u8),
     U16(u16),
     U32(u32),
     U64(u64),
     U128(u128),
+    Usize(u64),
 }
 
 impl Int {
+    pub fn from_scalar<'tcx>(ty: Ty<'tcx>, scalar: ScalarInt) -> Result<Self, Error> {
+        let value = match ty.kind() {
+            TyKind::Int(int_ty) => match int_ty {
+                IntTy::I8 => Int::I8(scalar.to_u8()),
+                IntTy::I16 => Int::I16(scalar.to_u16()),
+                IntTy::I32 => Int::I32(scalar.to_u32()),
+                IntTy::I64 => Int::I64(scalar.to_u64()),
+                IntTy::I128 => Int::I128(scalar.to_u128()),
+                IntTy::Isize => Int::Isize(scalar.to_u64()),
+            },
+            TyKind::Uint(uint_ty) => match uint_ty {
+                UintTy::U8 => Int::U8(scalar.to_u8()),
+                UintTy::U16 => Int::U16(scalar.to_u16()),
+                UintTy::U32 => Int::U32(scalar.to_u32()),
+                UintTy::U64 => Int::U64(scalar.to_u64()),
+                UintTy::U128 => Int::U128(scalar.to_u128()),
+                UintTy::Usize => Int::Usize(scalar.to_u64()),
+            },
+            _ => {
+                return Err(Error::InvalidType {
+                    msg: format!("Unsupported type for constant: {:?}", ty),
+                });
+            }
+        };
+
+        Ok(value)
+    }
+
     pub fn ty<'ctx>(&self, context: &'ctx Context) -> IntegerType<'ctx> {
         let num_bits = match self {
             Int::I8(_) => 8,
@@ -49,12 +83,14 @@ impl Int {
             Int::U32(_) => 32,
             Int::U64(_) => 64,
             Int::U128(_) => 128,
+            Int::Isize(_) => 64, // isize is treated as i64
+            Int::Usize(_) => 64, // usize is treated as i64
         };
 
         IntegerType::new(context, num_bits)
     }
 
-    pub fn attr<'ctx>(self, context: &'ctx Context) -> Attribute<'ctx> {
+    pub fn attr<'ctx>(&self, context: &'ctx Context) -> Attribute<'ctx> {
         // NOTE: unsigned values are promotied of i64
         let source_attr = match self {
             Int::I8(value) => format!("{} : i8", value),
@@ -62,11 +98,13 @@ impl Int {
             Int::I32(value) => format!("{} : i32", value),
             Int::I64(value) => format!("{} : i64", value),
             Int::I128(value) => format!("{} : i128", value),
-            Int::U8(value) => format!("{} : i64", value),
-            Int::U16(value) => format!("{} : i64", value),
-            Int::U32(value) => format!("{} : i64", value),
-            Int::U64(value) => format!("{} : i28", value),
+            Int::Isize(value) => format!("{} : i64", value),
+            Int::U8(value) => format!("{} : i8", value),
+            Int::U16(value) => format!("{} : i16", value),
+            Int::U32(value) => format!("{} : i32", value),
+            Int::U64(value) => format!("{} : i64", value),
             Int::U128(value) => format!("{} : i128", value),
+            Int::Usize(value) => format!("{} : i64", value),
         };
 
         Attribute::parse(context, &source_attr).unwrap()

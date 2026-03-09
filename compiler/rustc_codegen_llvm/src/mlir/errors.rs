@@ -25,5 +25,5 @@ pub enum MlirError {
     CreateOperation { err: rustc_mlir::errors::Error },
 
     #[diag(codegen_llvm_mlir_invalid_scalar_operand)]
-    InvalidScalarOperand { node: String },
+    InvalidScalar { node: String },
 }

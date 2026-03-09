@@ -87,32 +87,28 @@ impl<'a> TritonCodegen<'a> {
                     Const::Ty(ty, const_val) => {
                         // Handle const generic parameters of integer type
                         if !ty.is_integral() {
-                            return Err(MlirError::InvalidScalarOperand {
-                                node: format!("{:?}", node),
-                            });
+                            return Err(MlirError::InvalidScalar { node: format!("{:?}", node) });
                         }
                         match const_val.kind() {
                             ConstKind::Param(param) => {
                                 let value = instance.args.const_at(param.index as usize).to_value();
                                 let scalar = value.valtree.try_to_scalar().ok_or_else(|| {
-                                    MlirError::InvalidScalarOperand { node: format!("{:?}", node) }
+                                    MlirError::InvalidScalar { node: format!("{:?}", node) }
                                 })?;
                                 match scalar {
                                     Scalar::Int(scalar_int) => Ok(scalar_int),
-                                    _ => Err(MlirError::InvalidScalarOperand {
+                                    _ => Err(MlirError::InvalidScalar {
                                         node: format!("{:?}", node),
                                     }),
                                 }
                             }
-                            _ => {
-                                Err(MlirError::InvalidScalarOperand { node: format!("{:?}", node) })
-                            }
+                            _ => Err(MlirError::InvalidScalar { node: format!("{:?}", node) }),
                         }
                     }
-                    _ => Err(MlirError::InvalidScalarOperand { node: format!("{:?}", node) }),
+                    _ => Err(MlirError::InvalidScalar { node: format!("{:?}", node) }),
                 }
             }
-            _ => Err(MlirError::InvalidScalarOperand { node: format!("{:?}", node) }),
+            _ => Err(MlirError::InvalidScalar { node: format!("{:?}", node) }),
         }
     }
 
@@ -832,7 +828,7 @@ impl<'a> TritonCodegen<'a> {
     ) -> Result<Operation<'a>, MlirError> {
         match const_val {
             ConstValue::Scalar(scalar) => {
-                self.codegen_scalar_const_value(tcx, instance, scalar, ty)
+                self.codegen_scalar_const_value(tcx, instance, ty, scalar)
             }
             ConstValue::ZeroSized => todo!("ZeroSized"),
             ConstValue::Slice { alloc_id, meta } => {
@@ -848,37 +844,26 @@ impl<'a> TritonCodegen<'a> {
         &self,
         tcx: TyCtxt<'tcx>,
         instance: &Instance<'tcx>,
-        scalar: Scalar,
         ty: Ty<'tcx>,
+        scalar: Scalar,
     ) -> Result<Operation<'a>, MlirError> {
         match scalar {
-            Scalar::Int(int) => match ty.kind() {
-                TyKind::Uint(UintTy::Usize) => {
-                    let value = int.to_i64();
+            Scalar::Int(scalar_int) => match ty.kind() {
+                TyKind::Uint(_) | TyKind::Int(_) => {
+                    let value =
+                        Int::from_scalar(ty, scalar_int).map_err(|e| MlirError::InvalidScalar {
+                            node: format!("Invalid scalar: {:?} {:?} {:?}", e, ty, scalar_int),
+                        })?;
 
                     Ok(create_int_constant(
                         self.module.context(),
                         Location::unknown(self.module.context()),
-                        Int::I64(value),
+                        value,
                     )
                     .map_err(|e| MlirError::CreateOperation { err: e })?
                     .into())
                 }
-                TyKind::Int(IntTy::I32) => {
-                    println!(
-                        "[DEBUG] TritonCodegen::codegen_scalar_const_value: {:?} int: {:?}",
-                        ty, int
-                    );
-                    let value = int.to_i32();
-                    Ok(create_int_constant(
-                        self.module.context(),
-                        Location::unknown(self.module.context()),
-                        Int::I32(value),
-                    )
-                    .map_err(|e| MlirError::CreateOperation { err: e })?
-                    .into())
-                }
-                rustc_middle::infer::canonical::ir::TyKind::Adt(adt_def, args) => {
+                TyKind::Adt(adt_def, args) => {
                     self.codegen_adt(tcx, instance, adt_def, args.as_slice())
                 }
                 _ => todo!("Scalar::Int ty: {:?} {:?}", ty.kind(), ty),
