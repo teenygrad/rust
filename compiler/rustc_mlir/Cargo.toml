@@ -21,6 +21,9 @@ rustc_fluent_macro = { path = "../rustc_fluent_macro" }
 rustc_middle = { path = "../rustc_middle" }
 rustc_ast = { path = "../rustc_ast" }
 
+[dev-dependencies]
+rstest = "0.26.1"
+
 [build-dependencies]
 cc = "1.2.16"
 cmake = "0.1.57"

@@ -16,14 +16,35 @@
 
 use melior::Context;
 use melior::dialect::ods::arith::{
-    AddIOperation, ConstantOperation, ExtSIOperation, MulIOperation,
+    AddIOperation, CmpIOperation, ConstantOperation, ExtSIOperation, MulIOperation,
 };
+use melior::ir::attribute::IntegerAttribute;
 use melior::ir::r#type::IntegerType;
 use melior::ir::{Attribute, Location, Type, TypeLike, Value, ValueLike};
 use rustc_ast::{IntTy, UintTy};
 use rustc_middle::ty::{ScalarInt, Ty, TyKind};
 
 use crate::errors::Error;
+
+pub struct Predicate(i32);
+impl Predicate {
+    const EQ: Predicate = Self(0);
+    const NE: Predicate = Self(1);
+    const SLT: Predicate = Self(2);
+    const SLE: Predicate = Self(3);
+    const SGT: Predicate = Self(4);
+    const SGE: Predicate = Self(5);
+    const ULT: Predicate = Self(6);
+    const ULE: Predicate = Self(7);
+    const UGT: Predicate = Self(8);
+    const UGE: Predicate = Self(9);
+}
+
+impl std::fmt::Display for Predicate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 /// This enum represents integers but we use unsigned integers for the values,
 /// as we use the signless variant of the integer type in MLIR.
@@ -169,11 +190,29 @@ pub fn create_extsi<'ctx>(
     Ok(ExtSIOperation::builder(context, location).r#in(src).out(result_ty).build())
 }
 
+pub fn create_cmpi<'ctx>(
+    context: &'ctx Context,
+    location: Location<'ctx>,
+    predicate: Predicate,
+    lhs: Value<'ctx, 'ctx>,
+    rhs: Value<'ctx, 'ctx>,
+    result_ty: Type<'ctx>,
+) -> Result<CmpIOperation<'ctx>, Error> {
+    let predicate = Attribute::parse(context, &predicate.to_string()).unwrap();
+
+    Ok(CmpIOperation::builder(context, location)
+        .predicate(predicate)
+        .lhs(lhs)
+        .rhs(rhs)
+        .result(result_ty)
+        .build())
+}
 #[cfg(test)]
 mod tests {
 
     use melior::ir::operation::OperationLike;
     use melior::ir::{BlockLike, Location, Module, Operation};
+    use rstest::rstest;
 
     use super::*;
     use crate::test::create_test_context;
@@ -258,6 +297,45 @@ mod tests {
         module.body().append_operation(extsi);
 
         let expected = "module {\n  %c4_i32 = arith.constant 4 : i32\n  %0 = arith.extsi %c4_i32 : i32 to i64\n}\n";
+        let output = module.as_operation().to_string();
+        assert_eq!(expected, output);
+    }
+
+    #[rstest]
+    #[case(Predicate::EQ, "eq")]
+    #[case(Predicate::NE, "ne")]
+    #[case(Predicate::SLT, "slt")]
+    #[case(Predicate::SLE, "sle")]
+    #[case(Predicate::SGT, "sgt")]
+    #[case(Predicate::SGE, "sge")]
+    #[case(Predicate::ULT, "ult")]
+    #[case(Predicate::ULE, "ule")]
+    #[case(Predicate::UGT, "ugt")]
+    #[case(Predicate::UGE, "uge")]
+    fn test_create_cmpi(#[case] predicate: Predicate, #[case] predicate_str: &str) {
+        let context = create_test_context();
+        let location = Location::unknown(&context);
+        let module = Module::new(location);
+
+        let lhs: Operation = create_int_constant(&context, location, Int::I32(4)).unwrap().into();
+        let rhs: Operation = create_int_constant(&context, location, Int::I32(5)).unwrap().into();
+
+        let lhs_value = lhs.result(0).unwrap().into();
+        let rhs_value = rhs.result(0).unwrap().into();
+        let result_ty = IntegerType::new(&context, 1).into();
+
+        let cmp_slt = create_cmpi(&context, location, predicate, lhs_value, rhs_value, result_ty)
+            .unwrap()
+            .into();
+
+        module.body().append_operation(lhs);
+        module.body().append_operation(rhs);
+        module.body().append_operation(cmp_slt);
+
+        let expected = format!(
+            "module {{\n  %c4_i32 = arith.constant 4 : i32\n  %c5_i32 = arith.constant 5 : i32\n  %0 = arith.cmpi {}, %c4_i32, %c5_i32 : i32\n}}\n",
+            predicate_str
+        );
         let output = module.as_operation().to_string();
         assert_eq!(expected, output);
     }
