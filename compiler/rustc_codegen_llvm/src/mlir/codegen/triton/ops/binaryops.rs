@@ -14,11 +14,16 @@
  * limitations under the License.
  */
 
+use itertools::Itertools;
 use melior::ir::operation::OperationLike;
-use melior::ir::{BlockLike, BlockRef, Location, Operation, TypeLike, Value, ValueLike};
+use melior::ir::r#type::{IntegerType, RankedTensorType};
+use melior::ir::{
+    BlockLike, BlockRef, Location, Operation, ShapedTypeLike, TypeLike, Value, ValueLike,
+};
 use rustc_middle::mir::{BasicBlock, Body, CallSource, Operand, Place, UnwindAction};
 use rustc_middle::ty::{Instance, TyCtxt};
-use rustc_mlir::shared::arith::create_muli;
+use rustc_mlir::shared::arith::{create_addi, create_extsi, create_muli};
+use rustc_mlir::shared::builtin::create_tensor_type;
 use rustc_span::Span;
 use rustc_span::source_map::Spanned;
 
@@ -158,6 +163,58 @@ impl<'a> TritonCodegen<'a> {
             ),
         };
 
-        todo!("TritonCodegen::codegen_add: {:?}-> {:?} {:?}-> {:?}", lhs, lhs_ty, rhs, rhs_ty);
+        let lhs_ty: RankedTensorType<'a> =
+            lhs.r#type().try_into().map_err(|_| MlirError::InvalidType {
+                msg: format!("expected tensor type for lhs in add, got {:?}", lhs.r#type()),
+            })?;
+
+        let dimensions = (0..lhs_ty.rank())
+            .map(|i| lhs_ty.dim_size(i))
+            .map_ok(|i| i as i64)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_e| MlirError::InvalidType {
+                msg: format!("failed to get dimensions for {:?}", lhs.r#type()),
+            })?;
+
+        let ext_type =
+            create_tensor_type(&dimensions, IntegerType::new(self.module.context(), 64).into());
+        println!("[DEBUG] TritonCodegen::codegen_add: ext_type: {:?}", ext_type);
+
+        let lhs_extsi_op: Operation<'a> = create_extsi(
+            self.module.context(),
+            Location::unknown(self.module.context()),
+            lhs,
+            ext_type.into(),
+        )
+        .map_err(|e| MlirError::CreateOperation { err: e })?
+        .into();
+        let lhs_result =
+            lhs_extsi_op.result(0).expect("LHS ExtSI operation result not found").into();
+
+        let rhs_extsi_op: Operation<'a> = create_extsi(
+            self.module.context(),
+            Location::unknown(self.module.context()),
+            rhs,
+            ext_type.into(),
+        )
+        .map_err(|e| MlirError::CreateOperation { err: e })?
+        .into();
+        let rhs_result =
+            rhs_extsi_op.result(0).expect("RHS ExtSI operation result not found").into();
+
+        let add_op: Operation<'a> = create_addi(
+            self.module.context(),
+            Location::unknown(self.module.context()),
+            lhs_result,
+            rhs_result,
+        )
+        .map_err(|e| MlirError::CreateOperation { err: e })?
+        .into();
+        let result = add_op.result(0).expect("Add operation result not found").into();
+
+        mlir_block.append_operation(lhs_extsi_op);
+        mlir_block.append_operation(rhs_extsi_op);
+        mlir_block.append_operation(add_op);
+        Ok(result)
     }
 }

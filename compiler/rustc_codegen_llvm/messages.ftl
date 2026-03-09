@@ -68,3 +68,5 @@ codegen_llvm_write_thinlto_key_with_llvm_err = error while writing ThinLTO key d
 codegen_llvm_mlir_codegen_failed = mlir codegen failed: {$err}
 codegen_llvm_mlir_create_operation_failed = mlir create operation failed: {$err}
 codegen_llvm_mlir_invalid_scalar_operand = invalid scalar operand: {$node}
+codegen_llvm_mlir_invalid_type = invalid type: {$msg}
+codegen_llvm_mlir_incompatible_types = incomaptibale types: {$msg}

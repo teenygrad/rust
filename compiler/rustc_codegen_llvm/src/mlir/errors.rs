@@ -26,4 +26,10 @@ pub enum MlirError {
 
     #[diag(codegen_llvm_mlir_invalid_scalar_operand)]
     InvalidScalar { node: String },
+
+    #[diag(codegen_llvm_mlir_invalid_type)]
+    InvalidType { msg: String },
+
+    #[diag(codegen_llvm_mlir_incompatible_types)]
+    IncompatibleTypes { msg: String },
 }
