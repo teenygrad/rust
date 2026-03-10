@@ -22,7 +22,7 @@ use melior::ir::{
 };
 use rustc_middle::mir::{BasicBlock, Body, CallSource, Operand, Place, UnwindAction};
 use rustc_middle::ty::{Instance, TyCtxt};
-use rustc_mlir::shared::arith::{create_addi, create_extsi, create_muli};
+use rustc_mlir::shared::arith::{Predicate, create_addi, create_cmpi, create_extsi, create_muli};
 use rustc_mlir::shared::builtin::create_tensor_type;
 use rustc_span::Span;
 use rustc_span::source_map::Spanned;
@@ -85,12 +85,99 @@ impl<'a> TritonCodegen<'a> {
         println!("[DEBUG] TritonCodegen::codegen_add_call: arg0: {:?}", arg0);
         println!("[DEBUG] TritonCodegen::codegen_add_call: arg1: {:?}", arg1);
 
-        let arg0_value =
+        let lhs =
             self.codegen_operand(tcx, instance, arg0, arg0.ty(mir, tcx), mlir_block, ssa_values)?;
-        let arg1_value =
+        let rhs =
             self.codegen_operand(tcx, instance, arg1, arg1.ty(mir, tcx), mlir_block, ssa_values)?;
 
-        self.codegen_add(tcx, arg0_value, arg1_value, mlir_block)
+        self.codegen_add(tcx, lhs, rhs, mlir_block)
+    }
+
+    pub fn codegen_lt_call<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        mir: &Body<'tcx>,
+        _func: &Operand<'tcx>,
+        args: &[Spanned<Operand<'tcx>>],
+        _destination: &Place<'tcx>,
+        _target: &Option<BasicBlock>,
+        _unwind: &UnwindAction,
+        _call_source: &CallSource,
+        _fn_span: &Span,
+        mlir_block: &BlockRef,
+        ssa_values: &mut SsaValues<'a, 'a>,
+    ) -> Result<Value<'a, 'a>, MlirError> {
+        debug_assert!(args.len() == 2, "TritonCodegen::codegen_lt_call: args length must be 2");
+
+        let arg0 = &args[0].node;
+        let arg1 = &args[1].node;
+
+        let lhs =
+            self.codegen_operand(tcx, instance, arg0, arg0.ty(mir, tcx), mlir_block, ssa_values)?;
+        let rhs =
+            self.codegen_operand(tcx, instance, arg1, arg1.ty(mir, tcx), mlir_block, ssa_values)?;
+
+        self.codegen_cmpi(tcx, Predicate::SLT, lhs, rhs, mlir_block)
+    }
+
+    pub fn codegen_cmpi<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        predicate: Predicate,
+        lhs: Value<'a, 'a>,
+        rhs: Value<'a, 'a>,
+        mlir_block: &BlockRef,
+    ) -> Result<Value<'a, 'a>, MlirError> {
+        let lhs_is_tensor = lhs.r#type().is_tensor();
+        let rhs_is_tensor = rhs.r#type().is_tensor();
+
+        let (lhs, rhs, result_ty) = match (lhs_is_tensor, rhs_is_tensor) {
+            (true, true) => (lhs, rhs, lhs.r#type()),
+            (true, false) => (
+                lhs,
+                self.like_tensor(
+                    tcx,
+                    Location::unknown(self.module.context()),
+                    lhs,
+                    rhs,
+                    mlir_block,
+                )?,
+                lhs.r#type(),
+            ),
+            (false, true) => (
+                self.like_tensor(
+                    tcx,
+                    Location::unknown(self.module.context()),
+                    rhs,
+                    lhs,
+                    mlir_block,
+                )?,
+                rhs,
+                rhs.r#type(),
+            ),
+            (false, false) => todo!(
+                "TritonCodegen::codegen_lt: {:?}-> {:?} {:?}-> {:?}",
+                lhs,
+                lhs.r#type(),
+                rhs,
+                rhs.r#type()
+            ),
+        };
+
+        let lt_op: Operation<'a> = create_cmpi(
+            self.module.context(),
+            Location::unknown(self.module.context()),
+            predicate,
+            lhs,
+            rhs,
+            result_ty,
+        )
+        .map_err(|e| MlirError::CreateOperation { err: e })?
+        .into();
+        let result = lt_op.result(0).expect("LT operation result not found").into();
+        mlir_block.append_operation(lt_op);
+        Ok(result)
     }
 
     pub fn codegen_mul(

@@ -28,16 +28,16 @@ use crate::errors::Error;
 
 pub struct Predicate(i32);
 impl Predicate {
-    const EQ: Predicate = Self(0);
-    const NE: Predicate = Self(1);
-    const SLT: Predicate = Self(2);
-    const SLE: Predicate = Self(3);
-    const SGT: Predicate = Self(4);
-    const SGE: Predicate = Self(5);
-    const ULT: Predicate = Self(6);
-    const ULE: Predicate = Self(7);
-    const UGT: Predicate = Self(8);
-    const UGE: Predicate = Self(9);
+    pub const EQ: Predicate = Self(0);
+    pub const NE: Predicate = Self(1);
+    pub const SLT: Predicate = Self(2);
+    pub const SLE: Predicate = Self(3);
+    pub const SGT: Predicate = Self(4);
+    pub const SGE: Predicate = Self(5);
+    pub const ULT: Predicate = Self(6);
+    pub const ULE: Predicate = Self(7);
+    pub const UGT: Predicate = Self(8);
+    pub const UGE: Predicate = Self(9);
 }
 
 impl std::fmt::Display for Predicate {
