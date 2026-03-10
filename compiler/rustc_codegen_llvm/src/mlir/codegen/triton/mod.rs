@@ -43,7 +43,7 @@ use rustc_mlir::shared::attr::create_scalar_attr;
 use rustc_mlir::shared::builtin::{tensor_type, tensor_type_like};
 use rustc_mlir::shared::ub::create_ub_poison;
 use rustc_mlir::triton::tensor::splat;
-use rustc_mlir::triton::{create_func, create_int_to_ptr_cast, load_triton_dialect, pointer_type};
+use rustc_mlir::triton::{create_func, int_to_ptr, load_triton_dialect, pointer_type};
 
 use crate::mlir::MlirModule;
 use crate::mlir::codegen::Codegen;
@@ -731,7 +731,7 @@ impl<'a> TritonCodegen<'a> {
                         );
                         let ptr_ty =
                             self.type_mapper.map_type(self.module.context(), &tcx, &normalized_ty);
-                        let cast_op: Operation = create_int_to_ptr_cast(
+                        let cast_op: Operation = int_to_ptr(
                             self.module.context(),
                             Location::unknown(self.module.context()),
                             result.into(),

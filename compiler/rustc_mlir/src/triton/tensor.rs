@@ -16,14 +16,17 @@
 
 use melior::Context;
 use melior::ir::r#type::IntegerType;
-use melior::ir::{Location, Type, Value};
+use melior::ir::{Location, Type, TypeLike, Value};
 
 use crate::errors::Error;
+use crate::ffi::mlirCreateTritonPointerType;
 use crate::shared::builtin::tensor_type;
 use crate::triton::attr_i32;
-use crate::triton::tt::{AddPtrOperation, LoadOperation, MakeRangeOperation, SplatOperation};
+use crate::triton::tt::{
+    AddPtrOperation, LoadOperation, MakeRangeOperation, SplatOperation, StoreOperation,
+};
 
-pub fn create_arange<'ctx>(
+pub fn arange<'ctx>(
     context: &'ctx Context,
     location: Location<'ctx>,
     start: i32,
@@ -75,6 +78,16 @@ pub fn load<'ctx>(
     Ok(LoadOperation::builder(context, location).ptr(ptr).mask(mask).build())
 }
 
+pub fn store<'ctx>(
+    context: &'ctx Context,
+    location: Location<'ctx>,
+    ptr: Value<'ctx, 'ctx>,
+    value: Value<'ctx, 'ctx>,
+    mask: Value<'ctx, 'ctx>,
+) -> Result<StoreOperation<'ctx>, Error> {
+    Ok(StoreOperation::builder(context, location).ptr(ptr).value(value).mask(mask).build())
+}
+
 #[cfg(test)]
 mod tests {
     use melior::Context;
@@ -84,7 +97,7 @@ mod tests {
     use super::*;
     use crate::shared::arith::{Int, create_int_constant};
     use crate::test::create_test_context;
-    use crate::triton::load_triton_dialect;
+    use crate::triton::{int_to_ptr, load_triton_dialect, pointer_type};
 
     #[test]
     fn test_create_arange() {
@@ -93,7 +106,7 @@ mod tests {
         let start = 0;
         let end = 5;
 
-        let arange_op = create_arange(&context, location, start, end);
+        let arange_op = arange(&context, location, start, end);
         assert!(arange_op.is_ok());
         let op = arange_op.unwrap();
 

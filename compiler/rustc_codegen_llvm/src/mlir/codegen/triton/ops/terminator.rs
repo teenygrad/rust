@@ -33,6 +33,7 @@ type LocalCallHandler<'a, 'tcx> = fn(
     &Instance<'tcx>,
     &Body<'tcx>,
     &Operand<'tcx>,
+    &str,
     &[Spanned<Operand<'tcx>>],
     &Place<'tcx>,
     &Option<BasicBlock>,
@@ -183,6 +184,7 @@ impl<'a> TritonCodegen<'a> {
             }
             "triton::Triton::arange" => TritonCodegen::codegen_arange as LocalCallHandler<'a, 'tcx>,
             "triton::Triton::load" => TritonCodegen::codegen_load as LocalCallHandler<'a, 'tcx>,
+            "triton::Triton::store" => TritonCodegen::codegen_store as LocalCallHandler<'a, 'tcx>,
             "std::ops::Mul::mul" => TritonCodegen::codegen_mul_call as LocalCallHandler<'a, 'tcx>,
             "std::ops::Add::add" => TritonCodegen::codegen_add_call as LocalCallHandler<'a, 'tcx>,
             "triton::types::Comparison::lt" => {
@@ -191,7 +193,7 @@ impl<'a> TritonCodegen<'a> {
             "triton::types::AddOffsets::add_offset" => {
                 TritonCodegen::codegen_add_ptr as LocalCallHandler<'a, 'tcx>
             }
-            _ => todo!("TritonCodegen::codegen_terminator_call unhandled call: {:?}", func_name),
+            _ => TritonCodegen::codegen_call as LocalCallHandler<'a, 'tcx>,
         };
 
         let value = method(
@@ -200,6 +202,7 @@ impl<'a> TritonCodegen<'a> {
             instance,
             mir,
             func,
+            func_name.as_str(),
             args,
             destination,
             target,
@@ -213,6 +216,25 @@ impl<'a> TritonCodegen<'a> {
         ssa_values.insert(destination.local, value);
         self.codegen_goto(&target.expect("target must be Some"), mlir_block, basic_blocks)?;
         Ok(())
+    }
+
+    pub fn codegen_call<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        mir: &Body<'tcx>,
+        func: &Operand<'tcx>,
+        func_name: &str,
+        args: &[Spanned<Operand<'tcx>>],
+        _destination: &Place<'tcx>,
+        _target: &Option<BasicBlock>,
+        _unwind: &UnwindAction,
+        _call_source: &CallSource,
+        _fn_span: &Span,
+        _mlir_block: &BlockRef,
+        _ssa_values: &mut SsaValues<'a, 'a>,
+    ) -> Result<Value<'a, 'a>, MlirError> {
+        todo!("TritonCodegen::codegen_call: {:?}", func_name);
     }
 
     fn codegen_goto(

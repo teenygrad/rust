@@ -32,6 +32,7 @@ impl<'a> TritonCodegen<'a> {
         instance: &Instance<'tcx>,
         _mir: &Body<'tcx>,
         func: &Operand<'tcx>,
+        _func_name: &str,
         args: &[Spanned<Operand<'tcx>>],
         destination: &Place<'tcx>,
         target: &Option<BasicBlock>,

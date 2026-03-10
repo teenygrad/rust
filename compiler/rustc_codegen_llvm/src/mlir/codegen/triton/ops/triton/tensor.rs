@@ -21,8 +21,9 @@ use rustc_middle::mir::{
     BasicBlock, Body, CallSource, Const, ConstValue, Operand, Place, UnwindAction,
 };
 use rustc_middle::ty::{Instance, TyCtxt};
+use rustc_mlir::shared::arith::{Int, create_int_constant};
 use rustc_mlir::triton::program::{ProgramAxis, create_get_program_id};
-use rustc_mlir::triton::tensor::{add_ptr, create_arange, load};
+use rustc_mlir::triton::tensor::{add_ptr, arange, load, store};
 use rustc_span::Span;
 use rustc_span::source_map::Spanned;
 
@@ -36,6 +37,7 @@ impl<'a> TritonCodegen<'a> {
         instance: &Instance<'tcx>,
         mir: &Body<'tcx>,
         func: &Operand<'tcx>,
+        _func_name: &str,
         args: &[Spanned<Operand<'tcx>>],
         destination: &Place<'tcx>,
         target: &Option<BasicBlock>,
@@ -59,14 +61,10 @@ impl<'a> TritonCodegen<'a> {
         let start = self.to_scalar_int(tcx, instance, &args[0].node)?.to_i32();
         let end = self.to_scalar_int(tcx, instance, &args[1].node)?.to_i32();
 
-        let arange_op: Operation<'a> = create_arange(
-            self.module.context(),
-            Location::unknown(self.module.context()),
-            start,
-            end,
-        )
-        .map_err(|e| MlirError::CreateOperation { err: e })?
-        .into();
+        let arange_op: Operation<'a> =
+            arange(self.module.context(), Location::unknown(self.module.context()), start, end)
+                .map_err(|e| MlirError::CreateOperation { err: e })?
+                .into();
 
         let result = arange_op.result(0).expect("Arange operation result not found");
         mlir_block.append_operation(arange_op);
@@ -79,6 +77,7 @@ impl<'a> TritonCodegen<'a> {
         instance: &Instance<'tcx>,
         mir: &Body<'tcx>,
         _func: &Operand<'tcx>,
+        _func_name: &str,
         args: &[Spanned<Operand<'tcx>>],
         _destination: &Place<'tcx>,
         _target: &Option<BasicBlock>,
@@ -125,6 +124,7 @@ impl<'a> TritonCodegen<'a> {
         instance: &Instance<'tcx>,
         mir: &Body<'tcx>,
         func: &Operand<'tcx>,
+        _func_name: &str,
         args: &[Spanned<Operand<'tcx>>],
         destination: &Place<'tcx>,
         target: &Option<BasicBlock>,
@@ -159,6 +159,66 @@ impl<'a> TritonCodegen<'a> {
                 .into();
         let result = load_op.result(0).expect("Load operation result not found");
         mlir_block.append_operation(load_op);
+        Ok(result.into())
+    }
+
+    pub fn codegen_store<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        mir: &Body<'tcx>,
+        func: &Operand<'tcx>,
+        _func_name: &str,
+        args: &[Spanned<Operand<'tcx>>],
+        destination: &Place<'tcx>,
+        target: &Option<BasicBlock>,
+        unwind: &UnwindAction,
+        call_source: &CallSource,
+        fn_span: &Span,
+        mlir_block: &BlockRef,
+        ssa_values: &mut SsaValues<'a, 'a>,
+    ) -> Result<Value<'a, 'a>, MlirError> {
+        println!(
+            "[DEBUG] TritonCodegen::codegen_store: func: {:?} args: {:?} destination: {:?} target: {:?} unwind: {:?} call_source: {:?} fn_span: {:?}",
+            func, args, destination, target, unwind, call_source, fn_span
+        );
+
+        debug_assert!(
+            args.len() == 3,
+            "TritonCodegen::codegen_store: args length must be 3: {:?}",
+            args
+        );
+
+        let arg0 = &args[0].node;
+        let arg1 = &args[1].node;
+        let arg2 = &args[2].node;
+
+        let dest =
+            self.codegen_operand(tcx, instance, arg0, arg0.ty(mir, tcx), mlir_block, ssa_values)?;
+        let src =
+            self.codegen_operand(tcx, instance, arg1, arg1.ty(mir, tcx), mlir_block, ssa_values)?;
+        let mask =
+            self.codegen_operand(tcx, instance, arg2, arg2.ty(mir, tcx), mlir_block, ssa_values)?;
+
+        let store_op: Operation<'a> =
+            store(self.module.context(), Location::unknown(self.module.context()), dest, src, mask)
+                .map_err(|e| MlirError::CreateOperation { err: e })?
+                .into();
+        mlir_block.append_operation(store_op);
+
+        // AXM TODO: fix this, perhaps make return type an Option<Value<'a, 'a>>
+        // instead of this, I am adding a constant and returning that, this will be
+        // removed during dead code elimination
+        let void_op = create_int_constant(
+            self.module.context(),
+            Location::unknown(self.module.context()),
+            Int::I32(0),
+        )
+        .map_err(|e| MlirError::CreateOperation { err: e })?;
+        let void_op: Operation<'a> = void_op.into();
+        let result = void_op.result(0).expect("Void operation result not found");
+        mlir_block.append_operation(void_op);
+
         Ok(result.into())
     }
 }

@@ -16,14 +16,15 @@
 
 use melior::Context;
 use melior::ir::attribute::{
-    ArrayAttribute, Attribute, IntegerAttribute, StringAttribute, TypeAttribute,
+    ArrayAttribute, Attribute, FlatSymbolRefAttribute, IntegerAttribute, StringAttribute,
+    TypeAttribute,
 };
 use melior::ir::r#type::{FunctionType, IntegerType};
 use melior::ir::{Location, Region, Type, TypeLike, Value};
 
 use crate::errors::Error;
 use crate::ffi::{mlirCreateTritonPointerType, mlirLoadTritonDialect};
-use crate::triton::tt::{FuncOperation, IntToPtrOperation, ReturnOperation};
+use crate::triton::tt::{CallOperation, FuncOperation, IntToPtrOperation, ReturnOperation};
 
 pub mod program;
 pub mod tensor;
@@ -99,7 +100,16 @@ pub fn create_return<'ctx, 'b>(
     Ok(ReturnOperation::builder(context, location).srcs(value).build())
 }
 
-pub fn create_int_to_ptr_cast<'ctx, 'b>(
+pub fn call<'ctx>(
+    context: &'ctx Context,
+    location: Location<'ctx>,
+    args: &[Value<'ctx, 'ctx>],
+) -> Result<CallOperation<'ctx>, Error> {
+    let x = FlatSymbolRefAttribute::new(context, "xyz");
+    todo!("call: {:?}", args);
+}
+
+pub fn int_to_ptr<'ctx, 'b>(
     context: &'ctx Context,
     location: Location<'ctx>,
     src: Value<'ctx, 'b>,
@@ -175,7 +185,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_int_to_ptr_cast() {
+    fn test_create_int_to_ptr() {
         // MLIR context and location
         let context = create_test_context();
         load_triton_dialect(&context);
@@ -190,9 +200,7 @@ mod tests {
         let i64_zero_value = i64_zero.result().unwrap();
 
         // Call the function under test
-        let cast_op =
-            create_int_to_ptr_cast(&context, location, i64_zero_value.into(), f32_ptr_type)
-                .unwrap();
+        let cast_op = int_to_ptr(&context, location, i64_zero_value.into(), f32_ptr_type).unwrap();
 
         module.body().append_operation(i64_zero.into());
         module.body().append_operation(cast_op.into());
