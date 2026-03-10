@@ -443,7 +443,7 @@ pub mod triton {
         pub trait AddOffsets<I: Int, T: Tensor<I>> {
             type Output;
 
-            fn add_offsets(self, offsets: T) -> Self::Output;
+            fn add_offset(self, offsets: T) -> Self::Output;
         }
 
         // Pointer Type
@@ -624,7 +624,7 @@ pub mod triton {
 
                     #[inline(never)]
                     #[allow(clippy::zero_ptr)]
-                    fn add_offsets(self, _offsets: I32Tensor) -> Self::Output {
+                    fn add_offset(self, _offsets: I32Tensor) -> Self::Output {
                         // dummy implementation not used in final output
                         Tensor(0 as *mut Self)
                     }
@@ -875,8 +875,8 @@ pub extern "C" fn tensor_add<T: Triton, D: types::Dtype, const BLOCK_SIZE: u32>(
     let block_start = pid * BLOCK_SIZE;
     let offsets = T::arange(0, BLOCK_SIZE) + block_start;
     let mask = offsets.lt(n_elements);
-    let x = T::load(x_ptr.add_offsets(offsets), mask);
-    let y = T::load(y_ptr.add_offsets(offsets), mask);
+    let x = T::load(x_ptr.add_offset(offsets), mask);
+    let y = T::load(y_ptr.add_offset(offsets), mask);
     let output = x + y;
-    T::store(output_ptr.add_offsets(offsets), output, mask);
+    T::store(output_ptr.add_offset(offsets), output, mask);
 }

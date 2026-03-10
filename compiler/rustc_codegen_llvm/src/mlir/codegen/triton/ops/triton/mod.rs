@@ -16,7 +16,7 @@
 
 use melior::ir::{BlockLike, BlockRef, Location};
 use rustc_middle::mir::{Local, Terminator};
-use rustc_mlir::triton::create_tt_return;
+use rustc_mlir::triton::create_return;
 
 use crate::mlir::codegen::triton::{SsaValues, TritonCodegen};
 use crate::mlir::errors::MlirError;
@@ -33,7 +33,7 @@ impl<'a> TritonCodegen<'a> {
     ) -> Result<(), MlirError> {
         println!("[DEBUG] TritonCodegen::codegen_return: ssa_values: {:?}", ssa_values);
         let value = ssa_values.get(&Local::ZERO).copied();
-        let return_op = create_tt_return(
+        let return_op = create_return(
             self.module.context(),
             Location::unknown(self.module.context()),
             value.as_slice(),

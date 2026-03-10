@@ -23,7 +23,8 @@ use melior::ir::{
 use rustc_middle::mir::{BasicBlock, Body, CallSource, Operand, Place, UnwindAction};
 use rustc_middle::ty::{Instance, TyCtxt};
 use rustc_mlir::shared::arith::{Predicate, create_addi, create_cmpi, create_extsi, create_muli};
-use rustc_mlir::shared::builtin::create_tensor_type;
+use rustc_mlir::shared::builtin::tensor_type;
+use rustc_mlir::triton::tensor::add_ptr;
 use rustc_span::Span;
 use rustc_span::source_map::Spanned;
 

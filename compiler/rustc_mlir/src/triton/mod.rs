@@ -59,15 +59,15 @@ pub fn create_func<'c>(
     name: &str,
     arg_types: &[Type<'c>],
     res_types: &[Type<'c>],
-    tt_divisibility: i32,
+    divisibility: i32,
 ) -> Result<FuncOperation<'c>, Error> {
     // Create the function type
     let function_type = TypeAttribute::new(FunctionType::new(context, arg_types, res_types).into());
 
-    // Argument attributes: each gets a dictionary {tt.divisibility = $tt_divisibility : i32}
+    // Argument attributes: each gets a dictionary {tt.divisibility = $divisibility : i32}
     let arg_attrs: Vec<_> = (0..arg_types.len())
         .map(|_| {
-            Attribute::parse(context, &format!("{{tt.divisibility = {} : i32}}", tt_divisibility))
+            Attribute::parse(context, &format!("{{tt.divisibility = {} : i32}}", divisibility))
                 .expect("valid arg attrs")
         })
         .collect();
@@ -91,7 +91,7 @@ pub fn create_func<'c>(
         .build())
 }
 
-pub fn create_tt_return<'ctx, 'b>(
+pub fn create_return<'ctx, 'b>(
     context: &'ctx Context,
     location: Location<'ctx>,
     value: &[Value<'ctx, 'b>],
@@ -99,7 +99,7 @@ pub fn create_tt_return<'ctx, 'b>(
     Ok(ReturnOperation::builder(context, location).srcs(value).build())
 }
 
-pub fn create_tt_int_to_ptr_cast<'ctx, 'b>(
+pub fn create_int_to_ptr_cast<'ctx, 'b>(
     context: &'ctx Context,
     location: Location<'ctx>,
     src: Value<'ctx, 'b>,
@@ -120,7 +120,7 @@ mod tests {
     use crate::test::create_test_context;
 
     #[test]
-    fn test_tt_func_op_with_attributes() {
+    fn test_func_op_with_attributes() {
         let context = create_test_context();
         load_triton_dialect(&context);
 
@@ -136,7 +136,7 @@ mod tests {
 
         // Use the new function in test:
         let func_op =
-            create_func(&context, location, "test_tt_func_attrs", &inputs, &results, 16).unwrap();
+            create_func(&context, location, "test_func_attrs", &inputs, &results, 16).unwrap();
 
         // Create a constant op returning f32 1.0
         let one_attr = Attribute::parse(&context, "1.0 : f32").expect("valid f32");
@@ -165,7 +165,7 @@ mod tests {
         let output = module.as_operation().to_string();
 
         let expected = "module {
-  tt.func public @test_tt_func_attrs(%arg0: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg1: !tt.ptr<f32> {tt.divisibility = 16 : i32}) -> f32 attributes {noinline = false} {
+  tt.func public @test_func_attrs(%arg0: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg1: !tt.ptr<f32> {tt.divisibility = 16 : i32}) -> f32 attributes {noinline = false} {
     %cst = arith.constant 1.000000e+00 : f32
     tt.return %cst : f32
   }
@@ -175,7 +175,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_tt_int_to_ptr_cast() {
+    fn test_create_int_to_ptr_cast() {
         // MLIR context and location
         let context = create_test_context();
         load_triton_dialect(&context);
@@ -191,7 +191,7 @@ mod tests {
 
         // Call the function under test
         let cast_op =
-            create_tt_int_to_ptr_cast(&context, location, i64_zero_value.into(), f32_ptr_type)
+            create_int_to_ptr_cast(&context, location, i64_zero_value.into(), f32_ptr_type)
                 .unwrap();
 
         module.body().append_operation(i64_zero.into());

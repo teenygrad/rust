@@ -40,12 +40,10 @@ use rustc_middle::ty::{
 use rustc_mlir::load_all_dialects;
 use rustc_mlir::shared::arith::{Int, create_constant, create_int_constant};
 use rustc_mlir::shared::attr::create_scalar_attr;
-use rustc_mlir::shared::builtin::create_tensor_type;
+use rustc_mlir::shared::builtin::{tensor_type, tensor_type_like};
 use rustc_mlir::shared::ub::create_ub_poison;
 use rustc_mlir::triton::tensor::splat;
-use rustc_mlir::triton::{
-    create_func, create_tt_int_to_ptr_cast, load_triton_dialect, pointer_type,
-};
+use rustc_mlir::triton::{create_func, create_int_to_ptr_cast, load_triton_dialect, pointer_type};
 
 use crate::mlir::MlirModule;
 use crate::mlir::codegen::Codegen;
@@ -122,8 +120,17 @@ impl<'a> TritonCodegen<'a> {
         value: Value<'a, 'a>,
         mlir_block: &BlockRef,
     ) -> Result<Value<'a, 'a>, MlirError> {
+        let tensor_type = tensor_type_like(
+            tensor
+                .r#type()
+                .try_into()
+                .map_err(|e: melior::error::Error| MlirError::InvalidType { msg: e.to_string() })?,
+            value.r#type(),
+        )
+        .map_err(|e| MlirError::InvalidType { msg: e.to_string() })?;
+
         let splat_op: Operation<'_> =
-            splat(&self.module.context(), location, value, tensor.r#type())
+            splat(&self.module.context(), location, value, tensor_type.into())
                 .map_err(|e| MlirError::CreateOperation { err: e })?
                 .into();
         let result = splat_op.result(0).unwrap();
@@ -445,7 +452,7 @@ impl<'a> TritonCodegen<'a> {
         // will be eliminated by the optimizer.
         if name == "triton::llvm::triton::tensor::Tensor" {
             let ty = map_ty(0);
-            let tensor_type = create_tensor_type(&[i64::MIN], ty).into();
+            let tensor_type = tensor_type(&[i64::MIN], ty).into();
 
             Ok(create_ub_poison(
                 self.module.context(),
@@ -724,7 +731,7 @@ impl<'a> TritonCodegen<'a> {
                         );
                         let ptr_ty =
                             self.type_mapper.map_type(self.module.context(), &tcx, &normalized_ty);
-                        let cast_op: Operation = create_tt_int_to_ptr_cast(
+                        let cast_op: Operation = create_int_to_ptr_cast(
                             self.module.context(),
                             Location::unknown(self.module.context()),
                             result.into(),

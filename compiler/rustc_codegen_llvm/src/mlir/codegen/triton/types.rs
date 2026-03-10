@@ -21,7 +21,7 @@ use rustc_ast::{FloatTy, IntTy, UintTy};
 use rustc_middle::ty::{
     AdtDef, AliasTy, AliasTyKind, GenericArg, ParamTy, Ty, TyCtxt, TyKind, TypingEnv,
 };
-use rustc_mlir::shared::builtin::create_tensor_type;
+use rustc_mlir::shared::builtin::tensor_type;
 use rustc_mlir::triton::pointer_type;
 
 type AdtHandler =
@@ -234,7 +234,7 @@ pub fn triton_tensor_handler<'tcx, 'c>(
     debug_assert_eq!(args.len(), 1, "Tensor should have 1 argument");
     let arg_ty = args[0].expect_ty();
     let arg_type = type_mapper.map_type(context, tcx, &arg_ty);
-    create_tensor_type(&[i64::MIN], arg_type).into()
+    tensor_type(&[i64::MIN], arg_type).into()
 }
 
 pub fn triton_pointer_handler<'tcx, 'c>(

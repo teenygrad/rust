@@ -15,14 +15,14 @@
  */
 
 use melior::ir::operation::OperationLike;
-use melior::ir::{BlockLike, BlockRef, Location, Operation, Value};
+use melior::ir::{BlockLike, BlockRef, Location, Operation, TypeLike, Value, ValueLike};
 use rustc_middle::mir::interpret::Scalar;
 use rustc_middle::mir::{
     BasicBlock, Body, CallSource, Const, ConstValue, Operand, Place, UnwindAction,
 };
 use rustc_middle::ty::{Instance, TyCtxt};
 use rustc_mlir::triton::program::{ProgramAxis, create_get_program_id};
-use rustc_mlir::triton::tensor::create_arange;
+use rustc_mlir::triton::tensor::{add_ptr, create_arange, load};
 use rustc_span::Span;
 use rustc_span::source_map::Spanned;
 
@@ -70,6 +70,95 @@ impl<'a> TritonCodegen<'a> {
 
         let result = arange_op.result(0).expect("Arange operation result not found");
         mlir_block.append_operation(arange_op);
+        Ok(result.into())
+    }
+
+    pub fn codegen_add_ptr<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        mir: &Body<'tcx>,
+        _func: &Operand<'tcx>,
+        args: &[Spanned<Operand<'tcx>>],
+        _destination: &Place<'tcx>,
+        _target: &Option<BasicBlock>,
+        _unwind: &UnwindAction,
+        _call_source: &CallSource,
+        _fn_span: &Span,
+        mlir_block: &BlockRef,
+        ssa_values: &mut SsaValues<'a, 'a>,
+    ) -> Result<Value<'a, 'a>, MlirError> {
+        debug_assert!(
+            args.len() == 2,
+            "TritonCodegen::codegen_add_offsets_call: args length must be 2"
+        );
+
+        let arg0 = &args[0].node;
+        let arg1 = &args[1].node;
+
+        let ptr =
+            self.codegen_operand(tcx, instance, arg0, arg0.ty(mir, tcx), mlir_block, ssa_values)?;
+        let offset =
+            self.codegen_operand(tcx, instance, arg1, arg1.ty(mir, tcx), mlir_block, ssa_values)?;
+
+        debug_assert!(
+            offset.r#type().is_tensor(),
+            "TritonCodegen::codegen_add_offset: rhs is not a tensor"
+        );
+
+        let location = Location::unknown(self.module.context());
+        let ptr = self.like_tensor(tcx, location, offset, ptr, mlir_block)?;
+
+        let add_ptr_op: Operation<'a> =
+            add_ptr(self.module.context(), location, ptr, offset, ptr.r#type())
+                .map_err(|e| MlirError::CreateOperation { err: e })?
+                .into();
+        let result = add_ptr_op.result(0).expect("AddPtr operation result not found").into();
+
+        mlir_block.append_operation(add_ptr_op);
+        Ok(result)
+    }
+
+    pub fn codegen_load<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        mir: &Body<'tcx>,
+        func: &Operand<'tcx>,
+        args: &[Spanned<Operand<'tcx>>],
+        destination: &Place<'tcx>,
+        target: &Option<BasicBlock>,
+        unwind: &UnwindAction,
+        call_source: &CallSource,
+        fn_span: &Span,
+        mlir_block: &BlockRef,
+        ssa_values: &mut SsaValues<'a, 'a>,
+    ) -> Result<Value<'a, 'a>, MlirError> {
+        println!(
+            "[DEBUG] TritonCodegen::codegen_load: func: {:?} args: {:?} destination: {:?} target: {:?} unwind: {:?} call_source: {:?} fn_span: {:?}",
+            func, args, destination, target, unwind, call_source, fn_span
+        );
+
+        debug_assert!(
+            args.len() == 2,
+            "TritonCodegen::codegen_load: args length must be 2: {:?}",
+            args
+        );
+
+        let arg0 = &args[0].node;
+        let arg1 = &args[1].node;
+
+        let ptr =
+            self.codegen_operand(tcx, instance, arg0, arg0.ty(mir, tcx), mlir_block, ssa_values)?;
+        let mask =
+            self.codegen_operand(tcx, instance, arg1, arg1.ty(mir, tcx), mlir_block, ssa_values)?;
+
+        let load_op: Operation<'a> =
+            load(self.module.context(), Location::unknown(self.module.context()), ptr, mask)
+                .map_err(|e| MlirError::CreateOperation { err: e })?
+                .into();
+        let result = load_op.result(0).expect("Load operation result not found");
+        mlir_block.append_operation(load_op);
         Ok(result.into())
     }
 }

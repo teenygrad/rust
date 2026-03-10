@@ -14,12 +14,21 @@
  * limitations under the License.
  */
 
-use melior::ir::Type;
 use melior::ir::r#type::RankedTensorType;
+use melior::ir::{ShapedTypeLike, Type};
 
-pub fn create_tensor_type<'ctx>(
-    dimensions: &[i64],
-    element_type: Type<'ctx>,
-) -> RankedTensorType<'ctx> {
+use crate::errors::Error;
+
+pub fn tensor_type<'ctx>(dimensions: &[i64], element_type: Type<'ctx>) -> RankedTensorType<'ctx> {
     RankedTensorType::new(dimensions, element_type, None)
+}
+
+pub fn tensor_type_like<'ctx>(
+    tensor: RankedTensorType<'ctx>,
+    value: Type<'ctx>,
+) -> Result<RankedTensorType<'ctx>, Error> {
+    let dims = tensor
+        .dims()
+        .map_err(|e: melior::error::Error| Error::InvalidType { msg: e.to_string() })?;
+    Ok(RankedTensorType::new(&dims, value, None))
 }

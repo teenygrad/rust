@@ -15,13 +15,13 @@
  */
 
 use melior::Context;
-use melior::ir::r#type::{IntegerType, RankedTensorType};
+use melior::ir::r#type::IntegerType;
 use melior::ir::{Location, Type, Value};
 
 use crate::errors::Error;
-use crate::shared::builtin::create_tensor_type;
+use crate::shared::builtin::tensor_type;
 use crate::triton::attr_i32;
-use crate::triton::tt::{MakeRangeOperation, SplatOperation};
+use crate::triton::tt::{AddPtrOperation, LoadOperation, MakeRangeOperation, SplatOperation};
 
 pub fn create_arange<'ctx>(
     context: &'ctx Context,
@@ -34,7 +34,7 @@ pub fn create_arange<'ctx>(
     let element_type = IntegerType::new(context, 32).into();
     let dimensions = &[(end - start) as i64];
 
-    let result = create_tensor_type(dimensions, element_type).into();
+    let result = tensor_type(dimensions, element_type).into();
     Ok(MakeRangeOperation::builder(context, location)
         .start(start_attr)
         .end(end_attr)
@@ -48,13 +48,31 @@ pub fn splat<'ctx>(
     src: Value<'ctx, 'ctx>,
     result_ty: Type<'ctx>,
 ) -> Result<SplatOperation<'ctx>, Error> {
-    // Ensure the result type is a ranked tensor; detailed element type compatibility
-    // is enforced by the Triton dialect/type verifier.
-    let _result_tensor: RankedTensorType<'ctx> = result_ty
-        .try_into()
-        .map_err(|_| Error::InvalidType { msg: "result is not a tensor".to_string() })?;
-
     Ok(SplatOperation::builder(context, location).src(src).result(result_ty).build())
+}
+
+pub fn add_ptr<'ctx>(
+    context: &'ctx Context,
+    location: Location<'ctx>,
+    ptr: Value<'ctx, 'ctx>,
+    offset: Value<'ctx, 'ctx>,
+    result_ty: Type<'ctx>,
+) -> Result<AddPtrOperation<'ctx>, Error> {
+    Ok(AddPtrOperation::builder(context, location)
+        .ptr(ptr)
+        .offset(offset)
+        .result(result_ty)
+        .build())
+}
+
+pub fn load<'ctx>(
+    context: &'ctx Context,
+    location: Location<'ctx>,
+    ptr: Value<'ctx, 'ctx>,
+    mask: Value<'ctx, 'ctx>,
+    // result_ty: Type<'ctx>,
+) -> Result<LoadOperation<'ctx>, Error> {
+    Ok(LoadOperation::builder(context, location).ptr(ptr).mask(mask).build())
 }
 
 #[cfg(test)]
@@ -96,7 +114,7 @@ mod tests {
         let src_op: Operation<'_> =
             create_int_constant(&context, location, Int::I32(0)).unwrap().into();
         let src = src_op.result(0).unwrap().into();
-        let result = create_tensor_type(&[5], IntegerType::new(&context, 32).into()).into();
+        let result = tensor_type(&[5], IntegerType::new(&context, 32).into()).into();
         let splat_op = splat(&context, location, src, result);
         assert!(splat_op.is_ok());
         let splat_op = splat_op.unwrap().into();

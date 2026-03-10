@@ -182,10 +182,14 @@ impl<'a> TritonCodegen<'a> {
                 TritonCodegen::codegen_program_id as LocalCallHandler<'a, 'tcx>
             }
             "triton::Triton::arange" => TritonCodegen::codegen_arange as LocalCallHandler<'a, 'tcx>,
+            "triton::Triton::load" => TritonCodegen::codegen_load as LocalCallHandler<'a, 'tcx>,
             "std::ops::Mul::mul" => TritonCodegen::codegen_mul_call as LocalCallHandler<'a, 'tcx>,
             "std::ops::Add::add" => TritonCodegen::codegen_add_call as LocalCallHandler<'a, 'tcx>,
             "triton::types::Comparison::lt" => {
                 TritonCodegen::codegen_lt_call as LocalCallHandler<'a, 'tcx>
+            }
+            "triton::types::AddOffsets::add_offset" => {
+                TritonCodegen::codegen_add_ptr as LocalCallHandler<'a, 'tcx>
             }
             _ => todo!("TritonCodegen::codegen_terminator_call unhandled call: {:?}", func_name),
         };
