@@ -41,7 +41,7 @@ impl<'a> TritonCodegen<'a> {
         fn_span: &Span,
         mlir_block: &BlockRef,
         _ssa_values: &mut SsaValues<'a, 'a>,
-    ) -> Result<Value<'a, 'a>, MlirError> {
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         debug_assert!(args.len() == 1, "TritonCodegen::codegen_program_id: args length must be 1");
 
         let value = self.to_scalar_int(tcx, instance, &args[0].node)?;
@@ -56,7 +56,11 @@ impl<'a> TritonCodegen<'a> {
         .into();
 
         let result = program_id_op.result(0).expect("Program ID operation result not found");
+        eprintln!(
+            "[DEBUG] AXM TritonCodegen::codegen_program_id: result: {:?}",
+            program_id_op.to_string()
+        );
         mlir_block.append_operation(program_id_op);
-        Ok(result.into())
+        Ok(Some(result.into()))
     }
 }

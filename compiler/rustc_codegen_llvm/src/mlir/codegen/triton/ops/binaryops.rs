@@ -47,7 +47,7 @@ impl<'a> TritonCodegen<'a> {
         _fn_span: &Span,
         mlir_block: &BlockRef,
         ssa_values: &mut SsaValues<'a, 'a>,
-    ) -> Result<Value<'a, 'a>, MlirError> {
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         debug_assert!(args.len() == 2, "TritonCodegen::codegen_mul_call: args length must be 2");
 
         let arg0 = &args[0].node;
@@ -79,7 +79,7 @@ impl<'a> TritonCodegen<'a> {
         _fn_span: &Span,
         mlir_block: &BlockRef,
         ssa_values: &mut SsaValues<'a, 'a>,
-    ) -> Result<Value<'a, 'a>, MlirError> {
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         debug_assert!(args.len() == 2, "TritonCodegen::codegen_add_call: args length must be 2");
 
         let arg0 = &args[0].node;
@@ -111,7 +111,7 @@ impl<'a> TritonCodegen<'a> {
         _fn_span: &Span,
         mlir_block: &BlockRef,
         ssa_values: &mut SsaValues<'a, 'a>,
-    ) -> Result<Value<'a, 'a>, MlirError> {
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         debug_assert!(args.len() == 2, "TritonCodegen::codegen_lt_call: args length must be 2");
 
         let arg0 = &args[0].node;
@@ -132,7 +132,7 @@ impl<'a> TritonCodegen<'a> {
         lhs: Value<'a, 'a>,
         rhs: Value<'a, 'a>,
         mlir_block: &BlockRef,
-    ) -> Result<Value<'a, 'a>, MlirError> {
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         let lhs_is_tensor = lhs.r#type().is_tensor();
         let rhs_is_tensor = rhs.r#type().is_tensor();
 
@@ -179,9 +179,9 @@ impl<'a> TritonCodegen<'a> {
         )
         .map_err(|e| MlirError::CreateOperation { err: e })?
         .into();
-        let result = lt_op.result(0).expect("LT operation result not found").into();
+        let result = lt_op.result(0).expect("LT operation result not found");
         mlir_block.append_operation(lt_op);
-        Ok(result)
+        Ok(Some(result.into()))
     }
 
     pub fn codegen_mul(
@@ -189,7 +189,7 @@ impl<'a> TritonCodegen<'a> {
         lhs: Value<'a, 'a>,
         rhs: Value<'a, 'a>,
         mlir_block: &BlockRef,
-    ) -> Result<Value<'a, 'a>, MlirError> {
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         let lhs_ty = lhs.r#type();
         let rhs_ty = rhs.r#type();
 
@@ -202,9 +202,9 @@ impl<'a> TritonCodegen<'a> {
             )
             .map_err(|e| MlirError::CreateOperation { err: e })?
             .into();
-            let result = mul_op.result(0).expect("Mul operation result not found").into();
+            let result = mul_op.result(0).expect("Mul operation result not found");
             mlir_block.append_operation(mul_op);
-            Ok(result)
+            Ok(Some(result.into()))
         } else {
             todo!("TritonCodegen::codegen_mul: {:?} {:?}", lhs_ty, rhs_ty);
         }
@@ -216,7 +216,7 @@ impl<'a> TritonCodegen<'a> {
         lhs: Value<'a, 'a>,
         rhs: Value<'a, 'a>,
         mlir_block: &BlockRef,
-    ) -> Result<Value<'a, 'a>, MlirError> {
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         let lhs_ty = lhs.r#type();
         let rhs_ty = rhs.r#type();
 
@@ -258,9 +258,9 @@ impl<'a> TritonCodegen<'a> {
             create_addi(self.module.context(), Location::unknown(self.module.context()), lhs, rhs)
                 .map_err(|e| MlirError::CreateOperation { err: e })?
                 .into();
-        let result = add_op.result(0).expect("Add operation result not found").into();
+        let result = add_op.result(0).expect("Add operation result not found");
 
         mlir_block.append_operation(add_op);
-        Ok(result)
+        Ok(Some(result.into()))
     }
 }

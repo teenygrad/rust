@@ -16,10 +16,13 @@
 
 use std::collections::HashMap;
 
-use melior::ir::{BlockLike, BlockRef, Location, Value};
+use melior::ir::operation::OperationLike;
+use melior::ir::r#type::TupleType;
+use melior::ir::{BlockLike, BlockRef, Location, Operation, TypeLike, Value};
 use rustc_middle::mir::{BasicBlock, Body, CallSource, Operand, Place, Terminator, UnwindAction};
 use rustc_middle::ty::{Instance, TyCtxt, TyKind};
 use rustc_mlir::shared::cf::create_cf_br;
+use rustc_mlir::triton::call;
 use rustc_span::Span;
 use rustc_span::source_map::Spanned;
 
@@ -42,7 +45,7 @@ type LocalCallHandler<'a, 'tcx> = fn(
     &Span,
     &BlockRef,
     &mut SsaValues<'a, 'a>,
-) -> Result<Value<'a, 'a>, MlirError>;
+) -> Result<Option<Value<'a, 'a>>, MlirError>;
 
 impl<'a> TritonCodegen<'a> {
     pub fn codegen_terminator<'tcx>(
@@ -213,7 +216,9 @@ impl<'a> TritonCodegen<'a> {
             ssa_values,
         )?;
 
-        ssa_values.insert(destination.local, value);
+        if let Some(value) = value {
+            ssa_values.insert(destination.local, value);
+        }
         self.codegen_goto(&target.expect("target must be Some"), mlir_block, basic_blocks)?;
         Ok(())
     }
@@ -231,10 +236,61 @@ impl<'a> TritonCodegen<'a> {
         _unwind: &UnwindAction,
         _call_source: &CallSource,
         _fn_span: &Span,
-        _mlir_block: &BlockRef,
-        _ssa_values: &mut SsaValues<'a, 'a>,
-    ) -> Result<Value<'a, 'a>, MlirError> {
-        todo!("TritonCodegen::codegen_call: {:?}", func_name);
+        mlir_block: &BlockRef,
+        ssa_values: &mut SsaValues<'a, 'a>,
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
+        let args = args
+            .iter()
+            .map(|arg| {
+                self.codegen_operand(
+                    tcx,
+                    instance,
+                    &arg.node,
+                    arg.node.ty(mir, tcx),
+                    mlir_block,
+                    ssa_values,
+                )
+            })
+            .collect::<Result<Vec<_>, MlirError>>()?;
+
+        let fn_ty = func.ty(mir, tcx);
+        let ret_ty = match fn_ty.kind() {
+            // Function definitions (e.g., closures and fn items).
+            TyKind::FnDef(def_id, substs) => {
+                let sig = tcx.fn_sig(*def_id).instantiate(tcx, substs);
+                sig.output().skip_binder()
+            }
+            // For function pointers, combine binder + header and get the output type.
+            TyKind::FnPtr(binder, header) => {
+                let full_sig = binder.with(*header);
+                full_sig.output().skip_binder()
+            }
+            // Otherwise, fallback to just using the type itself.
+            _ => fn_ty,
+        };
+
+        let ret_ty = self.type_mapper.map_type(self.module.context(), &tcx, &ret_ty);
+        let call_op: Operation<'a> = call(
+            self.module.context(),
+            Location::unknown(self.module.context()),
+            func_name,
+            &args,
+            &[ret_ty],
+        )
+        .map_err(|e| MlirError::CreateOperation { err: e })?
+        .into();
+
+        eprintln!("[DEBUG] AXM TritonCodegen::codegen_call: call_op: {:?}", call_op.to_string());
+
+        let result = if call_op.result_count() > 0 {
+            let result = call_op.result(0).expect("Call operation result not found");
+            Some(result.into())
+        } else {
+            None
+        };
+
+        mlir_block.append_operation(call_op);
+        Ok(result)
     }
 
     fn codegen_goto(
@@ -250,6 +306,11 @@ impl<'a> TritonCodegen<'a> {
             target_block,
         )
         .map_err(|e| MlirError::CreateOperation { err: e })?;
+
+        eprintln!(
+            "[DEBUG] AXM TritonCodegen::codegen_goto: br_op: {:?}",
+            br_op.as_operation().to_string()
+        );
         mlir_block.append_operation(br_op.into());
         Ok(())
     }

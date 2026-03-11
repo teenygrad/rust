@@ -393,7 +393,9 @@ impl<'a> TritonCodegen<'a> {
                 let value = self.codegen_binary_op(
                     tcx, instance, mir, place, bin_op, operands, mlir_block, ssa_values,
                 )?;
-                ssa_values.insert(place.local, value);
+                if let Some(value) = value {
+                    ssa_values.insert(place.local, value);
+                }
             }
             Rvalue::NullaryOp(null_op) => todo!("NullaryOp: {:?}", null_op),
             Rvalue::UnaryOp(un_op, operand) => todo!("UnaryOp: {:?} {:?}", un_op, operand),
@@ -494,7 +496,7 @@ impl<'a> TritonCodegen<'a> {
         operands: &(Operand<'tcx>, Operand<'tcx>),
         mlir_block: &BlockRef,
         ssa_values: &mut SsaValues<'a, 'a>,
-    ) -> Result<Value<'a, 'a>, MlirError> {
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         let (lhs_op, rhs_op) = operands;
 
         let lhs_ty = instance.instantiate_mir_and_normalize_erasing_regions(

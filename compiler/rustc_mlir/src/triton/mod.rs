@@ -19,8 +19,9 @@ use melior::ir::attribute::{
     ArrayAttribute, Attribute, FlatSymbolRefAttribute, IntegerAttribute, StringAttribute,
     TypeAttribute,
 };
+use melior::ir::operation::OperationBuilder;
 use melior::ir::r#type::{FunctionType, IntegerType};
-use melior::ir::{Location, Region, Type, TypeLike, Value};
+use melior::ir::{Identifier, Location, Operation, Region, Type, TypeLike, Value};
 
 use crate::errors::Error;
 use crate::ffi::{mlirCreateTritonPointerType, mlirLoadTritonDialect};
@@ -103,10 +104,32 @@ pub fn create_return<'ctx, 'b>(
 pub fn call<'ctx>(
     context: &'ctx Context,
     location: Location<'ctx>,
+    callee: &str,
     args: &[Value<'ctx, 'ctx>],
+    result_ty: &[Type<'ctx>],
 ) -> Result<CallOperation<'ctx>, Error> {
-    let x = FlatSymbolRefAttribute::new(context, "xyz");
-    todo!("call: {:?}", args);
+    let callee_attr = FlatSymbolRefAttribute::new(context, callee);
+
+    // For now, we attach empty dictionaries for each argument/result, which satisfies
+    // the `ArgAndResultAttrsOpInterface` requirements of `tt.call`.
+    let arg_attr_dicts: Vec<_> = (0..args.len())
+        .map(|_| Attribute::parse(context, "{}").expect("valid empty arg attrs dict"))
+        .collect();
+    let arg_attrs = ArrayAttribute::new(context, &arg_attr_dicts);
+
+    let res_attr_dicts: Vec<_> = (0..result_ty.len())
+        .map(|_| Attribute::parse(context, "{}").expect("valid empty res attrs dict"))
+        .collect();
+    let res_attrs = ArrayAttribute::new(context, &res_attr_dicts);
+
+    let call_op = CallOperation::builder(context, location)
+        .callee(callee_attr)
+        .arg_attrs(arg_attrs)
+        .res_attrs(res_attrs)
+        .operands(args)
+        .build();
+
+    Ok(call_op)
 }
 
 pub fn int_to_ptr<'ctx, 'b>(

@@ -46,7 +46,7 @@ impl<'a> TritonCodegen<'a> {
         fn_span: &Span,
         mlir_block: &BlockRef,
         ssa_values: &mut SsaValues<'a, 'a>,
-    ) -> Result<Value<'a, 'a>, MlirError> {
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         println!(
             "[DEBUG] TritonCodegen::codegen_program_id: func: {:?} args: {:?} destination: {:?} target: {:?} unwind: {:?} call_source: {:?} fn_span: {:?}",
             func, args, destination, target, unwind, call_source, fn_span
@@ -67,8 +67,9 @@ impl<'a> TritonCodegen<'a> {
                 .into();
 
         let result = arange_op.result(0).expect("Arange operation result not found");
+        eprintln!("[DEBUG] AXM TritonCodegen::codegen_arange: {:?}", arange_op.to_string());
         mlir_block.append_operation(arange_op);
-        Ok(result.into())
+        Ok(Some(result.into()))
     }
 
     pub fn codegen_add_ptr<'tcx>(
@@ -86,7 +87,7 @@ impl<'a> TritonCodegen<'a> {
         _fn_span: &Span,
         mlir_block: &BlockRef,
         ssa_values: &mut SsaValues<'a, 'a>,
-    ) -> Result<Value<'a, 'a>, MlirError> {
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         debug_assert!(
             args.len() == 2,
             "TritonCodegen::codegen_add_offsets_call: args length must be 2"
@@ -112,10 +113,11 @@ impl<'a> TritonCodegen<'a> {
             add_ptr(self.module.context(), location, ptr, offset, ptr.r#type())
                 .map_err(|e| MlirError::CreateOperation { err: e })?
                 .into();
-        let result = add_ptr_op.result(0).expect("AddPtr operation result not found").into();
+        let result = add_ptr_op.result(0).expect("AddPtr operation result not found");
 
+        eprintln!("[DEBUG] AXM TritonCodegen::codegen_add_ptr: {:?}", add_ptr_op.to_string());
         mlir_block.append_operation(add_ptr_op);
-        Ok(result)
+        Ok(Some(result.into()))
     }
 
     pub fn codegen_load<'tcx>(
@@ -133,7 +135,7 @@ impl<'a> TritonCodegen<'a> {
         fn_span: &Span,
         mlir_block: &BlockRef,
         ssa_values: &mut SsaValues<'a, 'a>,
-    ) -> Result<Value<'a, 'a>, MlirError> {
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         println!(
             "[DEBUG] TritonCodegen::codegen_load: func: {:?} args: {:?} destination: {:?} target: {:?} unwind: {:?} call_source: {:?} fn_span: {:?}",
             func, args, destination, target, unwind, call_source, fn_span
@@ -158,8 +160,9 @@ impl<'a> TritonCodegen<'a> {
                 .map_err(|e| MlirError::CreateOperation { err: e })?
                 .into();
         let result = load_op.result(0).expect("Load operation result not found");
+        eprintln!("[DEBUG] AXM TritonCodegen::codegen_load: {:?}", load_op.to_string());
         mlir_block.append_operation(load_op);
-        Ok(result.into())
+        Ok(Some(result.into()))
     }
 
     pub fn codegen_store<'tcx>(
@@ -177,7 +180,7 @@ impl<'a> TritonCodegen<'a> {
         fn_span: &Span,
         mlir_block: &BlockRef,
         ssa_values: &mut SsaValues<'a, 'a>,
-    ) -> Result<Value<'a, 'a>, MlirError> {
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         println!(
             "[DEBUG] TritonCodegen::codegen_store: func: {:?} args: {:?} destination: {:?} target: {:?} unwind: {:?} call_source: {:?} fn_span: {:?}",
             func, args, destination, target, unwind, call_source, fn_span
@@ -204,21 +207,10 @@ impl<'a> TritonCodegen<'a> {
             store(self.module.context(), Location::unknown(self.module.context()), dest, src, mask)
                 .map_err(|e| MlirError::CreateOperation { err: e })?
                 .into();
+
+        eprintln!("[DEBUG] AXM TritonCodegen::codegen_store: {:?}", store_op.to_string());
         mlir_block.append_operation(store_op);
 
-        // AXM TODO: fix this, perhaps make return type an Option<Value<'a, 'a>>
-        // instead of this, I am adding a constant and returning that, this will be
-        // removed during dead code elimination
-        let void_op = create_int_constant(
-            self.module.context(),
-            Location::unknown(self.module.context()),
-            Int::I32(0),
-        )
-        .map_err(|e| MlirError::CreateOperation { err: e })?;
-        let void_op: Operation<'a> = void_op.into();
-        let result = void_op.result(0).expect("Void operation result not found");
-        mlir_block.append_operation(void_op);
-
-        Ok(result.into())
+        Ok(None)
     }
 }

@@ -39,6 +39,10 @@ impl<'a> TritonCodegen<'a> {
             value.as_slice(),
         )
         .map_err(|e| MlirError::CreateOperation { err: e })?;
+        eprintln!(
+            "[DEBUG] AXM TritonCodegen::codegen_return: return_op: {:?}",
+            return_op.as_operation().to_string()
+        );
         mlir_block.append_operation(return_op.into());
         Ok(())
     }

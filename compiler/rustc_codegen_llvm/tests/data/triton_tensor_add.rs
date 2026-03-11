@@ -853,7 +853,6 @@ pub mod triton {
 }
 pub use triton::*;
 
-#[no_mangle]
 pub extern "C" fn entry_point(n_elements: i32) {
     use triton::llvm::triton::num::*;
     use triton::llvm::triton::pointer::Pointer;

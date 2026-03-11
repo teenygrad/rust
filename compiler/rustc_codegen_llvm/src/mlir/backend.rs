@@ -25,6 +25,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
+use melior::ir::operation::OperationLike;
 use rustc_codegen_ssa::back::lto::{SerializedModule, ThinModule};
 use rustc_codegen_ssa::back::write::{
     CodegenContext, FatLtoInput, ModuleConfig, TargetMachineFactoryConfig, TargetMachineFactoryFn,
@@ -254,6 +255,9 @@ impl WriteBackendMethods for MlirCodegenBackend {
     ) {
         info!("MLIR: optimize module '{}'", module.name);
         let module = module.module_llvm.llmod();
+
+        assert!(module.as_operation().verify(), "MLIR module failed verification");
+
         info!("MLIR module: {:?}", module.as_operation().to_string());
         // TODO: Implement MLIR optimization passes
     }
