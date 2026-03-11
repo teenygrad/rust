@@ -202,10 +202,13 @@ impl<'a> TritonCodegen<'a> {
         );
 
         // Iterate over MIR basic blocks and codegen each one
+        let visibility = if func_name.ends_with("entry_point") { "public" } else { "private" };
+
         let func_op: Operation = create_func(
             self.module.context(),
             Location::unknown(self.module.context()),
             func_name,
+            visibility,
             &arg_types,
             ret_types,
             16,

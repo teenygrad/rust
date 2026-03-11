@@ -66,4 +66,8 @@ impl<'c> MlirModule<'c> {
     pub fn llmod(&self) -> &Module<'c> {
         &self.mlir
     }
+
+    pub fn llmod_mut(&mut self) -> &mut Module<'c> {
+        &mut self.mlir
+    }
 }

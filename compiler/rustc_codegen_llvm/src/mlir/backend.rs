@@ -26,6 +26,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use melior::ir::operation::OperationLike;
+use melior::pass::PassManager;
+use melior::{Context, pass};
 use rustc_codegen_ssa::back::lto::{SerializedModule, ThinModule};
 use rustc_codegen_ssa::back::write::{
     CodegenContext, FatLtoInput, ModuleConfig, TargetMachineFactoryConfig, TargetMachineFactoryFn,
@@ -46,6 +48,7 @@ use tracing::info;
 use crate::mlir::MlirModule;
 use crate::mlir::codegen::Codegen;
 use crate::mlir::codegen::triton::TritonCodegen;
+use crate::mlir::errors::MlirError;
 
 /// The MLIR codegen backend.
 #[derive(Clone)]
@@ -131,7 +134,7 @@ fn compile_codegen_unit_impl(
 
     // Create the MLIR module
     let mut mlir_module = MlirModule::new(cgu_name.as_str());
-    let mut triton_codegen = TritonCodegen::new(&mut mlir_module);
+    let mut triton_codegen = TritonCodegen::new(&mlir_module);
 
     // Get all mono items in deterministic order
     let mono_items = cgu.items_in_deterministic_order(tcx);
@@ -150,44 +153,18 @@ fn compile_codegen_unit_impl(
         info!("Visibility: {:?}", data.visibility);
 
         triton_codegen.codegen(tcx, mono_item).expect("Failed to generate MLIR for instance");
-
-        // match mono_item {
-        // MonoItem::Fn(instance) => {
-        //     info!("Type: Function");
-        //     info!("Instance: {:?}", instance);
-        //     info!("DefId: {:?}", instance.def_id());
-        //     info!("Symbol: {}", tcx.symbol_name(*instance).name);
-        //     eprintln!("[DEBUG] Processing function: {}", tcx.symbol_name(*instance).name);
-
-        //     // Log MIR summary first
-        //     // let summary = MirSummary::from_instance(tcx, *instance);
-        //     // summary.log();
-
-        //     // Now visit the full MIR structure
-        //     eprintln!("[DEBUG] Calling visitor.visit_instance for function");
-
-        //     // visitor.visit_instance(*instance);
-        //     eprintln!("[DEBUG] Completed visitor.visit_instance");
-        // }
-        // MonoItem::Static(def_id) => {
-        //     info!("Type: Static");
-        //     info!("DefId: {:?}", def_id);
-        //     info!(
-        //         "Symbol: {}",
-        //         tcx.symbol_name(rustc_middle::ty::Instance::mono(tcx, *def_id)).name
-        //     );
-        //     eprintln!("[DEBUG] Processing static item: {:?}", def_id);
-
-        //     // Log static type
-        //     let ty = tcx.type_of(*def_id).instantiate_identity();
-        //     info!("Static type: {:?}", ty);
-        // }
-        // MonoItem::GlobalAsm(item_id) => {
-        //     info!("Type: GlobalAsm");
-        //     info!("ItemId: {:?}", item_id);
-        //     eprintln!("[DEBUG] Processing GlobalAsm item: {:?}", item_id);
-        // }
     }
+
+    let mlir_module_ok = mlir_module.llmod().as_operation().verify();
+    if !mlir_module_ok {
+        panic!("MLIR module failed verification");
+    }
+
+    println!("MLIR module pre-cleanup: {}", mlir_module.llmod().as_operation().to_string());
+
+    cleanup_mlir_module(&mut mlir_module).expect("MLIR cleanup passes failed");
+
+    println!("MLIR module post-cleanup: {}", mlir_module.llmod().as_operation().to_string());
 
     info!("");
     info!("========================================");
@@ -195,6 +172,19 @@ fn compile_codegen_unit_impl(
     info!("========================================");
 
     ModuleCodegen::new_regular(cgu_name.to_string(), mlir_module)
+}
+
+fn cleanup_mlir_module(mlir_module: &mut MlirModule<'static>) -> Result<(), MlirError> {
+    let pass_manager = PassManager::new(mlir_module.context());
+
+    pass_manager.add_pass(pass::transform::create_canonicalizer());
+    pass_manager.add_pass(pass::transform::create_symbol_dce());
+
+    pass_manager
+        .run(mlir_module.llmod_mut())
+        .map_err(|e| MlirError::CodegenFailed { err: e.to_string() })?;
+
+    Ok(())
 }
 
 impl WriteBackendMethods for MlirCodegenBackend {
@@ -257,8 +247,6 @@ impl WriteBackendMethods for MlirCodegenBackend {
         let module = module.module_llvm.llmod();
 
         info!("MLIR module: {:?}", module.as_operation().to_string());
-
-        assert!(module.as_operation().verify(), "MLIR module failed verification");
 
         // TODO: Implement MLIR optimization passes
     }

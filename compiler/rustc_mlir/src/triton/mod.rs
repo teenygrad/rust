@@ -59,6 +59,7 @@ pub fn create_func<'c>(
     context: &'c melior::Context,
     location: Location<'c>,
     name: &str,
+    visibility: &str,
     arg_types: &[Type<'c>],
     res_types: &[Type<'c>],
     divisibility: i32,
@@ -86,7 +87,7 @@ pub fn create_func<'c>(
     Ok(FuncOperation::builder(context, location)
         .sym_name(StringAttribute::new(context, name))
         .function_type(function_type)
-        .sym_visibility(StringAttribute::new(context, "public"))
+        .sym_visibility(StringAttribute::new(context, visibility))
         .arg_attrs(arg_attrs)
         .res_attrs(res_attrs)
         .body(body_region)
@@ -169,7 +170,8 @@ mod tests {
 
         // Use the new function in test:
         let func_op =
-            create_func(&context, location, "test_func_attrs", &inputs, &results, 16).unwrap();
+            create_func(&context, location, "public", "test_func_attrs", &inputs, &results, 16)
+                .unwrap();
 
         // Create a constant op returning f32 1.0
         let one_attr = Attribute::parse(&context, "1.0 : f32").expect("valid f32");
