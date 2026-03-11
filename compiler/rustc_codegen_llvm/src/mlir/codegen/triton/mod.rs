@@ -179,11 +179,16 @@ impl<'a> TritonCodegen<'a> {
             .collect();
 
         // Result type
-        let ret_types = self
-            .type_mapper
-            .map_type(self.module.context(), &tcx, &fn_sig.output())
-            .to_result()
-            .ok();
+        let ret_type = fn_sig.output();
+        let ret_types = if !ret_type.is_unit() {
+            self.type_mapper
+                .map_type(self.module.context(), &tcx, &fn_sig.output())
+                .to_result()
+                .ok()
+        } else {
+            None
+        };
+
         let ret_types = ret_types.as_slice();
 
         // DEBUG output: print argument and result types

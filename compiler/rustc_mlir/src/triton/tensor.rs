@@ -15,8 +15,10 @@
  */
 
 use melior::Context;
+use melior::ir::attribute::DenseI32ArrayAttribute;
+use melior::ir::operation::OperationMutLike;
 use melior::ir::r#type::IntegerType;
-use melior::ir::{Location, Type, TypeLike, Value};
+use melior::ir::{Attribute, Location, Operation, Type, TypeLike, Value};
 
 use crate::errors::Error;
 use crate::ffi::mlirCreateTritonPointerType;
@@ -75,7 +77,13 @@ pub fn load<'ctx>(
     mask: Value<'ctx, 'ctx>,
     // result_ty: Type<'ctx>,
 ) -> Result<LoadOperation<'ctx>, Error> {
-    Ok(LoadOperation::builder(context, location).ptr(ptr).mask(mask).build())
+    let mut op: Operation<'ctx> =
+        LoadOperation::builder(context, location).ptr(ptr).mask(mask).build().into();
+
+    // ptr=1, mask=1, other=0
+    let seg_sizes = DenseI32ArrayAttribute::new(context, &[1, 1, 0]);
+    op.set_attribute("operandSegmentSizes", Attribute::from(seg_sizes));
+    Ok(LoadOperation::try_from(op).expect("valid tt.load"))
 }
 
 pub fn store<'ctx>(

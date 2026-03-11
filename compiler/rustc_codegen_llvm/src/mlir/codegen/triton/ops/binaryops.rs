@@ -22,8 +22,10 @@ use melior::ir::{
 };
 use rustc_middle::mir::{BasicBlock, Body, CallSource, Operand, Place, UnwindAction};
 use rustc_middle::ty::{Instance, TyCtxt};
-use rustc_mlir::shared::arith::{Predicate, create_addi, create_cmpi, create_extsi, create_muli};
-use rustc_mlir::shared::builtin::tensor_type;
+use rustc_mlir::shared::arith::{
+    Predicate, create_addf, create_addi, create_cmpi, create_extsi, create_muli,
+};
+use rustc_mlir::shared::builtin::{tensor_type, tensor_type_like};
 use rustc_mlir::triton::tensor::add_ptr;
 use rustc_span::Span;
 use rustc_span::source_map::Spanned;
@@ -135,39 +137,24 @@ impl<'a> TritonCodegen<'a> {
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         let lhs_is_tensor = lhs.r#type().is_tensor();
         let rhs_is_tensor = rhs.r#type().is_tensor();
+        let location = Location::unknown(self.module.context());
 
-        let (lhs, rhs, result_ty) = match (lhs_is_tensor, rhs_is_tensor) {
-            (true, true) => (lhs, rhs, lhs.r#type()),
-            (true, false) => (
-                lhs,
-                self.like_tensor(
-                    tcx,
-                    Location::unknown(self.module.context()),
-                    lhs,
-                    rhs,
-                    mlir_block,
-                )?,
-                lhs.r#type(),
-            ),
-            (false, true) => (
-                self.like_tensor(
-                    tcx,
-                    Location::unknown(self.module.context()),
-                    rhs,
-                    lhs,
-                    mlir_block,
-                )?,
-                rhs,
-                rhs.r#type(),
-            ),
-            (false, false) => todo!(
-                "TritonCodegen::codegen_lt: {:?}-> {:?} {:?}-> {:?}",
-                lhs,
-                lhs.r#type(),
-                rhs,
-                rhs.r#type()
-            ),
+        let (lhs, rhs) = match (lhs_is_tensor, rhs_is_tensor) {
+            (true, true) => (lhs, rhs),
+            (true, false) => (lhs, self.like_tensor(tcx, location, lhs, rhs, mlir_block)?),
+            (false, true) => (self.like_tensor(tcx, location, rhs, lhs, mlir_block)?, rhs),
+            (false, false) => {
+                todo!("TritonCodegen::codegen_lt: {:?}-> {:?} {:?}", lhs, lhs.r#type(), rhs,)
+            }
         };
+
+        let result_ty = tensor_type_like(
+            lhs.r#type()
+                .try_into()
+                .map_err(|e: melior::error::Error| MlirError::InvalidType { msg: e.to_string() })?,
+            IntegerType::new(self.module.context(), 1).into(),
+        )
+        .map_err(|e| MlirError::InvalidType { msg: e.to_string() })?;
 
         let lt_op: Operation<'a> = create_cmpi(
             self.module.context(),
@@ -175,7 +162,7 @@ impl<'a> TritonCodegen<'a> {
             predicate,
             lhs,
             rhs,
-            result_ty,
+            result_ty.into(),
         )
         .map_err(|e| MlirError::CreateOperation { err: e })?
         .into();
@@ -254,10 +241,28 @@ impl<'a> TritonCodegen<'a> {
             ),
         };
 
-        let add_op: Operation<'a> =
+        let lhs_ty: RankedTensorType<'a> = lhs
+            .r#type()
+            .try_into()
+            .map_err(|e: melior::error::Error| MlirError::InvalidType { msg: e.to_string() })?;
+
+        let rhs_ty: RankedTensorType<'a> = rhs
+            .r#type()
+            .try_into()
+            .map_err(|e: melior::error::Error| MlirError::InvalidType { msg: e.to_string() })?;
+
+        let add_op: Operation<'a> = if lhs_ty.element().is_integer()
+            && rhs_ty.element().is_integer()
+        {
             create_addi(self.module.context(), Location::unknown(self.module.context()), lhs, rhs)
                 .map_err(|e| MlirError::CreateOperation { err: e })?
-                .into();
+                .into()
+        } else {
+            create_addf(self.module.context(), Location::unknown(self.module.context()), lhs, rhs)
+                .map_err(|e| MlirError::CreateOperation { err: e })?
+                .into()
+        };
+
         let result = add_op.result(0).expect("Add operation result not found");
 
         mlir_block.append_operation(add_op);

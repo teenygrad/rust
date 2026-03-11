@@ -20,7 +20,7 @@ use melior::ir::operation::OperationLike;
 use melior::ir::r#type::TupleType;
 use melior::ir::{BlockLike, BlockRef, Location, Operation, TypeLike, Value};
 use rustc_middle::mir::{BasicBlock, Body, CallSource, Operand, Place, Terminator, UnwindAction};
-use rustc_middle::ty::{Instance, TyCtxt, TyKind};
+use rustc_middle::ty::{Instance, TyCtxt, TyKind, TypingEnv};
 use rustc_mlir::shared::cf::create_cf_br;
 use rustc_mlir::triton::call;
 use rustc_span::Span;
@@ -179,7 +179,10 @@ impl<'a> TritonCodegen<'a> {
             _ => format!("XX{:?}", func),
         };
 
-        println!("[DEBUG] TritonCodegen::codegen_terminator_call: func_name: {:?}", func_name);
+        println!(
+            "[DEBUG] TritonCodegen::codegen_terminator_call: func: {:?} func_name: {:?}",
+            func, func_name
+        );
 
         let method: LocalCallHandler<'a, 'tcx> = match func_name.as_str() {
             "triton::Triton::program_id" => {
@@ -269,11 +272,44 @@ impl<'a> TritonCodegen<'a> {
             _ => fn_ty,
         };
 
+        // Get the callee from the func operand: this should be the mangled function name.
+        // This branch is for both `TyKind::FnDef` and function pointer cases.
+        let callee_name = match func {
+            Operand::Constant(constant) => {
+                let ty = constant.const_.ty();
+                println!("[DEBUG] AXM TritonCodegen::codegen_call: ty: {:?}", ty);
+                match ty.kind() {
+                    TyKind::FnDef(def_id, substs) => {
+                        let typing_env = TypingEnv::post_analysis(tcx, *def_id);
+                        if let Some(instance) =
+                            Instance::resolve_for_fn_ptr(tcx, typing_env, *def_id, substs)
+                        {
+                            tcx.symbol_name(instance).name.to_string()
+                        } else {
+                            func_name.to_string()
+                        }
+                    }
+                    TyKind::FnPtr(binder, header) => {
+                        todo!("FnPtr: {:?} {:?}", binder, header);
+                    }
+                    _ => func_name.to_string(),
+                }
+            }
+            // Try to resolve the function pointer to a DefId if possible.
+            // Most common "direct call" case handled above, fallback to func_name param.
+            _ => func_name.to_string(),
+        };
+
+        eprintln!(
+            "[DEBUG] AXM TritonCodegen::codegen_call: callee_name: {:?} {:?}",
+            func, callee_name
+        );
+
         let ret_ty = self.type_mapper.map_type(self.module.context(), &tcx, &ret_ty);
         let call_op: Operation<'a> = call(
             self.module.context(),
             Location::unknown(self.module.context()),
-            func_name,
+            callee_name.as_str(),
             &args,
             &[ret_ty],
         )

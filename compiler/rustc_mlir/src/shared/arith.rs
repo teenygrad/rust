@@ -16,10 +16,10 @@
 
 use melior::Context;
 use melior::dialect::ods::arith::{
-    AddIOperation, CmpIOperation, ConstantOperation, ExtSIOperation, MulIOperation,
+    AddFOperation, AddIOperation, CmpIOperation, ConstantOperation, ExtSIOperation, MulIOperation,
 };
 use melior::ir::attribute::IntegerAttribute;
-use melior::ir::r#type::IntegerType;
+use melior::ir::r#type::{IntegerType, RankedTensorType};
 use melior::ir::{Attribute, Location, Type, TypeLike, Value, ValueLike};
 use rustc_ast::{IntTy, UintTy};
 use rustc_middle::ty::{ScalarInt, Ty, TyKind};
@@ -179,6 +179,15 @@ pub fn create_addi<'ctx>(
     rhs: Value<'ctx, 'ctx>,
 ) -> Result<AddIOperation<'ctx>, Error> {
     Ok(AddIOperation::builder(context, location).lhs(lhs).rhs(rhs).build())
+}
+
+pub fn create_addf<'ctx>(
+    context: &'ctx Context,
+    location: Location<'ctx>,
+    lhs: Value<'ctx, 'ctx>,
+    rhs: Value<'ctx, 'ctx>,
+) -> Result<AddFOperation<'ctx>, Error> {
+    Ok(AddFOperation::builder(context, location).lhs(lhs).rhs(rhs).build())
 }
 
 pub fn create_extsi<'ctx>(
