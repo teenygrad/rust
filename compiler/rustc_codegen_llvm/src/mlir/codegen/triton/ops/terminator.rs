@@ -43,7 +43,7 @@ type LocalCallHandler<'a, 'tcx> = fn(
     &UnwindAction,
     &CallSource,
     &Span,
-    &BlockRef,
+    &BlockRef<'a, 'a>,
     &mut SsaValues<'a, 'a>,
 ) -> Result<Option<Value<'a, 'a>>, MlirError>;
 
@@ -54,7 +54,7 @@ impl<'a> TritonCodegen<'a> {
         instance: &Instance<'tcx>,
         mir: &Body<'tcx>,
         terminator: &Terminator<'tcx>,
-        mlir_block: &BlockRef,
+        mlir_block: &BlockRef<'a, 'a>,
         ssa_values: &mut SsaValues<'a, 'a>,
         basic_blocks: &HashMap<BasicBlock, BlockRef>,
     ) -> Result<(), MlirError> {
@@ -164,7 +164,7 @@ impl<'a> TritonCodegen<'a> {
         unwind: &UnwindAction,
         call_source: &CallSource,
         fn_span: &Span,
-        mlir_block: &BlockRef,
+        mlir_block: &BlockRef<'a, 'a>,
         basic_blocks: &HashMap<BasicBlock, BlockRef>,
         ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<(), MlirError> {
@@ -239,7 +239,7 @@ impl<'a> TritonCodegen<'a> {
         _unwind: &UnwindAction,
         _call_source: &CallSource,
         _fn_span: &Span,
-        mlir_block: &BlockRef,
+        mlir_block: &BlockRef<'a, 'a>,
         ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         let args = args
@@ -332,7 +332,7 @@ impl<'a> TritonCodegen<'a> {
     fn codegen_goto(
         &self,
         target: &BasicBlock,
-        mlir_block: &BlockRef,
+        mlir_block: &BlockRef<'a, 'a>,
         basic_blocks: &HashMap<BasicBlock, BlockRef>,
     ) -> Result<(), MlirError> {
         let target_block = basic_blocks.get(target).unwrap();

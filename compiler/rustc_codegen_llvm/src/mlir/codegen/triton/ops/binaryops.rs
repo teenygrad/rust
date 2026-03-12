@@ -47,7 +47,7 @@ impl<'a> TritonCodegen<'a> {
         _unwind: &UnwindAction,
         _call_source: &CallSource,
         _fn_span: &Span,
-        mlir_block: &BlockRef,
+        mlir_block: &BlockRef<'a, 'a>,
         ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         debug_assert!(args.len() == 2, "TritonCodegen::codegen_mul_call: args length must be 2");
@@ -79,7 +79,7 @@ impl<'a> TritonCodegen<'a> {
         _unwind: &UnwindAction,
         _call_source: &CallSource,
         _fn_span: &Span,
-        mlir_block: &BlockRef,
+        mlir_block: &BlockRef<'a, 'a>,
         ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         debug_assert!(args.len() == 2, "TritonCodegen::codegen_add_call: args length must be 2");
@@ -111,7 +111,7 @@ impl<'a> TritonCodegen<'a> {
         _unwind: &UnwindAction,
         _call_source: &CallSource,
         _fn_span: &Span,
-        mlir_block: &BlockRef,
+        mlir_block: &BlockRef<'a, 'a>,
         ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         debug_assert!(args.len() == 2, "TritonCodegen::codegen_lt_call: args length must be 2");
@@ -133,7 +133,7 @@ impl<'a> TritonCodegen<'a> {
         predicate: Predicate,
         lhs: Value<'a, 'a>,
         rhs: Value<'a, 'a>,
-        mlir_block: &BlockRef,
+        mlir_block: &BlockRef<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         let lhs_is_tensor = lhs.r#type().is_tensor();
         let rhs_is_tensor = rhs.r#type().is_tensor();
@@ -175,7 +175,7 @@ impl<'a> TritonCodegen<'a> {
         &self,
         lhs: Value<'a, 'a>,
         rhs: Value<'a, 'a>,
-        mlir_block: &BlockRef,
+        mlir_block: &BlockRef<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         let lhs_ty = lhs.r#type();
         let rhs_ty = rhs.r#type();
@@ -202,7 +202,7 @@ impl<'a> TritonCodegen<'a> {
         tcx: TyCtxt<'tcx>,
         lhs: Value<'a, 'a>,
         rhs: Value<'a, 'a>,
-        mlir_block: &BlockRef,
+        mlir_block: &BlockRef<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         let lhs_ty = lhs.r#type();
         let rhs_ty = rhs.r#type();

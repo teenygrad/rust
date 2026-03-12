@@ -44,7 +44,7 @@ impl<'a> TritonCodegen<'a> {
         unwind: &UnwindAction,
         call_source: &CallSource,
         fn_span: &Span,
-        mlir_block: &BlockRef,
+        mlir_block: &BlockRef<'a, 'a>,
         ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         println!(
@@ -85,7 +85,7 @@ impl<'a> TritonCodegen<'a> {
         _unwind: &UnwindAction,
         _call_source: &CallSource,
         _fn_span: &Span,
-        mlir_block: &BlockRef,
+        mlir_block: &BlockRef<'a, 'a>,
         ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         debug_assert!(
@@ -133,7 +133,7 @@ impl<'a> TritonCodegen<'a> {
         unwind: &UnwindAction,
         call_source: &CallSource,
         fn_span: &Span,
-        mlir_block: &BlockRef,
+        mlir_block: &BlockRef<'a, 'a>,
         ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         println!(
@@ -178,7 +178,7 @@ impl<'a> TritonCodegen<'a> {
         unwind: &UnwindAction,
         call_source: &CallSource,
         fn_span: &Span,
-        mlir_block: &BlockRef,
+        mlir_block: &BlockRef<'a, 'a>,
         ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         println!(
