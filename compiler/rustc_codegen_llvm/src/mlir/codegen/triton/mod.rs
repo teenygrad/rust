@@ -326,7 +326,7 @@ impl<'a> TritonCodegen<'a> {
             | StatementKind::Coverage(_)
             | StatementKind::BackwardIncompatibleDropHint { .. }
             | StatementKind::Retag(..) => Ok(()),
-        };
+        }?;
 
         println!("[DEBUG] TritonCodegen::codegen_statement: ssa_values: {:?}", ssa_values);
         Ok(())
@@ -1027,13 +1027,23 @@ impl<'a> TritonCodegen<'a> {
                         scalar, adt_def, args
                     );
 
+                    // For scalar newtype ADTs (e.g. `I32(pub i32)`), get the inner
+                    // field's primitive type so Int::from_scalar can determine the
+                    // correct MLIR integer kind.  codegen_constant_cast will call
+                    // codegen_const_adt to wrap the result, so we must NOT call it
+                    // here to avoid a double-call.
+                    let variant = adt_def.non_enum_variant();
+                    let inner_ty = tcx
+                        .type_of(variant.fields[FieldIdx::from_usize(0)].did)
+                        .instantiate(tcx, args);
+
                     let scalar_op: Operation<'a> = match scalar {
                         Scalar::Int(scalar_int) => {
-                            let value = Int::from_scalar(ty, scalar_int).map_err(|e| {
+                            let value = Int::from_scalar(inner_ty, scalar_int).map_err(|e| {
                                 MlirError::InvalidScalar {
                                     node: format!(
                                         "Invalid scalar: {:?} {:?} {:?}",
-                                        e, ty, scalar_int
+                                        e, inner_ty, scalar_int
                                     ),
                                 }
                             })?;
@@ -1050,15 +1060,7 @@ impl<'a> TritonCodegen<'a> {
 
                     let result = scalar_op.result(0).unwrap();
                     mlir_block.append_operation(scalar_op);
-
-                    self.codegen_const_adt(
-                        tcx,
-                        instance,
-                        adt_def,
-                        result.into(),
-                        args.as_slice(),
-                        mlir_block,
-                    )
+                    Ok(result.into())
                 }
                 _ => todo!("Scalar::Int ty: {:?} {:?}", ty.kind(), ty),
             },
