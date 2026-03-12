@@ -24,7 +24,7 @@ use melior::ir::{
 };
 use melior::utility::register_all_llvm_translations;
 use rustc_abi::FieldIdx;
-use rustc_ast::{IntTy, UintTy};
+use rustc_ast::{IntTy, MutTy, UintTy};
 use rustc_index::IndexVec;
 use rustc_middle::mir::interpret::Scalar;
 use rustc_middle::mir::mono::MonoItem;
@@ -167,7 +167,7 @@ impl<'a> TritonCodegen<'a> {
         };
 
         eprintln!(
-            "[DEBUG] TritonCodegen: function name: {} (raw symbol: {})",
+            "[DEBUG] TritonCodegen codegen_function: function name: {} (raw symbol: {})",
             friendly_name, func_name
         );
 
@@ -181,10 +181,7 @@ impl<'a> TritonCodegen<'a> {
         // Result type
         let ret_type = fn_sig.output();
         let ret_types = if !ret_type.is_unit() {
-            self.type_mapper
-                .map_type(self.module.context(), &tcx, &fn_sig.output())
-                .to_result()
-                .ok()
+            self.type_mapper.map_type(self.module.context(), &tcx, &ret_type).to_result().ok()
         } else {
             None
         };
@@ -218,6 +215,14 @@ impl<'a> TritonCodegen<'a> {
 
         let mir = tcx.instance_mir(instance.def);
         let location = Location::unknown(self.module.context());
+
+        if func_name.contains("program_id") {
+            println!(
+                "[DEBUG] TritonCodegen::codegen_function: func_name: {:?}, arg_types: {:?}",
+                func_name, arg_types
+            );
+            println!("[DEBUG] TritonCodegen::codegen_function: mir: {:?}", mir);
+        }
 
         for (bb, _) in mir.basic_blocks.iter_enumerated() {
             let block = Block::new(&[]);
@@ -395,6 +400,10 @@ impl<'a> TritonCodegen<'a> {
                 );
 
                 if let Some(result) = result {
+                    println!(
+                        "codegen_aggregate_create: result: ** {:?} ** {:?}",
+                        place.local, result
+                    );
                     ssa_values.insert(place.local, result);
                 } else {
                     println!(
@@ -429,24 +438,6 @@ impl<'a> TritonCodegen<'a> {
 
         // todo!("[TODO] TritonCodegen::codegen_assign: {:?} {:?}", place, rvalue)
         Ok(())
-    }
-
-    fn codegen_aggregate_define<'tcx>(
-        &self,
-        tcx: TyCtxt<'tcx>,
-        instance: &Instance<'tcx>,
-        aggregate_kind: &AggregateKind<'tcx>,
-        _index_vec: &IndexVec<FieldIdx, Operand<'tcx>>,
-        _mlir_block: &BlockRef<'a, 'a>,
-    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
-        match aggregate_kind {
-            AggregateKind::Adt(_def_id, _, _raw_list, _, _) => {
-                // TODO: We do not support aggregates for triton yet. The implementations
-                // for tensors and pointers are just basic pointers.
-                Ok(None)
-            }
-            _ => todo!("AggregateKind: {:?}", aggregate_kind),
-        }
     }
 
     fn codegen_aggregate_create<'tcx>(
@@ -500,13 +491,19 @@ impl<'a> TritonCodegen<'a> {
         ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         let arg1 = index_vec.get(FieldIdx::from_usize(0)).expect("arg1 not found");
-        let value =
-            self.codegen_operand(tcx, instance, arg1, arg1.ty(mir, tcx), mlir_block, ssa_values)?;
+        let arg1_ty = instance.instantiate_mir_and_normalize_erasing_regions(
+            tcx,
+            TypingEnv::fully_monomorphized(),
+            EarlyBinder::bind(arg1.ty(mir, tcx)),
+        );
 
-        println!("codegen_create_tensor: instance: {:?}", instance);
-        todo!("codegen_create_tensor: value: {:?} {:?} {:?}", arg1, value, value.r#type());
-
-        let tensor_type = tensor_type(&[i64::MIN], value.r#type()).into();
+        let pointee_ty = match arg1_ty.kind() {
+            TyKind::RawPtr(pointee_ty, _) => {
+                self.type_mapper.map_type(self.module.context(), &tcx, pointee_ty)
+            }
+            _ => todo!("codegen_create_tensor: arg1_ty: {:?}", arg1_ty),
+        };
+        let tensor_type = tensor_type(&[i64::MIN], pointee_ty).into();
         let tensor_op = create_ub_poison(
             self.module.context(),
             Location::unknown(self.module.context()),
@@ -529,9 +526,19 @@ impl<'a> TritonCodegen<'a> {
         ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         let arg1 = index_vec.get(FieldIdx::from_usize(0)).expect("arg1 not found");
-        let value =
-            self.codegen_operand(tcx, instance, arg1, arg1.ty(mir, tcx), mlir_block, ssa_values)?;
-        let pointer_type = pointer_type(value.r#type()).into();
+        let arg1_ty = instance.instantiate_mir_and_normalize_erasing_regions(
+            tcx,
+            TypingEnv::fully_monomorphized(),
+            EarlyBinder::bind(arg1.ty(mir, tcx)),
+        );
+
+        let pointee_ty = match arg1_ty.kind() {
+            TyKind::RawPtr(pointee_ty, _) => {
+                self.type_mapper.map_type(self.module.context(), &tcx, pointee_ty)
+            }
+            _ => todo!("codegen_create_pointer: arg1_ty: {:?}", arg1_ty),
+        };
+        let pointer_type = pointer_type(pointee_ty);
         let pointer_op = create_ub_poison(
             self.module.context(),
             Location::unknown(self.module.context()),
@@ -556,7 +563,8 @@ impl<'a> TritonCodegen<'a> {
         let arg1 = index_vec.get(FieldIdx::from_usize(0)).expect("arg1 not found");
         let value =
             self.codegen_operand(tcx, instance, arg1, arg1.ty(mir, tcx), mlir_block, ssa_values)?;
-        return Ok(Some(value));
+        println!("codegen_create_i32: value: {:?}", value);
+        Ok(Some(value))
     }
 
     fn codegen_const_adt<'tcx>(

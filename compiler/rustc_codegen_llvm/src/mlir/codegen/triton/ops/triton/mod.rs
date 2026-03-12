@@ -32,6 +32,7 @@ impl<'a> TritonCodegen<'a> {
         ssa_values: &mut SsaValues<'a, 'a>,
     ) -> Result<(), MlirError> {
         println!("[DEBUG] TritonCodegen::codegen_return: ssa_values: {:?}", ssa_values);
+        println!("[DEBUG] TritonCodegen::codegen_return: terminator: {:?}", _terminator);
         let value = ssa_values.get(&Local::ZERO).copied();
         let return_op = create_return(
             self.module.context(),

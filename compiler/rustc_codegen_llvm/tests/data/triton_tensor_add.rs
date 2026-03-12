@@ -510,13 +510,13 @@ pub mod triton {
                 #[inline(never)]
                 fn program_id(_axis: ProgramAxis) -> Self::I32 {
                     // dummy implementation not used in final output
-                    0.into()
+                    num::I32(0)
                 }
 
                 #[inline(never)]
                 fn num_programs(_axis: ProgramAxis) -> Self::I32 {
                     // dummy implementation not used in final output
-                    0.into()
+                    num::I32(0)
                 }
 
                 #[inline(never)]
