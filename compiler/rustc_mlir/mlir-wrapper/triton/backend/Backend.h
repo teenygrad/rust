@@ -193,7 +193,6 @@ private:
       {MlirPass::ttgpuir_accelerate_matmul, createTritonGPUAccelerateMatmul},
       {MlirPass::ttgpuir_reorder_instructions,
        createTritonGPUReorderInstructions},
-      {MlirPass::ttgpuir_f32_dot_tc, createTritonGPUF32DotTC},
       {MlirPass::ttgpuir_remove_layout_conversions,
        createTritonGPURemoveLayoutConversions},
       {MlirPass::ttgpuir_reduce_data_duplication,

@@ -105,7 +105,7 @@ std::optional<Error> CudaBackend::addCudaPass(PassManager &pm, CudaPass pass,
 
 std::optional<Error> CudaBackend::addCudaPass(PassManager &pm, CudaPass pass,
                                               int arg0, int arg1) {
-  if (pass != CudaPass::ttgpuir_to_llvmir) {
+  if (pass != CudaPass::ttnvgpuir_to_llvmir) {
     m_last_error = std::make_optional(Error::InvalidPass);
     m_last_error_string = "Invalid nvidia pass";
     return m_last_error;
@@ -152,6 +152,7 @@ LogicalResult CudaBackend::make_ttgir(MLIRContext &context, ModuleOp module) {
   auto capability = getCapability();
   auto capability_major = static_cast<int>(capability) / 10;
   auto op = module.getOperation();
+  auto emuTF32 = (capability_major >= 8);
 
   if (m_options.maxnreg.has_value()) {
     auto maxnreg = m_options.maxnreg.value();
@@ -162,15 +163,15 @@ LogicalResult CudaBackend::make_ttgir(MLIRContext &context, ModuleOp module) {
 
   std::string capability_str =
       std::string("cuda:").append(std::to_string(static_cast<int>(capability)));
+
   addPass(pm, MlirPass::ttir_convert_to_ttgpuir, capability_str,
           m_options.num_warps, 32, m_options.num_ctas);
+
+  // optimize TTGIR
   addPass(pm, MlirPass::ttgpuir_coalesce);
-  if (capability_major >= 8) {
-    addPass(pm, MlirPass::ttgpuir_f32_dot_tc);
-  }
+  addPass(pm, MlirPass::ttgpuir_f32_dot_tc, emuTF32);
 
   addCudaPass(pm, CudaPass::ttnvgpuir_plan_cta);
-
   addPass(pm, MlirPass::ttgpuir_remove_layout_conversions);
   addPass(pm, MlirPass::ttgpuir_optimize_thread_locality);
   addPass(pm, MlirPass::ttgpuir_accelerate_matmul);
@@ -186,7 +187,6 @@ LogicalResult CudaBackend::make_ttgir(MLIRContext &context, ModuleOp module) {
     addPass(pm, MlirPass::ttir_triton_licm);
     addPass(pm, MlirPass::canonicalizer);
     addPass(pm, MlirPass::ttgpuir_combine_tensor_select_and_if);
-
     addCudaPass(pm, CudaPass::hopper_warpspec, m_options.num_stages,
                 m_options.dump_enabled);
     addPass(pm, MlirPass::ttgpuir_assign_latencies, m_options.num_stages);
@@ -207,6 +207,7 @@ LogicalResult CudaBackend::make_ttgir(MLIRContext &context, ModuleOp module) {
     addPass(pm, MlirPass::ttgpuir_warp_specialize, m_options.num_stages);
     addPass(pm, MlirPass::ttgpuir_pipeline, m_options.num_stages,
             m_options.dump_enabled);
+    addPass(pm, MlirPass::ttgpuir_optimize_partition_warps);
     addPass(pm, MlirPass::ttgpuir_combine_tensor_select_and_if);
     // hoist again and allow hoisting out of if statements
     addPass(pm, MlirPass::ttgpuir_hoist_tmem_alloc, true);
@@ -222,6 +223,9 @@ LogicalResult CudaBackend::make_ttgir(MLIRContext &context, ModuleOp module) {
 
   addPass(pm, MlirPass::ttgpuir_coalesce_async_copy);
   addCudaPass(pm, CudaPass::ttnvgpuir_optimize_tmem_layouts);
+  if (capability_major >= 9) {
+    addCudaPass(pm, CudaPass::ttnvgpuir_tma_lowering);
+  }
   addPass(pm, MlirPass::ttgpuir_remove_layout_conversions);
   addCudaPass(pm, CudaPass::ttnvgpuir_interleave_tmem);
 
@@ -230,12 +234,9 @@ LogicalResult CudaBackend::make_ttgir(MLIRContext &context, ModuleOp module) {
   addPass(pm, MlirPass::ttir_loop_aware_cse);
   addPass(pm, MlirPass::symbol_dce);
 
-  if (capability_major >= 9) {
-    addCudaPass(pm, CudaPass::ttnvgpuir_tma_lowering);
-  }
-
-  addCudaPass(pm, CudaPass::ttnvgpuir_fence_insertion);
+  addCudaPass(pm, CudaPass::ttnvgpuir_fence_insertion, capability);
   addCudaPass(pm, CudaPass::ttnvgpuir_lower_mma);
+
   addPass(pm, MlirPass::sccp);
   addPass(pm, MlirPass::cse);
   addPass(pm, MlirPass::canonicalizer);
@@ -251,7 +252,10 @@ LogicalResult CudaBackend::gluon_to_ttgir(MLIRContext &context,
   auto op = module.getOperation();
 
   addPass(pm, MlirPass::gluon_inliner);
+  addPass(pm, MlirPass::gluon_infer_coalesced_encodings);
   addPass(pm, MlirPass::gluon_resolve_auto_encodings);
+  addCudaPass(pm, CudaPass::ttnvgpuir_tma_lowering);
+  addPass(pm, MlirPass::canonicalizer);
   addPass(pm, MlirPass::sccp);
   addPass(pm, MlirPass::ttir_loop_aware_cse);
   addPass(pm, MlirPass::gluon_canonicalizer);
@@ -270,9 +274,11 @@ LogicalResult CudaBackend::make_llir(MLIRContext &context, ModuleOp module) {
   addPass(pm, MlirPass::ttgpuir_combine_tensor_select_and_if);
   addPass(pm, MlirPass::ttgpuir_allocate_warp_groups);
   addPass(pm, MlirPass::scf_to_cf);
+  addPass(pm, MlirPass::gluon_inliner);
   addPass(pm, MlirPass::ttgpuir_allocate_shared_memory_nv, capability,
           ptx_version);
   addCudaPass(pm, CudaPass::ttnvgpuir_allocate_tensor_memory);
+  addCudaPass(pm, CudaPass::ttnvgpuir_check_matmul_two_cta);
   if (m_options.enable_experimental_consan) {
     addPass(pm, MlirPass::ttgpuir_concurrency_sanitizer);
   }
@@ -285,7 +291,7 @@ LogicalResult CudaBackend::make_llir(MLIRContext &context, ModuleOp module) {
     // CUDABackend.instrumentation.patch("ttgpuir_to_llvmir", pm, mod.context)
   }
 
-  addCudaPass(pm, CudaPass::ttgpuir_to_llvmir, capability, ptx_version);
+  addCudaPass(pm, CudaPass::ttnvgpuir_to_llvmir, capability, ptx_version);
   addPass(pm, MlirPass::canonicalizer);
   addPass(pm, MlirPass::cse);
   addCudaPass(pm, CudaPass::ttnvgpuir_nvgpu_to_llvm);

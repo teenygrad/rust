@@ -38,7 +38,7 @@ void Backend::printIR(std::string stage, ModuleOp module) {
   llvm::outs() << "\n--------------------------------\n";
 }
 
-std::optional<Error> Backend::addPass(PassManager& pm, MlirPass pass) {
+std::optional<Error> Backend::addPass(PassManager &pm, MlirPass pass) {
   auto pass_fn = m_pass_fns.find(pass);
   if (pass_fn == m_pass_fns.end()) {
     m_last_error = std::make_optional(Error::InvalidPass);
@@ -50,29 +50,31 @@ std::optional<Error> Backend::addPass(PassManager& pm, MlirPass pass) {
   return std::nullopt;
 }
 
-std::optional<Error> Backend::addPass(PassManager& pm, MlirPass pass, int arg0) {
+std::optional<Error> Backend::addPass(PassManager &pm, MlirPass pass,
+                                      int arg0) {
   m_last_error = std::nullopt;
   m_last_error_string = "";
 
   switch (pass) {
-    case MlirPass::ttgpuir_assign_latencies:
-      pm.addPass(createTritonGPUAssignLatencies({arg0}));
-      break;
+  case MlirPass::ttgpuir_assign_latencies:
+    pm.addPass(createTritonGPUAssignLatencies({arg0}));
+    break;
 
-    case MlirPass::ttgpuir_warp_specialize:
-      pm.addPass(createTritonGPUAutomaticWarpSpecialization({arg0}));
-      break;
+  case MlirPass::ttgpuir_warp_specialize:
+    pm.addPass(createTritonGPUAutomaticWarpSpecialization({arg0}));
+    break;
 
-    default:
-      m_last_error = std::make_optional(Error::InvalidPass);
-      m_last_error_string = "Invalid triton pass";
-      break;
+  default:
+    m_last_error = std::make_optional(Error::InvalidPass);
+    m_last_error_string = "Invalid triton pass";
+    break;
   }
 
   return m_last_error;
 }
 
-std::optional<Error> Backend::addPass(PassManager& pm, MlirPass pass, bool arg0) {
+std::optional<Error> Backend::addPass(PassManager &pm, MlirPass pass,
+                                      bool arg0) {
   if (pass != MlirPass::ttgpuir_optimize_dot_operands) {
     m_last_error = std::make_optional(Error::InvalidPass);
     m_last_error_string = "Invalid triton pass";
@@ -83,7 +85,8 @@ std::optional<Error> Backend::addPass(PassManager& pm, MlirPass pass, bool arg0)
   return std::nullopt;
 }
 
-std::optional<Error> Backend::addPass(PassManager& pm, MlirPass pass, int arg0, bool arg1) {
+std::optional<Error> Backend::addPass(PassManager &pm, MlirPass pass, int arg0,
+                                      bool arg1) {
   if (pass != MlirPass::ttgpuir_pipeline) {
     m_last_error = std::make_optional(Error::InvalidPass);
     m_last_error_string = "Invalid triton pass";
@@ -94,8 +97,9 @@ std::optional<Error> Backend::addPass(PassManager& pm, MlirPass pass, int arg0, 
   return std::nullopt;
 }
 
-std::optional<Error> Backend::addPass(PassManager& pm, MlirPass pass, const std::string &arg0,
-  int arg1, int arg2, int arg3) {
+std::optional<Error> Backend::addPass(PassManager &pm, MlirPass pass,
+                                      const std::string &arg0, int arg1,
+                                      int arg2, int arg3) {
   if (pass != MlirPass::ttir_convert_to_ttgpuir) {
     m_last_error = std::make_optional(Error::InvalidPass);
     m_last_error_string = "Invalid triton pass";
@@ -105,6 +109,5 @@ std::optional<Error> Backend::addPass(PassManager& pm, MlirPass pass, const std:
   pm.addPass(createConvertTritonToTritonGPU({arg0, arg1, arg2, arg3}));
   return std::nullopt;
 }
-
-}
-}
+} // namespace triton
+} // namespace mlir

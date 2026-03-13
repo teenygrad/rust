@@ -86,15 +86,16 @@ enum Capability {
 enum CudaPass {
   // ttgpuir
   allocate_shared_memory_nv,
-  ttgpuir_to_llvmir,
 
   // ttnvgpuir
+  ttnvgpuir_to_llvmir,
   ttnvgpuir_plan_cta,
   ttnvgpuir_fence_insertion,
   ttnvgpuir_proxy_fence_insertion,
   ttnvgpuir_tma_lowering,
   ttnvgpuir_promote_lhs_to_tmem,
   ttnvgpuir_remove_tmem_tokens,
+  ttnvgpuir_check_matmul_two_cta,
   ttnvgpuir_nvgpu_to_llvm,
   ttnvgpuir_warp_specialize_to_llvm,
   ttnvgpuir_allocate_tensor_memory,
@@ -107,6 +108,7 @@ enum CudaPass {
   nvws_lower_warp_group,
   nvws_lower_aref,
   nvws_assign_stage_phase,
+  nvws_insert_tmem_aref,
 
   // hopper
   hopper_warpspec
@@ -156,6 +158,8 @@ private:
            ttng::createTritonNvidiaGPUPromoteLHSToTMemPass},
           {ttnvgpuir_remove_tmem_tokens,
            ttng::createTritonNvidiaGPURemoveTMEMTokensPass},
+          {ttnvgpuir_check_matmul_two_cta,
+           ttng::createTritonNvidiaGPUCheckMatmulTwoCTAPass},
           {ttnvgpuir_nvgpu_to_llvm, mlir::triton::createConvertNVGPUToLLVM},
           {ttnvgpuir_warp_specialize_to_llvm,
            mlir::triton::createConvertWarpSpecializeToLLVM},
@@ -173,6 +177,8 @@ private:
           // nvws
           {nvws_lower_warp_group, mlir::triton::createNVWSLowerWarpGroup},
           {nvws_lower_aref, mlir::triton::createNVWSLowerAref},
+          {nvws_assign_stage_phase, mlir::triton::createNVWSAssignStagePhase},
+          {nvws_insert_tmem_aref, mlir::triton::createNVWSInsertTmemAref},
       };
 
   Capability getCapability() const;
