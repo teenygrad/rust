@@ -48,6 +48,10 @@ add_definitions(${LLVM_DEFINITIONS})
 # Source files
 set(WRAPPER_SOURCES
     MLIRWrapper.cpp
+    triton/TritonWrapper.cpp
+    triton/TritonCompiler.cpp
+    triton/backend/Backend.cpp
+    triton/backend/CudaBackend.cpp
 )
 
 # Create static library

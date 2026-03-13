@@ -1,1 +1,26 @@
-error: package ID specification `teeny-compiler` did not match any packages
+
+module {
+  tt.func public @add_kernel(%arg0: !tt.ptr<f32> {tt.divisibility = 16 : i32} loc("/home/arshadm/Workspace/projects/spinorml/teenygrad/kernel.py":10:0), %arg1: !tt.ptr<f32> {tt.divisibility = 16 : i32} loc("/home/arshadm/Workspace/projects/spinorml/teenygrad/kernel.py":10:0), %arg2: !tt.ptr<f32> {tt.divisibility = 16 : i32} loc("/home/arshadm/Workspace/projects/spinorml/teenygrad/kernel.py":10:0), %arg3: i32 {tt.divisibility = 16 : i32} loc("/home/arshadm/Workspace/projects/spinorml/teenygrad/kernel.py":10:0)) attributes {noinline = false} {
+    %0 = tt.get_program_id x : i32 loc(#loc1)
+    %c1024_i32 = arith.constant 1024 : i32 loc(#loc2)
+    %c1024_i32_0 = arith.constant 1024 : i32 loc(#loc2)
+    %7 = arith.muli %0, %c1024_i32_0 : i32 loc(#loc2)
+    %8 = tt.make_range {end = 1024 : i32, start = 0 : i32} : tensor<1024xi32> loc(#loc3)
+    %9 = tt.splat %7 : i32 -> tensor<1024xi32> loc(#loc4)
+    %16 = arith.addi %9, %8 : tensor<1024xi32> loc(#loc4)
+    %17 = tt.splat %arg3 : i32 -> tensor<1024xi32> loc(#loc5)
+    %18 = arith.cmpi slt, %16, %17 : tensor<1024xi32> loc(#loc5)
+    %19 = tt.splat %arg0 : !tt.ptr<f32> -> tensor<1024x!tt.ptr<f32>> loc(#loc6)
+    %20 = tt.addptr %19, %16 : tensor<1024x!tt.ptr<f32>>, tensor<1024xi32> loc(#loc6)
+    %21 = tt.load %20, %18 : tensor<1024x!tt.ptr<f32>> loc(#loc7)
+    %22 = tt.splat %arg1 : !tt.ptr<f32> -> tensor<1024x!tt.ptr<f32>> loc(#loc8)
+    %23 = tt.addptr %22, %16 : tensor<1024x!tt.ptr<f32>>, tensor<1024xi32> loc(#loc8)
+    %24 = tt.load %23, %18 : tensor<1024x!tt.ptr<f32>> loc(#loc9)
+    %25 = arith.addf %21, %24 : tensor<1024xf32> loc(#loc10)
+    %26 = tt.splat %arg2 : !tt.ptr<f32> -> tensor<1024x!tt.ptr<f32>> loc(#loc11)
+    %27 = tt.addptr %26, %16 : tensor<1024x!tt.ptr<f32>>, tensor<1024xi32> loc(#loc11)
+    tt.store %27, %25, %18 : tensor<1024x!tt.ptr<f32>> loc(#loc12)
+    tt.return loc(#loc13)
+  } loc(#loc)
+} loc(#loc)
+
