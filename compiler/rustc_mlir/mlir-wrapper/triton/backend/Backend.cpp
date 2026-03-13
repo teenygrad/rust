@@ -31,10 +31,10 @@ Backend::~Backend() {
   // nop
 }
 
-void Backend::printIR(std::string stage, OwningOpRef<ModuleOp> &module) {
+void Backend::printIR(std::string stage, ModuleOp module) {
   llvm::outs() << "--------------------------------\n";
   llvm::outs() << "Stage: " << stage << "\n";
-  module->print(llvm::outs());
+  module.print(llvm::outs());
   llvm::outs() << "\n--------------------------------\n";
 }
 

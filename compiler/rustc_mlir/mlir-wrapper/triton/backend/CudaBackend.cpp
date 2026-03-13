@@ -49,8 +49,7 @@ void CudaBackend::loadDialects(MLIRContext &context) {
 
 Capability CudaBackend::getCapability() const { return m_capability; }
 
-LogicalResult CudaBackend::applyPasses(MLIRContext &context,
-                                       OwningOpRef<ModuleOp> &module,
+LogicalResult CudaBackend::applyPasses(MLIRContext &context, ModuleOp module,
                                        Language language) {
   auto m_result = LogicalResult::success();
   printIR("TTIR_BEFORE", module);
@@ -128,11 +127,10 @@ std::optional<Error> CudaBackend::addCudaPass(PassManager &pm, CudaPass pass,
   return std::nullopt;
 }
 
-LogicalResult CudaBackend::make_ttir(MLIRContext &context,
-                                     OwningOpRef<ModuleOp> &module) {
+LogicalResult CudaBackend::make_ttir(MLIRContext &context, ModuleOp module) {
   PassManager pm(&context);
   auto capability = getCapability();
-  auto op = module->getOperation();
+  auto op = module.getOperation();
 
   addPass(pm, MlirPass::inliner);
   addPass(pm, MlirPass::ttir_rewrite_tensor_pointer);
@@ -149,12 +147,11 @@ LogicalResult CudaBackend::make_ttir(MLIRContext &context,
   return pm.run(op);
 }
 
-LogicalResult CudaBackend::make_ttgir(MLIRContext &context,
-                                      OwningOpRef<ModuleOp> &module) {
+LogicalResult CudaBackend::make_ttgir(MLIRContext &context, ModuleOp module) {
   PassManager pm(&context);
   auto capability = getCapability();
   auto capability_major = static_cast<int>(capability) / 10;
-  auto op = module->getOperation();
+  auto op = module.getOperation();
 
   if (m_options.maxnreg.has_value()) {
     auto maxnreg = m_options.maxnreg.value();
@@ -247,11 +244,11 @@ LogicalResult CudaBackend::make_ttgir(MLIRContext &context,
 }
 
 LogicalResult CudaBackend::gluon_to_ttgir(MLIRContext &context,
-                                          OwningOpRef<ModuleOp> &module) {
+                                          ModuleOp module) {
   PassManager pm(&context);
   auto capability = getCapability();
   auto capability_major = static_cast<int>(capability) / 10;
-  auto op = module->getOperation();
+  auto op = module.getOperation();
 
   addPass(pm, MlirPass::gluon_inliner);
   addPass(pm, MlirPass::gluon_resolve_auto_encodings);
@@ -263,13 +260,12 @@ LogicalResult CudaBackend::gluon_to_ttgir(MLIRContext &context,
   return pm.run(op);
 }
 
-LogicalResult CudaBackend::make_llir(MLIRContext &context,
-                                     OwningOpRef<ModuleOp> &module) {
+LogicalResult CudaBackend::make_llir(MLIRContext &context, ModuleOp module) {
   PassManager pm(&context);
   auto capability = getCapability();
   auto capability_major = static_cast<int>(capability) / 10;
   auto ptx_version = m_options.ptx_version.value_or(90);
-  auto op = module->getOperation();
+  auto op = module.getOperation();
 
   addPass(pm, MlirPass::ttgpuir_combine_tensor_select_and_if);
   addPass(pm, MlirPass::ttgpuir_allocate_warp_groups);

@@ -25,25 +25,25 @@
 
 #include "llvm/IR/Module.h"
 
-#include "mlir/Transforms/Passes.h"
 #include "mlir/Conversion/Passes.h"
+#include "mlir/IR/OwningOpRef.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
-#include "mlir/IR/OwningOpRef.h"
+#include "mlir/Transforms/Passes.h"
 
 #include "triton/Conversion/TritonGPUToLLVM/Passes.h"
 #include "triton/Conversion/TritonToTritonGPU/Passes.h"
-#include "triton/Dialect/Triton/Transforms/Passes.h"
 #include "triton/Dialect/Gluon/Transforms/Passes.h"
+#include "triton/Dialect/Triton/Transforms/Passes.h"
 #include "triton/Dialect/TritonGPU/Transforms/Passes.h"
-#include "triton/Dialect/TritonNvidiaGPU/Transforms/Passes.h"
 #include "triton/Dialect/TritonInstrument/Transforms/Passes.h"
+#include "triton/Dialect/TritonNvidiaGPU/Transforms/Passes.h"
 #include "triton/Target/LLVMIR/Passes.h"
 
-#define CHECK_RESULT(result, msg) \
-  if (failed(result)) { \
-    llvm::errs() << msg << "\n"; \
-    return result; \
+#define CHECK_RESULT(result, msg)                                              \
+  if (failed(result)) {                                                        \
+    llvm::errs() << msg << "\n";                                               \
+    return result;                                                             \
   }
 
 namespace mlir {
@@ -83,7 +83,6 @@ enum MlirPass {
   ttir_convert_to_ttgpuir,
 
   // ttgpuir
-  ttgpuir_allocate_shared_memory_nv,
   ttgpuir_coalesce,
   ttgpuir_optimize_thread_locality,
   ttgpuir_hoist_tmem_alloc,
@@ -106,11 +105,8 @@ enum MlirPass {
   ttgpuir_fuse_nested_loops,
   ttgpuir_coalesce_async_copy,
   ttgpuir_concurrency_sanitizer,
-
-  // gluon
-  gluon_resolve_auto_encodings,
-  gluon_canonicalizer,
-  gluon_inliner,
+  ttgpuir_optimize_partition_warps,
+  ttgpuir_allocate_shared_memory_nv,
 
   // convert
   scf_to_cf,
@@ -121,43 +117,55 @@ enum MlirPass {
 
   // count
   llvmir_di_scope,
+  llvmir_di_local_variable,
+
+  // gluon
+  gluon_resolve_auto_encodings,
+  gluon_canonicalizer,
+  gluon_inliner,
+  gluon_infer_coalesced_encodings,
 };
 
 class Backend {
-  public:
-    Backend(std::string target);
+public:
+  Backend(std::string target);
 
-    virtual ~Backend();
+  virtual ~Backend();
 
-    const std::optional<Error> getLastError() const { return m_last_error; };
+  const std::optional<Error> getLastError() const { return m_last_error; };
 
-    const std::string& getLastErrorString() const { return m_last_error_string; };
+  const std::string &getLastErrorString() const { return m_last_error_string; };
 
-    virtual void loadDialects(MLIRContext &context) = 0;
+  virtual void loadDialects(MLIRContext &context) = 0;
 
-    virtual LogicalResult applyPasses(MLIRContext &context, OwningOpRef<ModuleOp> &module, Language language) = 0;
+  virtual LogicalResult applyPasses(MLIRContext &context, ModuleOp module,
+                                    Language language) = 0;
 
-    void printIR(std::string stage, OwningOpRef<ModuleOp> &module);
+  void printIR(std::string stage, ModuleOp module);
 
-    virtual std::optional<Error> addPass(PassManager& pm, MlirPass pass);
+  virtual std::optional<Error> addPass(PassManager &pm, MlirPass pass);
 
-    virtual std::optional<Error> addPass(PassManager& pm, MlirPass pass, int arg0);
+  virtual std::optional<Error> addPass(PassManager &pm, MlirPass pass,
+                                       int arg0);
 
-    virtual std::optional<Error> addPass(PassManager& pm, MlirPass pass, bool arg0);
+  virtual std::optional<Error> addPass(PassManager &pm, MlirPass pass,
+                                       bool arg0);
 
-    virtual std::optional<Error> addPass(PassManager& pm, MlirPass pass, int arg0, bool arg1);
+  virtual std::optional<Error> addPass(PassManager &pm, MlirPass pass, int arg0,
+                                       bool arg1);
 
-    virtual std::optional<Error> addPass(PassManager& pm, MlirPass pass, const std::string &arg0,
-      int arg1, int arg2, int arg3);
+  virtual std::optional<Error> addPass(PassManager &pm, MlirPass pass,
+                                       const std::string &arg0, int arg1,
+                                       int arg2, int arg3);
 
-  protected:
-      std::string m_target;
-      std::optional<Error> m_last_error;
-      std::string m_last_error_string = "";
+protected:
+  std::string m_target;
+  std::optional<Error> m_last_error;
+  std::string m_last_error_string = "";
 
-  private:
-    // triton passes
-    std::unordered_map<MlirPass, std::unique_ptr<Pass> (*)()> m_pass_fns = {
+private:
+  // triton passes
+  std::unordered_map<MlirPass, std::unique_ptr<Pass> (*)()> m_pass_fns = {
       // common
       {MlirPass::sccp, createSCCPPass},
       {MlirPass::symbol_dce, createSymbolDCEPass},
@@ -165,36 +173,46 @@ class Backend {
       {MlirPass::canonicalizer, createCanonicalizerPass},
       {MlirPass::cse, createCSEPass},
       {MlirPass::licm, createLoopInvariantCodeMotionPass},
-      {MlirPass::print_ir, [] { return createPrintIRPass(); }},
 
       // ttir
       {MlirPass::ttir_combine, createTritonCombineOps},
       {MlirPass::ttir_reorder_broadcast, createTritonReorderBroadcast},
       {MlirPass::ttir_rewrite_tensor_pointer, createTritonRewriteTensorPointer},
-      {MlirPass::ttir_rewrite_tensor_descriptor_to_pointer, createTritonRewriteTensorDescriptorToPointer},
+      {MlirPass::ttir_rewrite_tensor_descriptor_to_pointer,
+       createTritonRewriteTensorDescriptorToPointer},
       {MlirPass::ttir_loop_unroll, createTritonLoopUnroll},
       {MlirPass::ttir_triton_licm, createTritonLoopInvariantCodeMotion},
       {MlirPass::ttir_loop_aware_cse, createTritonLoopAwareCSE},
 
       // ttgpuir
       {MlirPass::ttgpuir_coalesce, createTritonGPUCoalesce},
-      {MlirPass::ttgpuir_optimize_thread_locality, createTritonGPUOptimizeThreadLocality},
-      {MlirPass::ttgpuir_hoist_tmem_alloc, createTritonGPUHoistTMEMAlloc},
+      {MlirPass::ttgpuir_optimize_thread_locality,
+       createTritonGPUOptimizeThreadLocality},
       {MlirPass::ttgpuir_schedule_loops, createTritonGPUScheduleLoops},
       {MlirPass::ttgpuir_prefetch, createTritonGPUPrefetch},
       {MlirPass::ttgpuir_accelerate_matmul, createTritonGPUAccelerateMatmul},
-      {MlirPass::ttgpuir_reorder_instructions, createTritonGPUReorderInstructions},
+      {MlirPass::ttgpuir_reorder_instructions,
+       createTritonGPUReorderInstructions},
       {MlirPass::ttgpuir_f32_dot_tc, createTritonGPUF32DotTC},
-      {MlirPass::ttgpuir_remove_layout_conversions, createTritonGPURemoveLayoutConversions},
-      {MlirPass::ttgpuir_reduce_data_duplication, createTritonGPUReduceDataDuplication},
-      {MlirPass::ttgpuir_allocate_warp_groups, createTritonGPUAllocateWarpGroups},
+      {MlirPass::ttgpuir_remove_layout_conversions,
+       createTritonGPURemoveLayoutConversions},
+      {MlirPass::ttgpuir_reduce_data_duplication,
+       createTritonGPUReduceDataDuplication},
+      {MlirPass::ttgpuir_allocate_warp_groups,
+       createTritonGPUAllocateWarpGroups},
       {MlirPass::ttgpuir_allocate_shared_memory, createAllocateSharedMemory},
-      {MlirPass::ttgpuir_allocate_global_scratch_memory, createTritonGPUGlobalScratchAllocationPass},
-      {MlirPass::ttgpuir_combine_tensor_select_and_if, createTritonGPUCombineTensorSelectAndIf},
-      {MlirPass::ttgpuir_optimize_accumulator_init, createTritonGPUOptimizeAccumulatorInit},
+      {MlirPass::ttgpuir_allocate_global_scratch_memory,
+       createTritonGPUGlobalScratchAllocationPass},
+      {MlirPass::ttgpuir_combine_tensor_select_and_if,
+       createTritonGPUCombineTensorSelectAndIf},
+      {MlirPass::ttgpuir_optimize_accumulator_init,
+       createTritonGPUOptimizeAccumulatorInit},
       {MlirPass::ttgpuir_fuse_nested_loops, createTritonGPUFuseNestedLoops},
       {MlirPass::ttgpuir_coalesce_async_copy, createTritonGPUCoalesceAsyncCopy},
-      {MlirPass::ttgpuir_concurrency_sanitizer, createTritonInstrumentConcurrencySanitizer},
+      {MlirPass::ttgpuir_concurrency_sanitizer,
+       createTritonInstrumentConcurrencySanitizer},
+      {MlirPass::ttgpuir_optimize_partition_warps,
+       createTritonGPUOptimizePartitionWarps},
 
       // convert
       {MlirPass::scf_to_cf, createSCFToControlFlowPass},
@@ -202,10 +220,22 @@ class Backend {
       {MlirPass::index_to_llvmir, createConvertIndexToLLVMPass},
       {MlirPass::arith_to_llvmir, createArithToLLVMConversionPass},
       {MlirPass::nvvm_to_llvm, createConvertNVVMToLLVMPass},
-    };
+
+      // llvmir
+      {MlirPass::llvmir_di_scope, createLLVMDIScope},
+      {MlirPass::llvmir_di_local_variable, createLLVMDILocalVariable},
+
+      // gluon
+      {MlirPass::gluon_resolve_auto_encodings,
+       gluon::createGluonResolveAutoEncodingsPass},
+      {MlirPass::gluon_canonicalizer, gluon::createGluonCanonicalize},
+      {MlirPass::gluon_inliner, gluon::createGluonInline},
+      {MlirPass::gluon_infer_coalesced_encodings,
+       gluon::createGluonInferCoalescedEncodingsPass},
+  };
 };
 
-}
-}
+} // namespace triton
+} // namespace mlir
 
 #endif /*! TRITON_BACKEND_H */

@@ -16,36 +16,25 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "llvm/IR/Module.h"
-#include "llvm/IR/Verifier.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/Utils/Cloning.h"
-
-#include "mlir/IR/DialectRegistry.h"
+#include "mlir-c/IR.h"
+#include "mlir/CAPI/Wrap.h"
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/MLIRContext.h"
-#include "mlir/Target/LLVMIR/Import.h"
-
-#include "mlir/Dialect/DLTI/DLTI.h"
-#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-
-#include "triton/Dialect/Triton/IR/Dialect.h"
 
 #include "TritonCompiler.h"
-
-#include <iostream>
-
-using namespace std;
 
 using namespace mlir;
 using namespace mlir::triton;
 
-llvm::Module *convertModule(llvm::LLVMContext *llvm_ctx, llvm::Module *module) {
-  TritonCompiler compiler("cuda");
-  return compiler.applyTritonPasses(llvm_ctx, module);
-}
+// MlirContext is struct { void *ptr; } — unwrap to MLIRContext*
+DEFINE_C_API_PTR_METHODS(MlirContext, MLIRContext)
 
-extern "C" LLVMModuleRef LLVMRustApplyTritonPasses(LLVMContextRef ctx,
-                                                   LLVMModuleRef module) {
-  auto new_module = convertModule(llvm::unwrap(ctx), llvm::unwrap(module));
-  return llvm::wrap(new_module);
+extern "C" bool mlirApplyTritonPasses(MlirModule module) {
+  // MlirModule.ptr holds the underlying Operation* of the ModuleOp.
+  // The ptr field may be const void*, so we cast via const_cast.
+  auto *op_ptr = static_cast<Operation *>(const_cast<void *>(module.ptr));
+  auto module_op = ModuleOp(op_ptr);
+  MLIRContext *context = unwrap(mlirModuleGetContext(module));
+  TritonCompiler compiler(*context, "cuda");
+  return succeeded(compiler.applyTritonPasses(module_op));
 }
