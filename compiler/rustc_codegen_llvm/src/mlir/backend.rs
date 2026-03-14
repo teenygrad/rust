@@ -20,14 +20,13 @@
 //! with rustc's compilation pipeline.
 
 use std::any::Any;
-use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
 use melior::ir::operation::OperationLike;
+use melior::pass;
 use melior::pass::PassManager;
-use melior::{Context, pass};
 use rustc_codegen_ssa::back::lto::{SerializedModule, ThinModule};
 use rustc_codegen_ssa::back::write::{
     CodegenContext, FatLtoInput, ModuleConfig, TargetMachineFactoryConfig, TargetMachineFactoryFn,
@@ -40,6 +39,7 @@ use rustc_errors::DiagCtxtHandle;
 use rustc_middle::dep_graph;
 use rustc_middle::dep_graph::{WorkProduct, WorkProductId};
 use rustc_middle::ty::TyCtxt;
+use rustc_mlir::ffi::mlirApplyTritonPasses;
 use rustc_session::Session;
 use rustc_session::config::{OutputFilenames, PrintKind, PrintRequest};
 use rustc_span::Symbol;
@@ -162,11 +162,15 @@ fn compile_codegen_unit_impl(
         panic!("MLIR module failed verification");
     }
 
-    println!("MLIR module pre-cleanup: {}", mlir_module.llmod().as_operation().to_string());
+    println!("MLIR module pre-cleanup: {}", mlir_module.llmod().as_operation());
 
     cleanup_mlir_module(&mut mlir_module).expect("MLIR cleanup passes failed");
 
-    println!("MLIR module post-cleanup: {}", mlir_module.llmod().as_operation().to_string());
+    println!("MLIR module post-cleanup: {}", mlir_module.llmod().as_operation());
+
+    run_triton_passes(&mut mlir_module).expect("Triton passes failed");
+
+    println!("MLIR module post-triton: {}", mlir_module.llmod().as_operation());
 
     info!("");
     info!("========================================");
@@ -186,6 +190,13 @@ fn cleanup_mlir_module(mlir_module: &mut MlirModule<'static>) -> Result<(), Mlir
         .run(mlir_module.llmod_mut())
         .map_err(|e| MlirError::CodegenFailed { err: e.to_string() })?;
 
+    Ok(())
+}
+
+fn run_triton_passes(mlir_module: &mut MlirModule<'static>) -> Result<(), MlirError> {
+    unsafe {
+        mlirApplyTritonPasses(mlir_module.llmod().to_raw());
+    }
     Ok(())
 }
 

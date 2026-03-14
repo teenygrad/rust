@@ -59,8 +59,6 @@ LogicalResult CudaBackend::applyPasses(MLIRContext &context, ModuleOp module,
     CHECK_RESULT(m_result, "Failed to make TTIR module. Aborting translation.");
     printIR("TTIR", module);
 
-    return LogicalResult::success();
-
     m_result = make_ttgir(context, module);
     CHECK_RESULT(m_result,
                  "Failed to make TTGIR module. Aborting translation.");

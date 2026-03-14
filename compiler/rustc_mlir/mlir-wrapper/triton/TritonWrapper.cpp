@@ -16,25 +16,25 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "mlir-c/IR.h"
-#include "mlir/CAPI/Wrap.h"
-#include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/MLIRContext.h"
+// #include "mlir-c/IR.h"
+// #include "mlir/CAPI/Wrap.h"
+// #include "mlir/IR/BuiltinOps.h"
+// #include "mlir/IR/MLIRContext.h"
+
+#include "../MLIRWrapper.h"
 
 #include "TritonCompiler.h"
 
 using namespace mlir;
 using namespace mlir::triton;
 
-// MlirContext is struct { void *ptr; } — unwrap to MLIRContext*
-DEFINE_C_API_PTR_METHODS(MlirContext, MLIRContext)
-
 extern "C" bool mlirApplyTritonPasses(MlirModule module) {
-  // MlirModule.ptr holds the underlying Operation* of the ModuleOp.
-  // The ptr field may be const void*, so we cast via const_cast.
-  auto *op_ptr = static_cast<Operation *>(const_cast<void *>(module.ptr));
+  Operation *op_ptr =
+      const_cast<Operation *>(static_cast<const Operation *>(module.ptr));
+
   auto module_op = ModuleOp(op_ptr);
   MLIRContext *context = unwrap(mlirModuleGetContext(module));
+
   TritonCompiler compiler(*context, "cuda");
   return succeeded(compiler.applyTritonPasses(module_op));
 }

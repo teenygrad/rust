@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-use mlir_sys::{MlirContext, MlirType};
+use mlir_sys::{MlirContext, MlirModule, MlirType};
 
 #[link(name = "mlir-wrapper", kind = "static")]
 unsafe extern "C" {
     pub fn mlirLoadTritonDialect(context: MlirContext);
 
     pub fn mlirCreateTritonPointerType(pointee: MlirType, address_space: i32) -> MlirType;
+
+    pub fn mlirApplyTritonPasses(module: MlirModule) -> bool;
 }
