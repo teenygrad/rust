@@ -20,6 +20,8 @@ use melior::Context;
 use melior::ir::{Location, Module};
 use rustc_codegen_ssa::back::write::CodegenContext;
 use rustc_errors::DiagCtxtHandle;
+use rustc_mlir::ffi::MlirTritonCompiler;
+use rustc_mlir::triton::TritonCompiler;
 
 use crate::mlir::backend::MlirCodegenBackend;
 
@@ -28,6 +30,7 @@ pub struct MlirModule<'c> {
     pub name: String,
     pub mlir: Module<'c>,
     pub context: Context,
+    pub compiler: TritonCompiler,
 }
 
 unsafe impl<'c> Send for MlirModule<'c> {}
@@ -39,7 +42,10 @@ impl<'c> MlirModule<'c> {
         let location = Location::unknown(&context);
         let module = Module::new(location);
 
-        Self { name: mod_name.to_string(), context, mlir: module }
+        let compiler = TritonCompiler::new(context.to_raw(), "cuda", "")
+            .expect("Failed to create Triton compiler");
+
+        Self { name: mod_name.to_string(), mlir: module, compiler, context }
     }
 
     pub fn context(&self) -> &Context {
@@ -55,8 +61,10 @@ impl<'c> MlirModule<'c> {
         let context = Context::new();
         let location = Location::unknown(&context);
         let module = Module::new(location);
+        let compiler = TritonCompiler::new(context.to_raw(), "cuda", "")
+            .expect("Failed to create Triton compiler");
 
-        Self { name: name.to_string_lossy().to_string(), context, mlir: module }
+        Self { name: name.to_string_lossy().to_string(), context, mlir: module, compiler }
     }
 
     pub fn set_llmod(&mut self, llmod: Module<'c>) {

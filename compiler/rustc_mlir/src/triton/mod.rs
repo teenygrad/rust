@@ -27,8 +27,11 @@ use crate::errors::Error;
 use crate::ffi::{mlirCreateTritonPointerType, mlirLoadTritonDialect};
 use crate::triton::tt::{CallOperation, FuncOperation, IntToPtrOperation, ReturnOperation};
 
+pub mod compiler;
 pub mod program;
 pub mod tensor;
+
+pub use compiler::TritonCompiler;
 
 melior_macro::dialect! {
     name: "tt",

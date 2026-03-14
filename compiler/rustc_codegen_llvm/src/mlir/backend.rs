@@ -39,7 +39,8 @@ use rustc_errors::DiagCtxtHandle;
 use rustc_middle::dep_graph;
 use rustc_middle::dep_graph::{WorkProduct, WorkProductId};
 use rustc_middle::ty::TyCtxt;
-use rustc_mlir::ffi::mlirApplyTritonPasses;
+use rustc_mlir::ffi::{MlirTritonCompiler, mlirApplyTritonPasses};
+use rustc_mlir::triton::TritonCompiler;
 use rustc_session::Session;
 use rustc_session::config::{OutputFilenames, PrintKind, PrintRequest};
 use rustc_span::Symbol;
@@ -51,7 +52,7 @@ use crate::mlir::codegen::triton::TritonCodegen;
 use crate::mlir::errors::MlirError;
 
 /// The MLIR codegen backend.
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct MlirCodegenBackend {}
 
 impl MlirCodegenBackend {
@@ -168,7 +169,7 @@ fn compile_codegen_unit_impl(
 
     println!("MLIR module post-cleanup: {}", mlir_module.llmod().as_operation());
 
-    run_triton_passes(&mut mlir_module).expect("Triton passes failed");
+    compile_module(&mut mlir_module).expect("Triton passes failed");
 
     println!("MLIR module post-triton: {}", mlir_module.llmod().as_operation());
 
@@ -193,10 +194,19 @@ fn cleanup_mlir_module(mlir_module: &mut MlirModule<'static>) -> Result<(), Mlir
     Ok(())
 }
 
-fn run_triton_passes(mlir_module: &mut MlirModule<'static>) -> Result<(), MlirError> {
-    unsafe {
-        mlirApplyTritonPasses(mlir_module.llmod().to_raw());
+fn compile_module(mlir_module: &mut MlirModule<'static>) -> Result<(), MlirError> {
+    let ok = mlir_module.compiler.compile(mlir_module.llmod().to_raw());
+    if !ok {
+        return Err(MlirError::CodegenFailed { err: "Triton compilation failed".to_string() });
     }
+
+    let output = mlir_module.compiler.get_output();
+    if output.is_none() {
+        return Err(MlirError::CodegenFailed { err: "Triton compilation failed".to_string() });
+    }
+
+    let output = output.unwrap();
+    println!("Triton output: {}", output);
     Ok(())
 }
 

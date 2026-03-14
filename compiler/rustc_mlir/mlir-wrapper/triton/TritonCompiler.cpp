@@ -1,26 +1,22 @@
 /*
- * Copyright (c) 2025 Teenygrad. All rights reserved.
+ * Copyright (c) 2026 Teenygrad.
  *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include "llvm/Support/raw_ostream.h"
 
-#include "mlir/IR/DialectRegistry.h"
 #include "mlir/IR/MLIRContext.h"
-
-#include "triton/Dialect/Triton/IR/Dialect.h"
 
 #include "TritonCompiler.h"
 #include "backend/CudaBackend.h"
@@ -30,19 +26,41 @@ using namespace std;
 namespace mlir {
 namespace triton {
 
-TritonCompiler::TritonCompiler(MLIRContext &context, std::string target)
-    : context(context), target(target) {
+TritonCompiler::TritonCompiler(MLIRContext *context, std::string target,
+                               std::string options)
+    : Compiler(context, target, options) {
   backend = new CudaBackend(target, CudaOptions());
-  backend->loadDialects(context);
+  backend->loadDialects(*context);
 }
 
 TritonCompiler::~TritonCompiler() { delete backend; }
 
-LogicalResult TritonCompiler::applyTritonPasses(ModuleOp mlir_module) {
-  auto result = backend->applyPasses(context, mlir_module, Language::TRITON);
+LogicalResult TritonCompiler::compile(ModuleOp mlir_module) {
+  auto result = applyTritonPasses(mlir_module);
   if (failed(result)) {
     llvm::errs() << "Failed to apply Triton passes. Aborting translation.\n";
   }
+
+  // The module is now in LLIR format, so we can generate the output from it.
+  CudaBackend *cudaBackend = dynamic_cast<CudaBackend *>(backend);
+  if (cudaBackend != nullptr) {
+    auto ptxResult = cudaBackend->generatePtx(*context, mlir_module);
+    if (failed(ptxResult)) {
+      llvm::errs() << "Failed to generate PTX from CUDA backend.\n";
+    }
+  }
+
+  if (failed(result)) {
+    llvm::errs() << "Failed to generate PTX. Aborting translation.\n";
+  }
+}
+
+LogicalResult TritonCompiler::applyTritonPasses(ModuleOp mlir_module) {
+  auto result = backend->applyPasses(*context, mlir_module, Language::TRITON);
+  if (failed(result)) {
+    llvm::errs() << "Failed to apply Triton passes. Aborting translation.\n";
+  }
+
   return result;
 }
 

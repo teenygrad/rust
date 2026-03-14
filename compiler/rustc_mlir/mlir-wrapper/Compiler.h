@@ -14,36 +14,37 @@
  * limitations under the License.
  */
 
-#ifndef TRITON_COMPILER_H
-#define TRITON_COMPILER_H
-
-#include <string>
+#ifndef COMPILER_H
+#define COMPILER_H
 
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/Support/LogicalResult.h"
 
-#include "../Compiler.h"
-#include "backend/Backend.h"
-
 namespace mlir {
 namespace triton {
 
-class TritonCompiler : public Compiler {
+class Compiler {
 public:
-  TritonCompiler(MLIRContext *context, std::string target, std::string options);
+  Compiler(MLIRContext *context, std::string target, std::string options)
+      : context(context), target(target), options(options) {};
 
-  virtual ~TritonCompiler() override;
+  virtual ~Compiler() = default;
 
-  virtual LogicalResult compile(ModuleOp mlir_module) override;
+  virtual LogicalResult compile(ModuleOp mlir_module) = 0;
+
+  virtual const char *getOutput();
+
+protected:
+  std::string target;
+  std::string options;
+  MLIRContext *context;
 
 private:
-  LogicalResult applyTritonPasses(ModuleOp mlir_module);
-
-  Backend *backend;
+  std::string m_output;
 };
 
 } // namespace triton
 } // namespace mlir
 
-#endif /* TRITON_COMPILER_H */
+#endif /* COMPILER_H */

@@ -14,7 +14,16 @@
  * limitations under the License.
  */
 
+use std::ffi::{c_char, c_void};
+
 use mlir_sys::{MlirContext, MlirModule, MlirType};
+
+/// Opaque handle to the Triton compiler (C ABI: `struct MlirTritonCompiler { void *ptr; }`).
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct MlirTritonCompiler {
+    pub ptr: *mut c_void,
+}
 
 #[link(name = "mlir-wrapper", kind = "static")]
 unsafe extern "C" {
@@ -23,4 +32,17 @@ unsafe extern "C" {
     pub fn mlirCreateTritonPointerType(pointee: MlirType, address_space: i32) -> MlirType;
 
     pub fn mlirApplyTritonPasses(module: MlirModule) -> bool;
+
+    // Triton compiler opaque handle API
+    pub fn mlirTritonCompilerCreate(
+        context: MlirContext,
+        target: *const c_char,
+        options: *const c_char,
+    ) -> MlirTritonCompiler;
+
+    pub fn mlirTritonCompilerCompile(compiler: MlirTritonCompiler, module: MlirModule) -> bool;
+
+    pub fn mlirTritonCompilerGetOutput(compiler: MlirTritonCompiler) -> *const c_char;
+
+    pub fn mlirTritonCompilerFree(compiler: MlirTritonCompiler);
 }

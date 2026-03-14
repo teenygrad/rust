@@ -48,6 +48,7 @@ add_definitions(${LLVM_DEFINITIONS})
 # Source files
 set(WRAPPER_SOURCES
     MLIRWrapper.cpp
+    Compiler.cpp
     triton/TritonWrapper.cpp
     triton/TritonCompiler.cpp
     triton/backend/Backend.cpp
