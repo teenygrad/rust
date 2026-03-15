@@ -30,6 +30,69 @@ Backend::~Backend() {
   // nop
 }
 
+LogicalResult Backend::applyPasses(MLIRContext &context, ModuleOp module,
+                                   Language language) {
+  auto m_result = LogicalResult::success();
+
+  m_ttir.clear();
+  m_ttgir.clear();
+  m_llir.clear();
+  m_llvmir.clear();
+
+  if (language == Language::TRITON) {
+    m_result = makeTTIR(context, module);
+    CHECK_RESULT(m_result, "Failed to make TTIR module. Aborting translation.");
+
+    llvm::raw_string_ostream ttir_os(m_ttir);
+    module.print(ttir_os);
+
+    m_result = makeTTGIR(context, module);
+    CHECK_RESULT(m_result,
+                 "Failed to make TTGIR module. Aborting translation.");
+
+    llvm::raw_string_ostream ttgir_os(m_ttgir);
+    module.print(ttgir_os);
+  } else {
+    m_result = gluonToTTGIR(context, module);
+    CHECK_RESULT(m_result, "Failed to convert GLUON module to TTGIR module. "
+                           "Aborting translation.");
+
+    llvm::raw_string_ostream ttgir_os(m_ttgir);
+    module.print(ttgir_os);
+  }
+
+  m_result = makeLLIR(context, module);
+  CHECK_RESULT(m_result, "Failed to make LLIR module. Aborting translation.");
+
+  llvm::raw_string_ostream llir_os(m_llir);
+  module.print(llir_os);
+
+  return LogicalResult::success();
+}
+
+LogicalResult Backend::makeLLVMIR(MLIRContext &context, ModuleOp module) {
+  llvm.init_targets() context = llvm.context() if knobs.compilation.enable_asan
+      : raise RuntimeError("Address Sanitizer Error: Address sanitizer is "
+                           "currently only supported on the AMD backend")
+            llvm_mod = llvm.to_module(mod, context) proc =
+      sm_arch_from_capability(capability) features =
+          get_features(options, self.target.arch) triple =
+              'nvptx64-nvidia-cuda' nvidia.set_short_ptr()
+                  llvm.attach_datalayout(llvm_mod, triple, proc,
+                                         features) if options
+                      .enable_reflect_ftz
+      : nvidia.set_nvvm_reflect_ftz(llvm_mod)
+
+            if options.extern_libs and
+              nvidia.has_extern_deps(llvm_mod)
+      : paths = [path for (name, path) in options.extern_libs] llvm
+                    .link_extern_libs(llvm_mod, paths)
+
+                        llvm.optimize_module(llvm_mod, llvm.OPTIMIZE_O3)
+
+                            return LogicalResult::success();
+}
+
 void Backend::printIR(std::string stage, ModuleOp module) {
   llvm::outs() << "--------------------------------\n";
   llvm::outs() << "Stage: " << stage << "\n";

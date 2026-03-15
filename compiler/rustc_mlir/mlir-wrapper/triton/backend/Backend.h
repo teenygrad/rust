@@ -138,9 +138,44 @@ public:
   virtual void loadDialects(MLIRContext &context) = 0;
 
   virtual LogicalResult applyPasses(MLIRContext &context, ModuleOp module,
-                                    Language language) = 0;
+                                    Language language);
+
+  virtual LogicalResult makeTTIR(MLIRContext &context, ModuleOp module) = 0;
+
+  virtual LogicalResult makeTTGIR(MLIRContext &context, ModuleOp module) = 0;
+
+  virtual LogicalResult gluonToTTGIR(MLIRContext &context, ModuleOp module) = 0;
+
+  virtual LogicalResult makeLLIR(MLIRContext &context, ModuleOp module) = 0;
+
+  virtual LogicalResult makeLLVMIR(MLIRContext &context, ModuleOp module);
 
   void printIR(std::string stage, ModuleOp module);
+
+  const char *getLLIR() const { return m_llir.c_str(); }
+
+  const char *getTTIR() const { return m_ttir.c_str(); }
+
+  const char *getTTGIR() const { return m_ttgir.c_str(); }
+
+  const char *getLLVMIR() const { return m_llvmir.c_str(); }
+
+  const char *getASM() const { return m_asm.c_str(); }
+
+  const char *getBIN() const { return m_bin.c_str(); }
+
+protected:
+  std::string m_target;
+  std::optional<Error> m_last_error;
+  std::string m_last_error_string = "";
+
+  std::string m_ttir;
+  std::string m_ttgir;
+  std::string m_llir;
+  std::string m_llvmir;
+
+  std::string m_asm;
+  std::string m_bin; // utf-8 encoded string
 
   virtual std::optional<Error> addPass(PassManager &pm, MlirPass pass);
 
@@ -156,11 +191,6 @@ public:
   virtual std::optional<Error> addPass(PassManager &pm, MlirPass pass,
                                        const std::string &arg0, int arg1,
                                        int arg2, int arg3);
-
-protected:
-  std::string m_target;
-  std::optional<Error> m_last_error;
-  std::string m_last_error_string = "";
 
 private:
   // triton passes

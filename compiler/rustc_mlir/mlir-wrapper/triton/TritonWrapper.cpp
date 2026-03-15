@@ -14,33 +14,19 @@
  * limitations under the License.
  */
 
-#include "TritonWrapper.h"
-#include "../MLIRWrapper.h"
-#include "TritonCompiler.h"
+#include <string>
 
+#include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/Operation.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include <memory>
-#include <string>
+#include "../MLIRWrapper.h"
+#include "TritonCompiler.h"
+#include "TritonWrapper.h"
 
 using namespace mlir;
 using namespace mlir::triton;
-
-namespace mlir {
-namespace triton {
-
-struct TritonCompilerHandle {
-  std::unique_ptr<TritonCompiler> compiler;
-  std::string output;
-};
-} // namespace triton
-} // namespace mlir
-
-static ModuleOp moduleFromC(MlirModule module) {
-  Operation *opPtr =
-      const_cast<Operation *>(static_cast<const Operation *>(module.ptr));
-  return ModuleOp(opPtr);
-}
 
 extern "C" ::MlirTritonCompiler mlirTritonCompilerCreate(MlirContext context,
                                                          const char *target,
@@ -56,35 +42,47 @@ extern "C" ::MlirTritonCompiler mlirTritonCompilerCreate(MlirContext context,
 
 extern "C" bool mlirTritonCompilerCompile(::MlirTritonCompiler compiler,
                                           MlirModule module) {
-  auto *handle = static_cast<TritonCompilerHandle *>(compiler.ptr);
-  if (!handle || !handle->compiler) {
-    return false;
-  }
-
-  auto moduleOp = moduleFromC(module);
-  auto ok = succeeded(handle->compiler->compile(moduleOp));
-  if (!ok) {
-    handle->output.clear();
-    return false;
-  }
-
-  std::string printed;
-  llvm::raw_string_ostream os(printed);
-  moduleOp.print(os);
-  os.flush();
-  handle->output = std::move(printed);
-  return true;
+  auto *handle = unwrap(compiler);
+  const auto *op = reinterpret_cast<const Operation *>(module.ptr);
+  ModuleOp moduleOp = llvm::cast<ModuleOp>(const_cast<Operation *>(op));
+  return succeeded(handle->compile(moduleOp));
 }
 
 extern "C" const char *
-mlirTritonCompilerGetOutput(::MlirTritonCompiler compiler) {
-  auto *handle = static_cast<TritonCompilerHandle *>(compiler.ptr);
-  if (!handle) {
-    return nullptr;
-  }
-  return handle->output.c_str();
+mlirTritonCompilerGetLLIR(::MlirTritonCompiler compiler) {
+  auto *handle = unwrap(compiler);
+  return handle->getLLIR();
+}
+
+extern "C" const char *
+mlirTritonCompilerGetTTIR(::MlirTritonCompiler compiler) {
+  auto *handle = unwrap(compiler);
+  return handle->getTTIR();
+}
+
+extern "C" const char *
+mlirTritonCompilerGetTTGIR(::MlirTritonCompiler compiler) {
+  auto *handle = unwrap(compiler);
+  return handle->getTTGIR();
+}
+
+extern "C" const char *
+mlirTritonCompilerGetLLVMIR(::MlirTritonCompiler compiler) {
+  auto *handle = unwrap(compiler);
+  return handle->getLLVMIR();
+}
+
+extern "C" const char *mlirTritonCompilerGetASM(::MlirTritonCompiler compiler) {
+  auto *handle = unwrap(compiler);
+  return handle->getASM();
+}
+
+extern "C" const char *mlirTritonCompilerGetBIN(::MlirTritonCompiler compiler) {
+  auto *handle = unwrap(compiler);
+  return handle->getBIN();
 }
 
 extern "C" void mlirTritonCompilerFree(::MlirTritonCompiler compiler) {
-  delete static_cast<TritonCompilerHandle *>(compiler.ptr);
+  auto *handle = unwrap(compiler);
+  delete handle;
 }

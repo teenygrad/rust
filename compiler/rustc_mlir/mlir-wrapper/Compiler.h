@@ -33,15 +33,10 @@ public:
 
   virtual LogicalResult compile(ModuleOp mlir_module) = 0;
 
-  virtual const char *getOutput();
-
 protected:
   std::string target;
   std::string options;
   MLIRContext *context;
-
-private:
-  std::string m_output;
 };
 
 } // namespace triton

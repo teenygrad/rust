@@ -200,7 +200,7 @@ fn compile_module(mlir_module: &mut MlirModule<'static>) -> Result<(), MlirError
         return Err(MlirError::CodegenFailed { err: "Triton compilation failed".to_string() });
     }
 
-    let output = mlir_module.compiler.get_output();
+    let output = mlir_module.compiler.get_llvm_ir();
     if output.is_none() {
         return Err(MlirError::CodegenFailed { err: "Triton compilation failed".to_string() });
     }

@@ -45,7 +45,12 @@ bool mlirTritonCompilerCompile(MlirTritonCompiler compiler, MlirModule module);
 /// Returns the output string owned by `compiler`.
 /// The returned pointer remains valid until the next successful compile on the
 /// same handle or until `mlirTritonCompilerFree` is called.
-const char *mlirTritonCompilerGetOutput(MlirTritonCompiler compiler);
+const char *mlirTritonCompilerGetLLIR(MlirTritonCompiler compiler);
+const char *mlirTritonCompilerGetTTIR(MlirTritonCompiler compiler);
+const char *mlirTritonCompilerGetTTGIR(MlirTritonCompiler compiler);
+const char *mlirTritonCompilerGetLLVMIR(MlirTritonCompiler compiler);
+const char *mlirTritonCompilerGetASM(MlirTritonCompiler compiler);
+const char *mlirTritonCompilerGetBIN(MlirTritonCompiler compiler);
 
 /// Frees the compiler handle.
 void mlirTritonCompilerFree(MlirTritonCompiler compiler);

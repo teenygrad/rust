@@ -16,7 +16,6 @@
 
 use std::ffi::{CStr, CString};
 
-use melior::Context;
 use mlir_sys::{MlirContext, MlirModule};
 
 use crate::ffi::{self, MlirTritonCompiler};
@@ -65,17 +64,45 @@ impl TritonCompiler {
     }
 
     /// Returns the output string from the last successful [TritonCompiler::compile].
+    /// This is the assembly (e.g. PTX) output. Prefer [TritonCompiler::get_asm] for clarity.
     ///
     /// The returned slice is valid until the next successful [TritonCompiler::compile]
     /// on this compiler or until the compiler is dropped. Returns `None` if
     /// there is no output or the pointer is invalid.
-    pub fn get_output(&self) -> Option<&str> {
-        let ptr = unsafe { ffi::mlirTritonCompilerGetOutput(self.raw) };
-        if ptr.is_null() {
-            return None;
-        }
-        unsafe { CStr::from_ptr(ptr).to_str().ok() }
+    pub fn get_asm(&self) -> Option<&str> {
+        ptr_to_str(unsafe { ffi::mlirTritonCompilerGetASM(self.raw) })
     }
+
+    pub fn get_bin(&self) -> Option<&str> {
+        ptr_to_str(unsafe { ffi::mlirTritonCompilerGetBIN(self.raw) })
+    }
+
+    /// Returns the LLIR (input MLIR) string from the last successful compile.
+    pub fn get_llir(&self) -> Option<&str> {
+        ptr_to_str(unsafe { ffi::mlirTritonCompilerGetLLIR(self.raw) })
+    }
+
+    /// Returns the TTIR (Triton IR) string from the last successful compile.
+    pub fn get_ttir(&self) -> Option<&str> {
+        ptr_to_str(unsafe { ffi::mlirTritonCompilerGetTTIR(self.raw) })
+    }
+
+    /// Returns the TTGIR (Triton GPU IR) string from the last successful compile.
+    pub fn get_ttgir(&self) -> Option<&str> {
+        ptr_to_str(unsafe { ffi::mlirTritonCompilerGetTTGIR(self.raw) })
+    }
+
+    /// Returns the LLVM IR string from the last successful compile.
+    pub fn get_llvm_ir(&self) -> Option<&str> {
+        ptr_to_str(unsafe { ffi::mlirTritonCompilerGetLLVMIR(self.raw) })
+    }
+}
+
+fn ptr_to_str(ptr: *const std::ffi::c_char) -> Option<&'static str> {
+    if ptr.is_null() {
+        return None;
+    }
+    unsafe { CStr::from_ptr(ptr).to_str().ok() }
 }
 
 impl Drop for TritonCompiler {

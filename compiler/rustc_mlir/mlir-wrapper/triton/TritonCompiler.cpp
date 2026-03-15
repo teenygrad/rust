@@ -39,6 +39,7 @@ LogicalResult TritonCompiler::compile(ModuleOp mlir_module) {
   auto result = applyTritonPasses(mlir_module);
   if (failed(result)) {
     llvm::errs() << "Failed to apply Triton passes. Aborting translation.\n";
+    return result;
   }
 
   // The module is now in LLIR format, so we can generate the output from it.
@@ -47,13 +48,19 @@ LogicalResult TritonCompiler::compile(ModuleOp mlir_module) {
     auto ptxResult = cudaBackend->generatePtx(*context, mlir_module);
     if (failed(ptxResult)) {
       llvm::errs() << "Failed to generate PTX from CUDA backend.\n";
+      return ptxResult;
     }
   }
 
-  if (failed(result)) {
-    llvm::errs() << "Failed to generate PTX. Aborting translation.\n";
-  }
+  return LogicalResult::success();
 }
+
+const char *TritonCompiler::getLLIR() const { return backend->getLLIR(); }
+const char *TritonCompiler::getTTIR() const { return backend->getTTIR(); }
+const char *TritonCompiler::getTTGIR() const { return backend->getTTGIR(); }
+const char *TritonCompiler::getLLVMIR() const { return backend->getLLVMIR(); }
+const char *TritonCompiler::getASM() const { return backend->getASM(); }
+const char *TritonCompiler::getBIN() const { return backend->getBIN(); }
 
 LogicalResult TritonCompiler::applyTritonPasses(ModuleOp mlir_module) {
   auto result = backend->applyPasses(*context, mlir_module, Language::TRITON);

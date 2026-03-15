@@ -37,6 +37,15 @@ public:
 
   virtual LogicalResult compile(ModuleOp mlir_module) override;
 
+  /// Return the output string from the last successful compile. The pointer
+  /// remains valid until the next successful compile or compiler destruction.
+  const char *getLLIR() const;
+  const char *getTTIR() const;
+  const char *getTTGIR() const;
+  const char *getLLVMIR() const;
+  const char *getASM() const;
+  const char *getBIN() const;
+
 private:
   LogicalResult applyTritonPasses(ModuleOp mlir_module);
 

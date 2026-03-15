@@ -117,18 +117,21 @@ public:
 
   virtual void loadDialects(MLIRContext &context);
 
-  virtual LogicalResult applyPasses(MLIRContext &context, ModuleOp module,
-                                    Language language) override;
+  virtual LogicalResult makeTTIR(MLIRContext &context,
+                                 ModuleOp module) override;
+
+  virtual LogicalResult makeTTGIR(MLIRContext &context,
+                                  ModuleOp module) override;
+
+  virtual LogicalResult gluonToTTGIR(MLIRContext &context,
+                                     ModuleOp module) override;
+
+  virtual LogicalResult makeLLIR(MLIRContext &context,
+                                 ModuleOp module) override;
 
   LogicalResult generatePtx(MLIRContext &context, ModuleOp module);
 
-  LogicalResult make_ttir(MLIRContext &context, ModuleOp module);
-
-  LogicalResult make_ttgir(MLIRContext &context, ModuleOp module);
-
-  LogicalResult gluon_to_ttgir(MLIRContext &context, ModuleOp module);
-
-  LogicalResult make_llir(MLIRContext &context, ModuleOp module);
+  LogicalResult generateCubin(MLIRContext &context, ModuleOp module);
 
 private:
   std::optional<Error> addCudaPass(PassManager &pm, CudaPass pass);

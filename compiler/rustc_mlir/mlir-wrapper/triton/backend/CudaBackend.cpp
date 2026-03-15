@@ -53,35 +53,8 @@ void CudaBackend::loadDialects(MLIRContext &context) {
 
 Capability CudaBackend::getCapability() const { return m_capability; }
 
-LogicalResult CudaBackend::applyPasses(MLIRContext &context, ModuleOp module,
-                                       Language language) {
-  auto m_result = LogicalResult::success();
-  printIR("TTIR_BEFORE", module);
-
-  if (language == Language::TRITON) {
-    m_result = make_ttir(context, module);
-    CHECK_RESULT(m_result, "Failed to make TTIR module. Aborting translation.");
-    printIR("TTIR", module);
-
-    m_result = make_ttgir(context, module);
-    CHECK_RESULT(m_result,
-                 "Failed to make TTGIR module. Aborting translation.");
-    printIR("TTGIR", module);
-  } else {
-    m_result = gluon_to_ttgir(context, module);
-    CHECK_RESULT(m_result, "Failed to convert GLUON module to TTGIR module. "
-                           "Aborting translation.");
-    printIR("TTGLUONIR", module);
-  }
-
-  m_result = make_llir(context, module);
-  CHECK_RESULT(m_result, "Failed to make LLIR module. Aborting translation.");
-  printIR("LLIR", module);
-
-  return LogicalResult::success();
-}
-
 LogicalResult CudaBackend::generatePtx(MLIRContext &context, ModuleOp module) {
+
   return LogicalResult::failure();
 }
 
@@ -133,7 +106,7 @@ std::optional<Error> CudaBackend::addCudaPass(PassManager &pm, CudaPass pass,
   return std::nullopt;
 }
 
-LogicalResult CudaBackend::make_ttir(MLIRContext &context, ModuleOp module) {
+LogicalResult CudaBackend::makeTTIR(MLIRContext &context, ModuleOp module) {
   PassManager pm(&context);
   auto capability = getCapability();
   auto op = module.getOperation();
@@ -153,7 +126,7 @@ LogicalResult CudaBackend::make_ttir(MLIRContext &context, ModuleOp module) {
   return pm.run(op);
 }
 
-LogicalResult CudaBackend::make_ttgir(MLIRContext &context, ModuleOp module) {
+LogicalResult CudaBackend::makeTTGIR(MLIRContext &context, ModuleOp module) {
   PassManager pm(&context);
   auto capability = getCapability();
   auto capability_major = static_cast<int>(capability) / 10;
@@ -250,8 +223,7 @@ LogicalResult CudaBackend::make_ttgir(MLIRContext &context, ModuleOp module) {
   return pm.run(op);
 }
 
-LogicalResult CudaBackend::gluon_to_ttgir(MLIRContext &context,
-                                          ModuleOp module) {
+LogicalResult CudaBackend::gluonToTTGIR(MLIRContext &context, ModuleOp module) {
   PassManager pm(&context);
   auto capability = getCapability();
   auto capability_major = static_cast<int>(capability) / 10;
@@ -270,7 +242,7 @@ LogicalResult CudaBackend::gluon_to_ttgir(MLIRContext &context,
   return pm.run(op);
 }
 
-LogicalResult CudaBackend::make_llir(MLIRContext &context, ModuleOp module) {
+LogicalResult CudaBackend::makeLLIR(MLIRContext &context, ModuleOp module) {
   PassManager pm(&context);
   auto capability = getCapability();
   auto capability_major = static_cast<int>(capability) / 10;

@@ -18,5 +18,3 @@
 
 using namespace mlir;
 using namespace mlir::triton;
-
-const char *Compiler::getOutput() { return m_output.c_str(); }
