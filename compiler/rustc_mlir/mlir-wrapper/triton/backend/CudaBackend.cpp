@@ -17,6 +17,22 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Target/LLVMIR/Dialect/NVVM/NVVMToLLVMIRTranslation.h"
+#include "mlir/Target/LLVMIR/Export.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/Bitcode/BitcodeReader.h"
+#include "llvm/IR/DataLayout.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IRReader/IRReader.h"
+#include "llvm/Linker/Linker.h"
+#include "llvm/MC/TargetRegistry.h"
+#include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/SourceMgr.h"
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/TargetParser/Triple.h"
 
 #include "triton/Dialect/TritonNvidiaGPU/IR/Dialect.h"
 
@@ -25,6 +41,8 @@
 #include "nvidia/include/Dialect/NVWS/IR/Dialect.h"
 
 #include "CudaBackend.h"
+
+#include <regex>
 
 using namespace mlir;
 using namespace triton;
@@ -53,9 +71,119 @@ void CudaBackend::loadDialects(MLIRContext &context) {
 
 Capability CudaBackend::getCapability() const { return m_capability; }
 
-LogicalResult CudaBackend::generatePtx(MLIRContext &context, ModuleOp module) {
+LogicalResult CudaBackend::makeLLVMIR(MLIRContext &context, ModuleOp module) {
+  llvm::LLVMContext llvmContext;
 
-  return LogicalResult::failure();
+  // Initialize LLVM targets (required for NVPTX/codegen)
+  llvm::InitializeAllTargets();
+  llvm::InitializeAllTargetInfos();
+  llvm::InitializeAllTargetMCs();
+  llvm::InitializeAllAsmParsers();
+  llvm::InitializeAllAsmPrinters();
+
+  // Address Sanitizer is only supported on the AMD backend; not applicable
+  // when using the base Backend (no knobs). Subclasses can override and check
+  // enable_asan and return failure() for NVIDIA.
+
+  // Translate MLIR module (LLVM dialect) to LLVM IR module
+  auto llvmMod =
+      mlir::translateModuleToLLVMIR(module.getOperation(), llvmContext);
+  if (!llvmMod) {
+    llvm::errs() << "Failed to translate MLIR module to LLVM IR\n";
+    return LogicalResult::failure();
+  }
+
+  // Set target triple for NVIDIA PTX
+  auto triple = llvm::Triple("nvptx64-nvidia-cuda");
+  llvmMod->setTargetTriple(triple);
+
+  // Attach data layout for NVPTX64 (matches triple/capability; proc/features
+  // would require TargetMachine if layout varied per SM).
+  static const char nvptx64DataLayout[] =
+      "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i128:128:128-"
+      "f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:"
+      "64";
+  llvmMod->setDataLayout(llvm::DataLayout(nvptx64DataLayout));
+
+  if (m_options.enable_reflect_ftz) {
+    llvmMod->addModuleFlag(llvm::Module::Override, "nvvm-reflect-ftz", 1u);
+  }
+
+  // Link extern libs from options when the module has undefined symbols
+  if (!m_options.extern_libs.empty()) {
+    std::vector<std::string> libPaths;
+    for (const auto &pair : m_options.extern_libs) {
+      libPaths.push_back(pair.second);
+    }
+
+    auto result = linkExternLibs(llvmContext, *llvmMod, libPaths);
+    if (failed(result)) {
+      return result;
+    }
+  }
+
+  // Do NOT run host O3 here: the pipeline has no TargetMachine for NVPTX, so
+  // passes like the CGSCC devirt repeater mis-analyze GPU IR (and can loop on
+  // infinite-loop / recursive functions that appear in Rust no_core stubs).
+  // Optimization is done at the correct level by llvmTranslateToAsm via the
+  // NVPTX TargetMachine's own CodeGen pipeline.
+
+  // Serialize LLVM module to string and store in m_llvmir
+  llvm::raw_string_ostream os(m_llvmir);
+  llvmMod->print(os, nullptr);
+
+  return LogicalResult::success();
+}
+
+LogicalResult CudaBackend::generatePtx(MLIRContext &context, ModuleOp module) {
+  // TODO: remove hardcoded values
+  int ptx_version = 120;
+  std::string triple = "nvptx64-nvidia-cuda";
+  std::string proc = "sm_120";
+  std::string features = ""; // get_features(m_options, m_options.arch);
+
+  std::vector<std::string> flags = {"nvptx-mad-wide-opt"};
+
+  // 2. Translate LLVM module to assembly (PTX)
+  // This part is pseudo-code, as actual translation will depend on LLVM API
+  // presence.
+  std::string src_asm = m_llvmir; // Assume m_llvmir contains the LLVM IR for
+                                  // the module serialized right before
+  std::string ret = llvmTranslateToAsm(src_asm, triple, proc, features, flags,
+                                       m_options.enable_fp_fusion, false);
+  if (ret.empty()) {
+    llvm::errs() << "Failed to translate LLVM IR to PTX\n";
+    llvm::errs() << "LLVM IR: " << src_asm << "\n";
+    llvm::errs() << "Triple: " << triple << "\n";
+    return LogicalResult::failure();
+  }
+  // 3. Find kernel name
+  std::regex kernel_re(R"(\.visible \.entry ([a-zA-Z_][a-zA-Z0-9_]*))");
+  std::smatch match;
+  std::string kernel_name;
+  if (std::regex_search(ret, match, kernel_re)) {
+    kernel_name = match[1].str();
+  } else {
+    llvm::errs() << "Could not find kernel name in PTX output\n";
+    return LogicalResult::failure();
+  }
+
+  // 4. Post-process version and target
+  char ptx_major_minor[8];
+  snprintf(ptx_major_minor, sizeof(ptx_major_minor), "%d.%d", ptx_version / 10,
+           ptx_version % 10);
+  ret = std::regex_replace(ret, std::regex(R"(\.version \d+\.\d+)"),
+                           ".version " + std::string(ptx_major_minor));
+  ret = std::regex_replace(ret, std::regex(R"(\.target sm_\d+)"),
+                           ".target sm_" + std::to_string(m_capability));
+
+  // 5. Remove debug flag if desired
+  // No 'knobs' defined; always remove for now or leave as TODO.
+  ret = std::regex_replace(ret, std::regex(R"(,\s*debug|debug,\s*)"), "");
+
+  // 7. Save PTX (exposed via getASM())
+  m_asm = std::move(ret);
+  return LogicalResult::success();
 }
 
 std::optional<Error> CudaBackend::addCudaPass(PassManager &pm, CudaPass pass) {
@@ -333,4 +461,85 @@ CudaBackend::createTritonGPUProxyFenceInsertionWrapper(int32_t capability) {
   ttng::TritonGPUProxyFenceInsertionOptions options;
   options.computeCapability = capability;
   return ttng::createTritonGPUProxyFenceInsertion(options);
+}
+
+LogicalResult
+CudaBackend::linkExternLibs(llvm::LLVMContext &llvmContext,
+                            llvm::Module &module,
+                            const std::vector<std::string> &libPaths) {
+  llvm::Linker linker(module);
+  for (const auto &libPath : libPaths) {
+    auto buf = llvm::MemoryBuffer::getFile(libPath);
+    if (!buf) {
+      llvm::errs() << "Failed to get memory buffer: " << libPath << "\n";
+      return LogicalResult::failure();
+    }
+
+    auto src =
+        llvm::getLazyBitcodeModule((*buf)->getMemBufferRef(), llvmContext);
+    if (!src) {
+      llvm::errs() << "Failed to get lazy bitcode module: " << libPath << "\n";
+      return LogicalResult::failure();
+    }
+
+    if (linker.linkInModule(std::move(*src))) {
+      llvm::errs() << "Failed to link extern library: " << libPath << "\n";
+      return LogicalResult::failure();
+    }
+  }
+
+  return LogicalResult::success();
+}
+
+/// Translates LLVM IR to NVPTX assembly (PTX) using the given triple, CPU,
+/// and features. Returns the PTX string or empty on error.
+std::string CudaBackend::llvmTranslateToAsm(
+    const std::string &llvmIr, const std::string &tripleStr,
+    const std::string &cpu, const std::string &features,
+    const std::vector<std::string> & /*flags*/, bool /*enableFpFusion*/,
+    bool /*verbose*/) {
+  // Targets were already initialized in makeLLVMIR; no need to repeat.
+
+  llvm::LLVMContext ctx;
+  auto buf = llvm::MemoryBuffer::getMemBuffer(llvmIr, "<llvm-ir>");
+  llvm::SMDiagnostic err;
+  std::unique_ptr<llvm::Module> mod =
+      llvm::parseIR(buf->getMemBufferRef(), err, ctx);
+  if (!mod) {
+    err.print("CudaBackend", llvm::errs());
+    return {};
+  }
+
+  std::string targetError;
+  llvm::Triple triple(llvm::Triple::normalize(tripleStr));
+  const llvm::Target *target =
+      llvm::TargetRegistry::lookupTarget(triple.getTriple(), targetError);
+  if (!target) {
+    llvm::errs() << targetError << "\n";
+    return {};
+  }
+
+  llvm::TargetOptions opts;
+  llvm::TargetMachine *tm = target->createTargetMachine(
+      triple, cpu, features, opts, llvm::Reloc::Static, std::nullopt,
+      llvm::CodeGenOptLevel::Default);
+  if (!tm)
+    return {};
+
+  llvm::SmallVector<char, 0> asmBuf;
+  {
+    llvm::raw_svector_ostream os(asmBuf);
+    llvm::legacy::PassManager pm;
+    if (tm->addPassesToEmitFile(pm, os, nullptr,
+                                llvm::CodeGenFileType::AssemblyFile)) {
+      llvm::errs() << "Failed to add passes to emit file\n";
+      delete tm;
+      return {};
+    }
+    (void)pm.run(*mod);
+  }
+  delete tm;
+  // Build return string after stream and pass manager are destroyed so
+  // no shared state can cause use-after-free or hang when copying.
+  return std::string(asmBuf.data(), asmBuf.size());
 }

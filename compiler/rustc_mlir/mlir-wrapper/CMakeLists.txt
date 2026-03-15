@@ -75,6 +75,12 @@ target_link_libraries(mlir-wrapper
     MLIRAnalysis
     LLVMSupport
     LLVMCore
+    LLVMBitcodeReader
+    LLVMLinker
+    LLVMIRReader
+    LLVMNVPTXCodeGen
+    LLVMNVPTXDesc
+    LLVMNVPTXInfo
 )
 
 # Link Triton if available

@@ -156,22 +156,22 @@ fn compile_codegen_unit_impl(
         triton_codegen.codegen(tcx, mono_item).expect("Failed to generate MLIR for instance");
     }
 
-    println!("MLIR module pre-verify: {}", mlir_module.llmod().as_operation().to_string());
+    eprintln!("MLIR module pre-verify: {}", mlir_module.llmod().as_operation().to_string());
 
     let mlir_module_ok = mlir_module.llmod().as_operation().verify();
     if !mlir_module_ok {
         panic!("MLIR module failed verification");
     }
 
-    println!("MLIR module pre-cleanup: {}", mlir_module.llmod().as_operation());
+    eprintln!("MLIR module pre-cleanup: {}", mlir_module.llmod().as_operation());
 
     cleanup_mlir_module(&mut mlir_module).expect("MLIR cleanup passes failed");
 
-    println!("MLIR module post-cleanup: {}", mlir_module.llmod().as_operation());
+    eprintln!("MLIR module post-cleanup: {}", mlir_module.llmod().as_operation());
 
     compile_module(&mut mlir_module).expect("Triton passes failed");
 
-    println!("MLIR module post-triton: {}", mlir_module.llmod().as_operation());
+    eprintln!("MLIR module post-triton: {}", mlir_module.llmod().as_operation());
 
     info!("");
     info!("========================================");
@@ -200,13 +200,13 @@ fn compile_module(mlir_module: &mut MlirModule<'static>) -> Result<(), MlirError
         return Err(MlirError::CodegenFailed { err: "Triton compilation failed".to_string() });
     }
 
-    let output = mlir_module.compiler.get_llvm_ir();
+    let output = mlir_module.compiler.get_asm();
     if output.is_none() {
         return Err(MlirError::CodegenFailed { err: "Triton compilation failed".to_string() });
     }
 
     let output = output.unwrap();
-    println!("Triton output: {}", output);
+    eprintln!("Triton PTX output: {}", output);
     Ok(())
 }
 

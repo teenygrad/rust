@@ -148,7 +148,7 @@ public:
 
   virtual LogicalResult makeLLIR(MLIRContext &context, ModuleOp module) = 0;
 
-  virtual LogicalResult makeLLVMIR(MLIRContext &context, ModuleOp module);
+  virtual LogicalResult makeLLVMIR(MLIRContext &context, ModuleOp module) = 0;
 
   void printIR(std::string stage, ModuleOp module);
 

@@ -17,6 +17,7 @@
 #include <iostream>
 
 #include "Backend.h"
+
 #include "llvm/Support/raw_ostream.h"
 
 namespace mlir {
@@ -38,6 +39,7 @@ LogicalResult Backend::applyPasses(MLIRContext &context, ModuleOp module,
   m_ttgir.clear();
   m_llir.clear();
   m_llvmir.clear();
+  m_asm.clear();
 
   if (language == Language::TRITON) {
     m_result = makeTTIR(context, module);
@@ -67,30 +69,10 @@ LogicalResult Backend::applyPasses(MLIRContext &context, ModuleOp module,
   llvm::raw_string_ostream llir_os(m_llir);
   module.print(llir_os);
 
+  m_result = makeLLVMIR(context, module);
+  CHECK_RESULT(m_result, "Failed to make LLVMIR module. Aborting translation.");
+
   return LogicalResult::success();
-}
-
-LogicalResult Backend::makeLLVMIR(MLIRContext &context, ModuleOp module) {
-  llvm.init_targets() context = llvm.context() if knobs.compilation.enable_asan
-      : raise RuntimeError("Address Sanitizer Error: Address sanitizer is "
-                           "currently only supported on the AMD backend")
-            llvm_mod = llvm.to_module(mod, context) proc =
-      sm_arch_from_capability(capability) features =
-          get_features(options, self.target.arch) triple =
-              'nvptx64-nvidia-cuda' nvidia.set_short_ptr()
-                  llvm.attach_datalayout(llvm_mod, triple, proc,
-                                         features) if options
-                      .enable_reflect_ftz
-      : nvidia.set_nvvm_reflect_ftz(llvm_mod)
-
-            if options.extern_libs and
-              nvidia.has_extern_deps(llvm_mod)
-      : paths = [path for (name, path) in options.extern_libs] llvm
-                    .link_extern_libs(llvm_mod, paths)
-
-                        llvm.optimize_module(llvm_mod, llvm.OPTIMIZE_O3)
-
-                            return LogicalResult::success();
 }
 
 void Backend::printIR(std::string stage, ModuleOp module) {

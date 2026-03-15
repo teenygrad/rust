@@ -23,6 +23,8 @@
 #include <tuple>
 #include <vector>
 
+#include "llvm/IR/Module.h"
+
 #include "triton/Dialect/TritonNvidiaGPU/Transforms/Passes.h"
 
 #include "nvidia/include/Dialect/NVWS/Transforms/Passes.h"
@@ -64,6 +66,7 @@ struct CudaOptions {
   bool enable_experimental_consan = false;
   bool instrumentation = false;
   bool disable_line_info = false;
+  bool enable_reflect_ftz = false;
 };
 
 enum Capability {
@@ -129,6 +132,9 @@ public:
   virtual LogicalResult makeLLIR(MLIRContext &context,
                                  ModuleOp module) override;
 
+  virtual LogicalResult makeLLVMIR(MLIRContext &context,
+                                   ModuleOp module) override;
+
   LogicalResult generatePtx(MLIRContext &context, ModuleOp module);
 
   LogicalResult generateCubin(MLIRContext &context, ModuleOp module);
@@ -146,6 +152,17 @@ private:
 
   std::unique_ptr<mlir::Pass>
   createTritonGPUProxyFenceInsertionWrapper(int32_t capability);
+
+  LogicalResult linkExternLibs(llvm::LLVMContext &llvmContext,
+                               llvm::Module &module,
+                               const std::vector<std::string> &libPaths);
+
+  std::string llvmTranslateToAsm(const std::string &llvmIr,
+                                 const std::string &tripleStr,
+                                 const std::string &cpu,
+                                 const std::string &features,
+                                 const std::vector<std::string> & /*flags*/,
+                                 bool /*enableFpFusion*/, bool /*verbose*/);
 
   CudaOptions m_options;
   Capability m_capability;

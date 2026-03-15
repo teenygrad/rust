@@ -70,35 +70,39 @@ impl TritonCompiler {
     /// on this compiler or until the compiler is dropped. Returns `None` if
     /// there is no output or the pointer is invalid.
     pub fn get_asm(&self) -> Option<&str> {
-        ptr_to_str(unsafe { ffi::mlirTritonCompilerGetASM(self.raw) })
+        ptr_to_str(self, unsafe { ffi::mlirTritonCompilerGetASM(self.raw) })
     }
 
     pub fn get_bin(&self) -> Option<&str> {
-        ptr_to_str(unsafe { ffi::mlirTritonCompilerGetBIN(self.raw) })
+        ptr_to_str(self, unsafe { ffi::mlirTritonCompilerGetBIN(self.raw) })
     }
 
     /// Returns the LLIR (input MLIR) string from the last successful compile.
     pub fn get_llir(&self) -> Option<&str> {
-        ptr_to_str(unsafe { ffi::mlirTritonCompilerGetLLIR(self.raw) })
+        ptr_to_str(self, unsafe { ffi::mlirTritonCompilerGetLLIR(self.raw) })
     }
 
     /// Returns the TTIR (Triton IR) string from the last successful compile.
     pub fn get_ttir(&self) -> Option<&str> {
-        ptr_to_str(unsafe { ffi::mlirTritonCompilerGetTTIR(self.raw) })
+        ptr_to_str(self, unsafe { ffi::mlirTritonCompilerGetTTIR(self.raw) })
     }
 
     /// Returns the TTGIR (Triton GPU IR) string from the last successful compile.
     pub fn get_ttgir(&self) -> Option<&str> {
-        ptr_to_str(unsafe { ffi::mlirTritonCompilerGetTTGIR(self.raw) })
+        ptr_to_str(self, unsafe { ffi::mlirTritonCompilerGetTTGIR(self.raw) })
     }
 
     /// Returns the LLVM IR string from the last successful compile.
     pub fn get_llvm_ir(&self) -> Option<&str> {
-        ptr_to_str(unsafe { ffi::mlirTritonCompilerGetLLVMIR(self.raw) })
+        ptr_to_str(self, unsafe { ffi::mlirTritonCompilerGetLLVMIR(self.raw) })
     }
 }
 
-fn ptr_to_str(ptr: *const std::ffi::c_char) -> Option<&'static str> {
+// Tie the returned string's lifetime to the compiler so that:
+// - the reference can't outlive the TritonCompiler (which owns the C++ object)
+// - a &mut borrow for compile() will conflict with any live reference, preventing
+//   use-after-reallocation when m_asm is replaced by the next generatePtx call.
+fn ptr_to_str<'a>(_anchor: &'a TritonCompiler, ptr: *const std::ffi::c_char) -> Option<&'a str> {
     if ptr.is_null() {
         return None;
     }
