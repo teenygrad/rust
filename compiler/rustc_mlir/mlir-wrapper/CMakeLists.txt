@@ -42,6 +42,14 @@ if(DEFINED TRITON_BUILD_DIR)
     include_directories(${TRITON_BUILD_DIR}/third_party)
 endif()
 
+# Add SPIRV backend includes if available
+if(DEFINED TRITON_SOURCE_DIR)
+    include_directories(${TRITON_SOURCE_DIR}/third_party/spirv/include)
+endif()
+if(DEFINED TRITON_BUILD_DIR)
+    include_directories(${TRITON_BUILD_DIR}/third_party/spirv/include)
+endif()
+
 # Compiler flags
 add_definitions(${LLVM_DEFINITIONS})
 
@@ -53,6 +61,7 @@ set(WRAPPER_SOURCES
     triton/TritonCompiler.cpp
     triton/backend/Backend.cpp
     triton/backend/CudaBackend.cpp
+    triton/backend/SpirVBackend.cpp
 )
 
 # Create static library
@@ -87,6 +96,19 @@ target_link_libraries(mlir-wrapper
 if(DEFINED TRITON_BUILD_DIR)
     target_link_directories(mlir-wrapper PRIVATE ${TRITON_BUILD_DIR}/lib)
     target_link_libraries(mlir-wrapper PRIVATE triton)
+endif()
+
+# Link SPIRV backend libraries if available
+if(DEFINED TRITON_BUILD_DIR)
+    target_link_directories(mlir-wrapper PRIVATE
+        ${TRITON_BUILD_DIR}/third_party/spirv/lib)
+    target_link_libraries(mlir-wrapper PRIVATE
+        TritonSPIRV
+        TritonGPUToSPIRV
+        MLIRSPIRVDialect
+        MLIRSPIRVTransforms
+        MLIRSPIRVTranslateRegistration
+    )
 endif()
 
 # Install
