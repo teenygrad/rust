@@ -42,14 +42,6 @@ if(DEFINED TRITON_BUILD_DIR)
     include_directories(${TRITON_BUILD_DIR}/third_party)
 endif()
 
-# Add SPIRV backend includes if available
-if(DEFINED TRITON_SOURCE_DIR)
-    include_directories(${TRITON_SOURCE_DIR}/third_party/spirv/include)
-endif()
-if(DEFINED TRITON_BUILD_DIR)
-    include_directories(${TRITON_BUILD_DIR}/third_party/spirv/include)
-endif()
-
 # Compiler flags
 add_definitions(${LLVM_DEFINITIONS})
 

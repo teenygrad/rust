@@ -18,8 +18,8 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/Pass/PassManager.h"
 
-#include "Conversion/TritonGPUToSPIRV/TritonGPUToSPIRVPass.h"
-#include "Target/SPIRV/SPIRVTranslation.h"
+#include "spirv/include/Conversion/TritonGPUToSPIRV/TritonGPUToSPIRVPass.h"
+#include "spirv/include/Target/SPIRV/SPIRVTranslation.h"
 
 #include "SpirVBackend.h"
 
@@ -60,8 +60,7 @@ LogicalResult SpirVBackend::makeTTGIR(MLIRContext &context, ModuleOp module) {
   PassManager pm(&context);
   auto op = module.getOperation();
 
-  std::string capability_str =
-      std::string("spirv:").append(m_target);
+  std::string capability_str = std::string("spirv:").append(m_target);
 
   addPass(pm, MlirPass::ttir_convert_to_ttgpuir, capability_str,
           m_options.num_warps, m_options.threads_per_warp, m_options.num_ctas);
