@@ -15,7 +15,6 @@
  */
 
 #include "mlir/Dialect/SPIRV/IR/SPIRVDialect.h"
-#include "mlir/IR/Builders.h"
 #include "mlir/Pass/PassManager.h"
 
 #include "spirv/include/Conversion/TritonGPUToSPIRV/TritonGPUToSPIRVPass.h"
@@ -130,17 +129,7 @@ LogicalResult SpirVBackend::makeLLVMIR(MLIRContext &context, ModuleOp module) {
   return LogicalResult::success();
 }
 
-LogicalResult SpirVBackend::generateSPIRV(MLIRContext &context,
-                                          ModuleOp module) {
-  if (!m_options.extern_libs.empty()) {
-    std::vector<std::string> names, paths;
-    for (const auto &pair : m_options.extern_libs) {
-      names.push_back(pair.first);
-      paths.push_back(pair.second);
-    }
-    addExternalLibs(module, names, paths);
-  }
-
+LogicalResult SpirVBackend::makeASM(MLIRContext &context, ModuleOp module) {
   std::string spirvIR =
       translateTritonGPUToSPIRVIR(module, m_options.capability);
   if (spirvIR.empty()) {
@@ -163,5 +152,9 @@ LogicalResult SpirVBackend::generateSPIRV(MLIRContext &context,
   }
   m_bin = std::string(binaryBuf.data(), binaryBuf.size());
 
+  return LogicalResult::success();
+}
+
+LogicalResult SpirVBackend::makeBIN(MLIRContext &context, ModuleOp module) {
   return LogicalResult::success();
 }

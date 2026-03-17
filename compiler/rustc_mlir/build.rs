@@ -76,6 +76,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("cargo:rustc-link-lib={}", lib);
     }
 
+    // Triton's SPIR-V translation path depends on SPIRV-Tools (C++ + C API).
+    // These symbols are referenced from libtriton.a (e.g. SPIRVTranslation.cpp.o),
+    // so we must ensure the final link includes SPIRV-Tools libraries.
+    //
+    // On most Linux distros these come from the `spirv-tools` / `spirv-tools-dev` packages
+    // and live on the default linker search path.
+    println!("cargo:rustc-link-lib=SPIRV-Tools");
+    println!("cargo:rustc-link-lib=SPIRV-Tools-opt");
+    println!("cargo:rustc-link-lib=SPIRV-Tools-link");
+
     // Link C++ standard library
     if cfg!(target_os = "macos") {
         println!("cargo:rustc-link-lib=c++");

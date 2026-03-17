@@ -45,6 +45,11 @@ endif()
 # Compiler flags
 add_definitions(${LLVM_DEFINITIONS})
 
+# SPIRV Tools is required to disassemble the spirv module
+find_package(SPIRV-Tools CONFIG REQUIRED)
+find_package(SPIRV-Tools-opt CONFIG REQUIRED)
+find_package(SPIRV-Tools-link CONFIG REQUIRED)
+
 # Source files
 set(WRAPPER_SOURCES
     MLIRWrapper.cpp
@@ -74,6 +79,9 @@ target_link_libraries(mlir-wrapper
     MLIRPass
     MLIRTransforms
     MLIRAnalysis
+    MLIRSPIRVDialect
+    MLIRSPIRVTransforms
+    MLIRSPIRVTranslateRegistration
     LLVMSupport
     LLVMCore
     LLVMBitcodeReader
@@ -82,25 +90,15 @@ target_link_libraries(mlir-wrapper
     LLVMNVPTXCodeGen
     LLVMNVPTXDesc
     LLVMNVPTXInfo
+    SPIRV-Tools
+    SPIRV-Tools-opt
+    SPIRV-Tools-link
 )
 
 # Link Triton if available
 if(DEFINED TRITON_BUILD_DIR)
     target_link_directories(mlir-wrapper PRIVATE ${TRITON_BUILD_DIR}/lib)
     target_link_libraries(mlir-wrapper PRIVATE triton)
-endif()
-
-# Link SPIRV backend libraries if available
-if(DEFINED TRITON_BUILD_DIR)
-    target_link_directories(mlir-wrapper PRIVATE
-        ${TRITON_BUILD_DIR}/third_party/spirv/lib)
-    target_link_libraries(mlir-wrapper PRIVATE
-        TritonSPIRV
-        TritonGPUToSPIRV
-        MLIRSPIRVDialect
-        MLIRSPIRVTransforms
-        MLIRSPIRVTranslateRegistration
-    )
 endif()
 
 # Install

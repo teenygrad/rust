@@ -135,9 +135,9 @@ public:
   virtual LogicalResult makeLLVMIR(MLIRContext &context,
                                    ModuleOp module) override;
 
-  LogicalResult generatePtx(MLIRContext &context, ModuleOp module);
+  virtual LogicalResult makeASM(MLIRContext &context, ModuleOp module) override;
 
-  LogicalResult generateCubin(MLIRContext &context, ModuleOp module);
+  virtual LogicalResult makeBIN(MLIRContext &context, ModuleOp module) override;
 
 private:
   std::optional<Error> addCudaPass(PassManager &pm, CudaPass pass);

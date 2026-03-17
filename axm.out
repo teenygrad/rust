@@ -1,26 +1,2494 @@
+warning: profile package spec `lld-wrapper` in profile `release` did not match any packages
+warning: profile package spec `test-float-parse` in profile `release` did not match any packages
+warning: profile package spec `wasm-component-ld-wrapper` in profile `release` did not match any packages
+warning: profile package spec `test-float-parse` in profile `dev` did not match any packages
+       Fresh unicode-ident v1.0.18
+       Fresh cfg-if v1.0.4
+       Fresh memchr v2.7.6
+       Fresh shlex v1.3.0
+       Fresh find-msvc-tools v0.1.9
+       Fresh itoa v1.0.15
+       Fresh rustc-hash v2.1.1
+       Fresh stable_deref_trait v1.2.1
+       Fresh proc-macro2 v1.0.103
+       Fresh cc v1.2.56
+       Fresh log v0.4.28
+       Fresh ryu v1.0.20
+warning: value assigned to `vp` is never read
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ryu-1.0.20/src/f2s.rs:146:17
+    |
+146 |                 vp /= 10;
+    |                 ^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
 
-module {
-  tt.func public @add_kernel(%arg0: !tt.ptr<f32> {tt.divisibility = 16 : i32} loc("/home/arshadm/Workspace/projects/spinorml/teenygrad/kernel.py":10:0), %arg1: !tt.ptr<f32> {tt.divisibility = 16 : i32} loc("/home/arshadm/Workspace/projects/spinorml/teenygrad/kernel.py":10:0), %arg2: !tt.ptr<f32> {tt.divisibility = 16 : i32} loc("/home/arshadm/Workspace/projects/spinorml/teenygrad/kernel.py":10:0), %arg3: i32 {tt.divisibility = 16 : i32} loc("/home/arshadm/Workspace/projects/spinorml/teenygrad/kernel.py":10:0)) attributes {noinline = false} {
-    %0 = tt.get_program_id x : i32 loc(#loc1)
-    %c1024_i32 = arith.constant 1024 : i32 loc(#loc2)
-    %c1024_i32_0 = arith.constant 1024 : i32 loc(#loc2)
-    %7 = arith.muli %0, %c1024_i32_0 : i32 loc(#loc2)
-    %8 = tt.make_range {end = 1024 : i32, start = 0 : i32} : tensor<1024xi32> loc(#loc3)
-    %9 = tt.splat %7 : i32 -> tensor<1024xi32> loc(#loc4)
-    %16 = arith.addi %9, %8 : tensor<1024xi32> loc(#loc4)
-    %17 = tt.splat %arg3 : i32 -> tensor<1024xi32> loc(#loc5)
-    %18 = arith.cmpi slt, %16, %17 : tensor<1024xi32> loc(#loc5)
-    %19 = tt.splat %arg0 : !tt.ptr<f32> -> tensor<1024x!tt.ptr<f32>> loc(#loc6)
-    %20 = tt.addptr %19, %16 : tensor<1024x!tt.ptr<f32>>, tensor<1024xi32> loc(#loc6)
-    %21 = tt.load %20, %18 : tensor<1024x!tt.ptr<f32>> loc(#loc7)
-    %22 = tt.splat %arg1 : !tt.ptr<f32> -> tensor<1024x!tt.ptr<f32>> loc(#loc8)
-    %23 = tt.addptr %22, %16 : tensor<1024x!tt.ptr<f32>>, tensor<1024xi32> loc(#loc8)
-    %24 = tt.load %23, %18 : tensor<1024x!tt.ptr<f32>> loc(#loc9)
-    %25 = arith.addf %21, %24 : tensor<1024xf32> loc(#loc10)
-    %26 = tt.splat %arg2 : !tt.ptr<f32> -> tensor<1024x!tt.ptr<f32>> loc(#loc11)
-    %27 = tt.addptr %26, %16 : tensor<1024x!tt.ptr<f32>>, tensor<1024xi32> loc(#loc11)
-    tt.store %27, %25, %18 : tensor<1024x!tt.ptr<f32>> loc(#loc12)
-    tt.return loc(#loc13)
-  } loc(#loc)
-} loc(#loc)
+       Fresh version_check v0.9.5
+warning: `ryu` (lib) generated 1 warning
+       Fresh quote v1.0.42
+       Fresh libc v0.2.177
+       Fresh once_cell v1.21.3
+       Fresh syn v2.0.110
+       Fresh proc-macro-hack v0.5.20+deprecated
+warning: unexpected `cfg` condition name: `need_proc_macro_hack`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-hack-0.5.20+deprecated/src/lib.rs:267:45
+    |
+267 |     if args.only_hack_old_rustc && cfg!(not(need_proc_macro_hack)) {
+    |                                             ^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: expected names are: `docsrs`, `feature`, and `test` and 31 more
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(need_proc_macro_hack)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(need_proc_macro_hack)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: `#[warn(unexpected_cfgs)]` on by default
 
+       Fresh getrandom v0.3.3
+       Fresh unicode-width v0.2.2
+       Fresh hashbrown v0.16.0
+warning: `proc-macro-hack` (lib) generated 1 warning
+       Fresh synstructure v0.13.2
+       Fresh displaydoc v0.2.5
+       Fresh thiserror-impl v2.0.18
+       Fresh serde_derive v1.0.228
+       Fresh zerovec-derive v0.11.2
+       Fresh typenum v1.19.0
+       Fresh crossbeam-utils v0.8.21
+       Fresh rustc-stable-hash v0.1.2
+       Fresh scopeguard v1.2.0
+       Fresh linux-raw-sys v0.11.0
+       Fresh equivalent v1.0.2
+       Fresh thiserror v2.0.18
+       Fresh zerofrom-derive v0.1.6
+       Fresh yoke-derive v0.8.1
+       Fresh generic-array v0.14.7
+warning: unexpected `cfg` condition name: `relaxed_coherence`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/generic-array-0.14.7/src/impls.rs:136:19
+    |
+136 |               #[cfg(relaxed_coherence)]
+    |                     ^^^^^^^^^^^^^^^^^
+...
+183 | / impl_from! {
+184 | |     1  => ::typenum::U1,
+185 | |     2  => ::typenum::U2,
+186 | |     3  => ::typenum::U3,
+...   |
+215 | |     32 => ::typenum::U32
+216 | | }
+    | |_- in this macro invocation
+    |
+    = help: expected names are: `docsrs`, `feature`, and `test` and 31 more
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(relaxed_coherence)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(relaxed_coherence)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: `#[warn(unexpected_cfgs)]` on by default
+    = note: this warning originates in the macro `impl_from` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition name: `relaxed_coherence`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/generic-array-0.14.7/src/impls.rs:158:23
+    |
+158 |               #[cfg(not(relaxed_coherence))]
+    |                         ^^^^^^^^^^^^^^^^^
+...
+183 | / impl_from! {
+184 | |     1  => ::typenum::U1,
+185 | |     2  => ::typenum::U2,
+186 | |     3  => ::typenum::U3,
+...   |
+215 | |     32 => ::typenum::U32
+216 | | }
+    | |_- in this macro invocation
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(relaxed_coherence)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(relaxed_coherence)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `impl_from` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition name: `relaxed_coherence`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/generic-array-0.14.7/src/impls.rs:136:19
+    |
+136 |               #[cfg(relaxed_coherence)]
+    |                     ^^^^^^^^^^^^^^^^^
+...
+219 | / impl_from! {
+220 | |     33 => ::typenum::U33,
+221 | |     34 => ::typenum::U34,
+222 | |     35 => ::typenum::U35,
+...   |
+268 | |     1024 => ::typenum::U1024
+269 | | }
+    | |_- in this macro invocation
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(relaxed_coherence)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(relaxed_coherence)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `impl_from` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition name: `relaxed_coherence`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/generic-array-0.14.7/src/impls.rs:158:23
+    |
+158 |               #[cfg(not(relaxed_coherence))]
+    |                         ^^^^^^^^^^^^^^^^^
+...
+219 | / impl_from! {
+220 | |     33 => ::typenum::U33,
+221 | |     34 => ::typenum::U34,
+222 | |     35 => ::typenum::U35,
+...   |
+268 | |     1024 => ::typenum::U1024
+269 | | }
+    | |_- in this macro invocation
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(relaxed_coherence)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(relaxed_coherence)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `impl_from` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/generic-array-0.14.7/src/lib.rs:235:33
+    |
+235 |     pub unsafe fn iter_position(&mut self) -> (slice::IterMut<T>, &mut usize) {
+    |                                 ^^^^^^^^^      ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^ the same lifetime is elided here
+    |                                 |              |
+    |                                 |              the same lifetime is hidden here
+    |                                 the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+    = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+    |
+235 |     pub unsafe fn iter_position(&mut self) -> (slice::IterMut<'_, T>, &mut usize) {
+    |                                                               +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/generic-array-0.14.7/src/lib.rs:290:33
+    |
+290 |     pub unsafe fn iter_position(&mut self) -> (slice::Iter<T>, &mut usize) {
+    |                                 ^^^^^^^^^      ^^^^^^^^^^^^^^  ^^^^^^^^^^ the same lifetime is elided here
+    |                                 |              |
+    |                                 |              the same lifetime is hidden here
+    |                                 the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+290 |     pub unsafe fn iter_position(&mut self) -> (slice::Iter<'_, T>, &mut usize) {
+    |                                                            +++
+
+       Fresh rustc_hashes v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_hashes)
+       Fresh lock_api v0.4.14
+       Fresh crossbeam-epoch v0.9.18
+warning: unexpected `cfg` condition name: `crossbeam_loom`
+  --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/lib.rs:66:7
+   |
+66 | #[cfg(crossbeam_loom)]
+   |       ^^^^^^^^^^^^^^
+   |
+   = help: expected names are: `docsrs`, `feature`, and `test` and 31 more
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_loom)'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_loom)");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition name: `crossbeam_loom`
+  --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/lib.rs:69:7
+   |
+69 | #[cfg(crossbeam_loom)]
+   |       ^^^^^^^^^^^^^^
+   |
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_loom)'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_loom)");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `crossbeam_loom`
+  --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/lib.rs:91:11
+   |
+91 | #[cfg(not(crossbeam_loom))]
+   |           ^^^^^^^^^^^^^^
+   |
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_loom)'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_loom)");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `crossbeam_loom`
+    --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/atomic.rs:1675:21
+     |
+1675 | #[cfg(all(test, not(crossbeam_loom)))]
+     |                     ^^^^^^^^^^^^^^
+     |
+     = help: consider using a Cargo feature instead
+     = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+              [lints.rust]
+              unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_loom)'] }
+     = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_loom)");` to the top of the `build.rs`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `crossbeam_loom`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/atomic.rs:350:15
+    |
+350 |     #[cfg(not(crossbeam_loom))]
+    |               ^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_loom)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_loom)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `crossbeam_loom`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/atomic.rs:358:11
+    |
+358 |     #[cfg(crossbeam_loom)]
+    |           ^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_loom)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_loom)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `crossbeam_loom`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/collector.rs:112:21
+    |
+112 | #[cfg(all(test, not(crossbeam_loom)))]
+    |                     ^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_loom)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_loom)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `crossbeam_loom`
+  --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/deferred.rs:90:21
+   |
+90 | #[cfg(all(test, not(crossbeam_loom)))]
+   |                     ^^^^^^^^^^^^^^
+   |
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_loom)'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_loom)");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `crossbeam_sanitize`
+  --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/internal.rs:56:15
+   |
+56 | #[cfg(not(any(crossbeam_sanitize, miri)))]
+   |               ^^^^^^^^^^^^^^^^^^
+   |
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_sanitize)'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_sanitize)");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `crossbeam_sanitize`
+  --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/internal.rs:59:11
+   |
+59 | #[cfg(any(crossbeam_sanitize, miri))]
+   |           ^^^^^^^^^^^^^^^^^^
+   |
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_sanitize)'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_sanitize)");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `crossbeam_sanitize`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/internal.rs:300:15
+    |
+300 | #[cfg(not(any(crossbeam_sanitize, miri)))] // `crossbeam_sanitize` and `miri` reduce the size of `Local`
+    |               ^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_sanitize)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_sanitize)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `crossbeam_loom`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/internal.rs:557:21
+    |
+557 | #[cfg(all(test, not(crossbeam_loom)))]
+    |                     ^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_loom)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_loom)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `crossbeam_sanitize`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/internal.rs:202:29
+    |
+202 |         let steps = if cfg!(crossbeam_sanitize) {
+    |                             ^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_sanitize)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_sanitize)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `crossbeam_loom`
+ --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/sync/mod.rs:5:11
+  |
+5 | #[cfg(not(crossbeam_loom))]
+  |           ^^^^^^^^^^^^^^
+  |
+  = help: consider using a Cargo feature instead
+  = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+           [lints.rust]
+           unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_loom)'] }
+  = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_loom)");` to the top of the `build.rs`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `crossbeam_loom`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/sync/list.rs:298:21
+    |
+298 | #[cfg(all(test, not(crossbeam_loom)))]
+    |                     ^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_loom)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_loom)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `crossbeam_loom`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/sync/queue.rs:217:21
+    |
+217 | #[cfg(all(test, not(crossbeam_loom)))]
+    |                     ^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_loom)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_loom)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `crossbeam_loom`
+  --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/default.rs:10:11
+   |
+10 | #[cfg(not(crossbeam_loom))]
+   |           ^^^^^^^^^^^^^^
+   |
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_loom)'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_loom)");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `crossbeam_loom`
+  --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/default.rs:64:21
+   |
+64 | #[cfg(all(test, not(crossbeam_loom)))]
+   |                     ^^^^^^^^^^^^^^
+   |
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_loom)'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_loom)");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `crossbeam_loom`
+  --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/default.rs:14:15
+   |
+14 |     #[cfg(not(crossbeam_loom))]
+   |               ^^^^^^^^^^^^^^
+   |
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_loom)'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_loom)");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `crossbeam_loom`
+  --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/default.rs:22:11
+   |
+22 |     #[cfg(crossbeam_loom)]
+   |           ^^^^^^^^^^^^^^
+   |
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crossbeam_loom)'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(crossbeam_loom)");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+       Fresh indexmap v2.12.0
+       Fresh rustix v1.1.2
+       Fresh parking_lot_core v0.9.12
+warning: `generic-array` (lib) generated 6 warnings
+warning: `crossbeam-epoch` (lib) generated 20 warnings
+       Fresh zerofrom v0.1.6
+       Fresh crypto-common v0.1.7
+       Fresh block-buffer v0.10.4
+       Fresh rustc-hash v1.1.0
+       Fresh thin-vec v0.2.14
+       Fresh crossbeam-deque v0.8.6
+       Fresh parking_lot v0.12.5
+       Fresh rustc_macros v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_macros)
+warning: unused import: `proc_macro2::Span`
+ --> compiler/rustc_macros/src/current_version.rs:2:5
+  |
+2 | use proc_macro2::Span;
+  |     ^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `rustc_macros` (lib) generated 1 warning (run `cargo fix --lib -p rustc_macros` to apply 1 suggestion)
+       Fresh yoke v0.8.1
+       Fresh unic-langid-macros-impl v0.9.6
+       Fresh digest v0.10.7
+       Fresh rustc_serialize v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_serialize)
+       Fresh tempfile v3.23.0
+       Fresh psm v0.1.26
+       Fresh tracing-attributes v0.1.31
+       Fresh rustc_index_macros v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_index_macros)
+       Fresh perf-event-open-sys v3.0.0
+       Fresh tracing-core v0.1.36
+       Fresh memmap2 v0.2.3
+       Fresh zerovec v0.11.5
+       Fresh writeable v0.6.2
+warning: unused import: `for_both`
+ --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/either-1.15.0/src/iterator.rs:1:13
+  |
+1 | use super::{for_both, Either, Left, Right};
+  |             ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+       Fresh cpufeatures v0.2.17
+       Fresh arrayvec v0.7.6
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.6/src/arrayvec.rs:605:21
+    |
+605 |     pub fn drain<R>(&mut self, range: R) -> Drain<T, CAP>
+    |                     ^^^^^^^^^               ^^^^^^^^^^^^^ the same lifetime is hidden here
+    |                     |
+    |                     the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+    = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+    |
+605 |     pub fn drain<R>(&mut self, range: R) -> Drain<'_, T, CAP>
+    |                                                   +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.6/src/arrayvec.rs:632:20
+    |
+632 |     fn drain_range(&mut self, start: usize, end: usize) -> Drain<T, CAP>
+    |                    ^^^^^^^^^ the lifetime is elided here   ^^^^^^^^^^^^^ the same lifetime is hidden here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+632 |     fn drain_range(&mut self, start: usize, end: usize) -> Drain<'_, T, CAP>
+    |                                                                  +++
+
+       Fresh pin-project-lite v0.2.16
+       Fresh measureme v12.0.3
+       Fresh rustc_index v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_index)
+       Fresh stacker v0.1.21
+       Fresh rustc_thread_pool v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_thread_pool)
+warning: `either` (lib) generated 1 warning
+warning: `arrayvec` (lib) generated 2 warnings
+       Fresh tinystr v0.8.2
+       Fresh tracing v0.1.44
+       Fresh jobserver v0.1.34
+       Fresh rustc_arena v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_arena)
+warning: unexpected `cfg` condition name: `bootstrap`
+  --> compiler/rustc_arena/src/lib.rs:13:13
+   |
+13 | #![cfg_attr(bootstrap, feature(maybe_uninit_slice))]
+   |             ^^^^^^^^^
+   |
+   = help: expected names are: `docsrs`, `feature`, and `test` and 31 more
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(bootstrap)'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(bootstrap)");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: `#[warn(unexpected_cfgs)]` on by default
+
+       Fresh ena v0.14.3
+       Fresh elsa v1.11.2
+warning: implicit autoref creates a reference to the dereference of a raw pointer
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/elsa-1.11.2/src/vec.rs:46:19
+    |
+ 46 |             &*(&**(*vec).get_unchecked((*vec).len() - 1) as *const T::Target)
+    |                   ^^---^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |                     |
+    |                     this raw pointer has type `*mut Vec<T>`
+    |
+    = note: creating a reference requires the pointer target to be valid and imposes aliasing requirements
+note: autoref is being applied to this expression, resulting in: `&[T]`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/elsa-1.11.2/src/vec.rs:46:19
+    |
+ 46 |             &*(&**(*vec).get_unchecked((*vec).len() - 1) as *const T::Target)
+    |                   ^^^^^^
+note: method calls to `get_unchecked` require a reference
+   --> /home/arshadm/.rustup/toolchains/nightly-2025-12-05-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/mod.rs:638:5
+    |
+638 | /     pub const unsafe fn get_unchecked<I>(&self, index: I) -> &I::Output
+639 | |     where
+640 | |         I: [const] SliceIndex<Self>,
+    | |____________________________________^
+    = note: `#[warn(dangerous_implicit_autorefs)]` on by default
+help: try using a raw pointer method instead; or if this reference is intentional, make it explicit
+    |
+ 46 |             &*(&**(&(*vec)).get_unchecked((*vec).len() - 1) as *const T::Target)
+    |                   ++      +
+
+warning: implicit autoref creates a reference to the dereference of a raw pointer
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/elsa-1.11.2/src/vec.rs:54:13
+    |
+ 54 |             (*vec).get(index).map(|x| &**x)
+    |             ^^---^^^^^^^^^^^^
+    |               |
+    |               this raw pointer has type `*mut Vec<T>`
+    |
+    = note: creating a reference requires the pointer target to be valid and imposes aliasing requirements
+note: autoref is being applied to this expression, resulting in: `&[T]`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/elsa-1.11.2/src/vec.rs:54:13
+    |
+ 54 |             (*vec).get(index).map(|x| &**x)
+    |             ^^^^^^
+note: method calls to `get` require a reference
+   --> /home/arshadm/.rustup/toolchains/nightly-2025-12-05-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/mod.rs:571:5
+    |
+571 | /     pub const fn get<I>(&self, index: I) -> Option<&I::Output>
+572 | |     where
+573 | |         I: [const] SliceIndex<Self>,
+    | |____________________________________^
+help: try using a raw pointer method instead; or if this reference is intentional, make it explicit
+    |
+ 54 |             (&(*vec)).get(index).map(|x| &**x)
+    |             ++      +
+
+warning: implicit autoref creates a reference to the dereference of a raw pointer
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/elsa-1.11.2/src/vec.rs:65:9
+    |
+ 65 |         (*vec).get_unchecked(index)
+    |         ^^---^^^^^^^^^^^^^^^^^^^^^^
+    |           |
+    |           this raw pointer has type `*mut Vec<T>`
+    |
+    = note: creating a reference requires the pointer target to be valid and imposes aliasing requirements
+note: autoref is being applied to this expression, resulting in: `&[T]`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/elsa-1.11.2/src/vec.rs:65:9
+    |
+ 65 |         (*vec).get_unchecked(index)
+    |         ^^^^^^
+note: method calls to `get_unchecked` require a reference
+   --> /home/arshadm/.rustup/toolchains/nightly-2025-12-05-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/mod.rs:638:5
+    |
+638 | /     pub const unsafe fn get_unchecked<I>(&self, index: I) -> &I::Output
+639 | |     where
+640 | |         I: [const] SliceIndex<Self>,
+    | |____________________________________^
+help: try using a raw pointer method instead; or if this reference is intentional, make it explicit
+    |
+ 65 |         (&(*vec)).get_unchecked(index)
+    |         ++      +
+
+warning: implicit autoref creates a reference to the dereference of a raw pointer
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/elsa-1.11.2/src/vec.rs:74:13
+    |
+ 74 |             (*vec).get(index).copied()
+    |             ^^---^^^^^^^^^^^^
+    |               |
+    |               this raw pointer has type `*mut Vec<T>`
+    |
+    = note: creating a reference requires the pointer target to be valid and imposes aliasing requirements
+note: autoref is being applied to this expression, resulting in: `&[T]`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/elsa-1.11.2/src/vec.rs:74:13
+    |
+ 74 |             (*vec).get(index).copied()
+    |             ^^^^^^
+note: method calls to `get` require a reference
+   --> /home/arshadm/.rustup/toolchains/nightly-2025-12-05-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/mod.rs:571:5
+    |
+571 | /     pub const fn get<I>(&self, index: I) -> Option<&I::Output>
+572 | |     where
+573 | |         I: [const] SliceIndex<Self>,
+    | |____________________________________^
+help: try using a raw pointer method instead; or if this reference is intentional, make it explicit
+    |
+ 74 |             (&(*vec)).get(index).copied()
+    |             ++      +
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/elsa-1.11.2/src/vec.rs:111:17
+    |
+111 |     pub fn iter(&self) -> Iter<T> {
+    |                 ^^^^^     ^^^^^^^ the same lifetime is hidden here
+    |                 |
+    |                 the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+    = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+    |
+111 |     pub fn iter(&self) -> Iter<'_, T> {
+    |                                +++
+
+       Fresh rustc_graphviz v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_graphviz)
+       Fresh hashbrown v0.15.5
+       Fresh constant_time_eq v0.3.1
+warning: `rustc_arena` (lib) generated 1 warning
+warning: `elsa` (lib) generated 5 warnings
+       Fresh unic-langid-impl v0.9.6
+       Fresh winnow v0.7.13
+       Fresh arrayref v0.3.9
+       Fresh rustc_data_structures v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_data_structures)
+       Fresh sha1 v0.10.6
+       Fresh sha2 v0.10.9
+       Fresh md-5 v0.10.6
+       Fresh derive-where v1.6.0
+       Fresh toml_datetime v0.7.3
+       Fresh toml_parser v1.0.9+spec-1.1.0
+       Fresh blake3 v1.8.2
+       Fresh serde_spanned v1.0.3
+       Fresh type-map v0.5.1
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/type-map-0.5.1/src/lib.rs:179:30
+    |
+179 |     pub fn entry<T: 'static>(&mut self) -> Entry<T> {
+    |                              ^^^^^^^^^     ^^^^^^^^ the same lifetime is hidden here
+    |                              |
+    |                              the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+    = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+    |
+179 |     pub fn entry<T: 'static>(&mut self) -> Entry<'_, T> {
+    |                                                  +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/type-map-0.5.1/src/lib.rs:384:48
+    |
+384 |         pub fn entry<T: 'static + Send + Sync>(&mut self) -> Entry<T> {
+    |                                                ^^^^^^^^^     ^^^^^^^^ the same lifetime is hidden here
+    |                                                |
+    |                                                the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+384 |         pub fn entry<T: 'static + Send + Sync>(&mut self) -> Entry<'_, T> {
+    |                                                                    +++
+
+       Fresh litemap v0.8.1
+       Fresh toml_writer v1.0.4
+       Fresh scoped-tls v1.0.1
+       Fresh zerotrie v0.2.3
+       Fresh semver v1.0.27
+warning: `type-map` (lib) generated 2 warnings
+       Fresh toml v0.9.8
+       Fresh icu_locale_core v2.1.1
+       Fresh rustc_span v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_span)
+       Fresh camino v1.2.2
+       Fresh cargo-platform v0.3.2
+       Fresh cmake v0.1.57
+       Fresh potential_utf v0.1.4
+       Fresh fluent-syntax v0.12.0
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fluent-syntax-0.12.0/src/unicode.rs:136:42
+    |
+136 | pub fn unescape_unicode_to_string(input: &str) -> Cow<str> {
+    |                                          ^^^^     ^^^^^^^^ the same lifetime is hidden here
+    |                                          |
+    |                                          the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+    = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+    |
+136 | pub fn unescape_unicode_to_string(input: &str) -> Cow<'_, str> {
+    |                                                       +++
+
+       Fresh self_cell v1.2.1
+warning: `fluent-syntax` (lib) generated 1 warning
+       Fresh rustc_helper v0.1.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_helper)
+       Fresh cargo_metadata v0.23.1
+       Fresh icu_provider v2.1.1
+       Fresh glob v0.3.3
+       Fresh rustc_ast_ir v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_ast_ir)
+       Fresh icu_collections v2.1.1
+       Fresh unicode-xid v0.2.6
+       Fresh unicode-properties v0.1.3
+       Fresh serde_core v1.0.228
+       Fresh icu_locale_data v2.1.1
+       Fresh rustc-literal-escaper v0.0.5
+       Fresh rustc_lexer v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_lexer)
+       Fresh icu_list v2.1.1
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/intl_pluralrules-7.0.2/src/operands.rs:51:13
+   |
+51 | #![cfg_attr(feature = "cargo-clippy", allow(clippy::cast_lossless))]
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+   |
+   = note: no expected values for `feature`
+   = help: consider adding `cargo-clippy` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition name: `tarpaulin_include`
+  --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/intl_pluralrules-7.0.2/src/lib.rs:30:11
+   |
+30 | #[cfg(not(tarpaulin_include))]
+   |           ^^^^^^^^^^^^^^^^^
+   |
+   = help: expected names are: `docsrs`, `feature`, and `test` and 31 more
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(tarpaulin_include)");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+ --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/intl_pluralrules-7.0.2/src/rules.rs:2:13
+  |
+2 | #![cfg_attr(feature = "cargo-clippy", allow(clippy::float_cmp))]
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+  |
+  = note: no expected values for `feature`
+  = help: consider adding `cargo-clippy` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+ --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/intl_pluralrules-7.0.2/src/rules.rs:3:13
+  |
+3 | #![cfg_attr(feature = "cargo-clippy", allow(clippy::unreadable_literal))]
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+  |
+  = note: no expected values for `feature`
+  = help: consider adding `cargo-clippy` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+ --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/intl_pluralrules-7.0.2/src/rules.rs:4:13
+  |
+4 | #![cfg_attr(feature = "cargo-clippy", allow(clippy::nonminimal_bool))]
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+  |
+  = note: no expected values for `feature`
+  = help: consider adding `cargo-clippy` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: `intl_pluralrules` (lib) generated 5 warnings
+       Fresh icu_locale v2.1.1
+       Fresh rustc_ast v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_ast)
+warning: hiding a lifetime that's elided elsewhere is confusing
+    --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/itertools-0.12.1/src/lib.rs:1438:30
+     |
+1438 |     fn peeking_take_while<F>(&mut self, accept: F) -> PeekingTakeWhile<Self, F>
+     |                              ^^^^^^^^^                ^^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+     |                              |
+     |                              the lifetime is elided here
+     |
+     = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+     = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+     |
+1438 |     fn peeking_take_while<F>(&mut self, accept: F) -> PeekingTakeWhile<'_, Self, F>
+     |                                                                        +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+    --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/itertools-0.12.1/src/lib.rs:1464:26
+     |
+1464 |     fn take_while_ref<F>(&mut self, accept: F) -> TakeWhileRef<Self, F>
+     |                          ^^^^^^^^^                ^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+     |                          |
+     |                          the lifetime is elided here
+     |
+     = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+     |
+1464 |     fn take_while_ref<F>(&mut self, accept: F) -> TakeWhileRef<'_, Self, F>
+     |                                                                +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+    --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/itertools-0.12.1/src/lib.rs:2309:26
+     |
+2309 |     fn format(self, sep: &str) -> Format<Self>
+     |                          ^^^^     ^^^^^^^^^^^^ the same lifetime is hidden here
+     |                          |
+     |                          the lifetime is elided here
+     |
+     = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+     |
+2309 |     fn format(self, sep: &str) -> Format<'_, Self>
+     |                                          +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+    --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/itertools-0.12.1/src/lib.rs:2348:34
+     |
+2348 |     fn format_with<F>(self, sep: &str, format: F) -> FormatWith<Self, F>
+     |                                  ^^^^                ^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+     |                                  |
+     |                                  the lifetime is elided here
+     |
+     = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+     |
+2348 |     fn format_with<F>(self, sep: &str, format: F) -> FormatWith<'_, Self, F>
+     |                                                                 +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/itertools-0.12.1/src/adaptors/mod.rs:591:35
+    |
+591 | pub fn take_while_ref<I, F>(iter: &mut I, f: F) -> TakeWhileRef<I, F>
+    |                                   ^^^^^^           ^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+    |                                   |
+    |                                   the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+591 | pub fn take_while_ref<I, F>(iter: &mut I, f: F) -> TakeWhileRef<'_, I, F>
+    |                                                                 +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/itertools-0.12.1/src/peeking_take_while.rs:129:39
+    |
+129 | pub fn peeking_take_while<I, F>(iter: &mut I, f: F) -> PeekingTakeWhile<I, F>
+    |                                       ^^^^^^           ^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+    |                                       |
+    |                                       the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+129 | pub fn peeking_take_while<I, F>(iter: &mut I, f: F) -> PeekingTakeWhile<'_, I, F>
+    |                                                                         +++
+
+       Fresh aho-corasick v1.1.4
+       Fresh minimal-lexical v0.2.1
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/minimal-lexical-0.2.1/src/bigint.rs:127:17
+    |
+127 | pub fn rview(x: &[Limb]) -> ReverseView<Limb> {
+    |                 ^^^^^^^     ^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+    |                 |
+    |                 the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+    = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+    |
+127 | pub fn rview(x: &[Limb]) -> ReverseView<'_, Limb> {
+    |                                         +++
+
+       Fresh regex-syntax v0.8.8
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fluent-bundle-0.16.0/src/args.rs:96:17
+   |
+96 |     pub fn iter(&self) -> impl Iterator<Item = (&str, &FluentValue)> {
+   |                 ^^^^^                           ^^^^  ^^^^^^^^^^^^
+   |                 |                               |     ||
+   |                 |                               |     |the same lifetime is hidden here
+   |                 |                               |     the same lifetime is elided here
+   |                 |                               the same lifetime is elided here
+   |                 the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+   = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+   |
+96 |     pub fn iter(&self) -> impl Iterator<Item = (&str, &FluentValue<'_>)> {
+   |                                                                   ++++
+
+       Fresh zerocopy v0.8.27
+warning: unreachable expression
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zerocopy-0.8.27/src/error.rs:200:43
+    |
+200 |             ConvertError::Alignment(e) => ConvertError::Alignment(Infallible::from(e)),
+    |                                           ^^^^^^^^^^^^^^^^^^^^^^^^-------------------^
+    |                                           |                       |
+    |                                           |                       any code following this expression is unreachable
+    |                                           unreachable expression
+    |
+note: this expression has type `Infallible`, which is uninhabited
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zerocopy-0.8.27/src/error.rs:200:67
+    |
+200 |             ConvertError::Alignment(e) => ConvertError::Alignment(Infallible::from(e)),
+    |                                                                   ^^^^^^^^^^^^^^^^^^^
+    = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `itertools` (lib) generated 6 warnings
+warning: `minimal-lexical` (lib) generated 1 warning
+warning: `fluent-bundle` (lib) generated 1 warning
+warning: `zerocopy` (lib) generated 1 warning
+       Fresh nom v7.1.3
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nom-7.1.3/src/lib.rs:375:13
+    |
+375 | #![cfg_attr(feature = "cargo-clippy", allow(clippy::doc_markdown))]
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `alloc`, `default`, `docsrs`, and `std`
+    = help: consider adding `cargo-clippy` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition name: `nightly`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nom-7.1.3/src/lib.rs:379:12
+    |
+379 | #[cfg_attr(nightly, warn(rustdoc::missing_doc_code_examples))]
+    |            ^^^^^^^
+    |
+    = help: expected names are: `docsrs`, `feature`, and `test` and 31 more
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(nightly)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(nightly)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `nightly`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nom-7.1.3/src/lib.rs:391:12
+    |
+391 | #[cfg_attr(nightly, allow(rustdoc::missing_doc_code_examples))]
+    |            ^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(nightly)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(nightly)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `nightly`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nom-7.1.3/src/lib.rs:418:14
+    |
+418 |   #[cfg_attr(nightly, allow(rustdoc::missing_doc_code_examples))]
+    |              ^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(nightly)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(nightly)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `nightly`
+  --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nom-7.1.3/src/internal.rs:49:12
+   |
+49 | #[cfg_attr(nightly, warn(rustdoc::missing_doc_code_examples))]
+   |            ^^^^^^^
+   |
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(nightly)'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(nightly)");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `nightly`
+  --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nom-7.1.3/src/internal.rs:96:12
+   |
+96 | #[cfg_attr(nightly, warn(rustdoc::missing_doc_code_examples))]
+   |            ^^^^^^^
+   |
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(nightly)'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(nightly)");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `nightly`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nom-7.1.3/src/internal.rs:340:12
+    |
+340 | #[cfg_attr(nightly, warn(rustdoc::missing_doc_code_examples))]
+    |            ^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(nightly)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(nightly)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `nightly`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nom-7.1.3/src/internal.rs:357:12
+    |
+357 | #[cfg_attr(nightly, warn(rustdoc::missing_doc_code_examples))]
+    |            ^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(nightly)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(nightly)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `nightly`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nom-7.1.3/src/internal.rs:374:12
+    |
+374 | #[cfg_attr(nightly, warn(rustdoc::missing_doc_code_examples))]
+    |            ^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(nightly)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(nightly)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `nightly`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nom-7.1.3/src/internal.rs:392:12
+    |
+392 | #[cfg_attr(nightly, warn(rustdoc::missing_doc_code_examples))]
+    |            ^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(nightly)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(nightly)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `nightly`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nom-7.1.3/src/internal.rs:409:12
+    |
+409 | #[cfg_attr(nightly, warn(rustdoc::missing_doc_code_examples))]
+    |            ^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(nightly)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(nightly)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `nightly`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nom-7.1.3/src/internal.rs:430:12
+    |
+430 | #[cfg_attr(nightly, warn(rustdoc::missing_doc_code_examples))]
+    |            ^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(nightly)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(nightly)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused import: `self::str::*`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nom-7.1.3/src/lib.rs:439:9
+    |
+439 | pub use self::str::*;
+    |         ^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+       Fresh rustc_llvm v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_llvm)
+warning: unexpected `cfg` condition name: `llvm_component`
+  --> compiler/rustc_llvm/src/lib.rs:91:9
+   |
+91 |         llvm_component = "x86",
+   |         ^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: expected names are: `docsrs`, `feature`, and `test` and 31 more
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(llvm_component, values("x86"))'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(llvm_component, values(\"x86\"))");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition name: `llvm_component`
+  --> compiler/rustc_llvm/src/lib.rs:99:9
+   |
+99 |         llvm_component = "arm",
+   |         ^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(llvm_component, values("arm"))'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(llvm_component, values(\"arm\"))");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `llvm_component`
+   --> compiler/rustc_llvm/src/lib.rs:107:9
+    |
+107 |         llvm_component = "aarch64",
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(llvm_component, values("aarch64"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(llvm_component, values(\"aarch64\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `llvm_component`
+   --> compiler/rustc_llvm/src/lib.rs:115:9
+    |
+115 |         llvm_component = "amdgpu",
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(llvm_component, values("amdgpu"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(llvm_component, values(\"amdgpu\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `llvm_component`
+   --> compiler/rustc_llvm/src/lib.rs:123:9
+    |
+123 |         llvm_component = "avr",
+    |         ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(llvm_component, values("avr"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(llvm_component, values(\"avr\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `llvm_component`
+   --> compiler/rustc_llvm/src/lib.rs:131:9
+    |
+131 |         llvm_component = "m68k",
+    |         ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(llvm_component, values("m68k"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(llvm_component, values(\"m68k\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `llvm_component`
+   --> compiler/rustc_llvm/src/lib.rs:139:9
+    |
+139 |         llvm_component = "csky",
+    |         ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(llvm_component, values("csky"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(llvm_component, values(\"csky\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `llvm_component`
+   --> compiler/rustc_llvm/src/lib.rs:147:9
+    |
+147 |         llvm_component = "loongarch",
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(llvm_component, values("loongarch"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(llvm_component, values(\"loongarch\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `llvm_component`
+   --> compiler/rustc_llvm/src/lib.rs:155:9
+    |
+155 |         llvm_component = "mips",
+    |         ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(llvm_component, values("mips"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(llvm_component, values(\"mips\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `llvm_component`
+   --> compiler/rustc_llvm/src/lib.rs:163:9
+    |
+163 |         llvm_component = "powerpc",
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(llvm_component, values("powerpc"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(llvm_component, values(\"powerpc\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `llvm_component`
+   --> compiler/rustc_llvm/src/lib.rs:171:9
+    |
+171 |         llvm_component = "systemz",
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(llvm_component, values("systemz"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(llvm_component, values(\"systemz\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `llvm_component`
+   --> compiler/rustc_llvm/src/lib.rs:179:9
+    |
+179 |         llvm_component = "msp430",
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(llvm_component, values("msp430"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(llvm_component, values(\"msp430\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `llvm_component`
+   --> compiler/rustc_llvm/src/lib.rs:187:9
+    |
+187 |         llvm_component = "riscv",
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(llvm_component, values("riscv"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(llvm_component, values(\"riscv\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `llvm_component`
+   --> compiler/rustc_llvm/src/lib.rs:195:9
+    |
+195 |         llvm_component = "sparc",
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(llvm_component, values("sparc"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(llvm_component, values(\"sparc\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `llvm_component`
+   --> compiler/rustc_llvm/src/lib.rs:203:9
+    |
+203 |         llvm_component = "nvptx",
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(llvm_component, values("nvptx"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(llvm_component, values(\"nvptx\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `llvm_component`
+   --> compiler/rustc_llvm/src/lib.rs:210:9
+    |
+210 |         llvm_component = "hexagon",
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(llvm_component, values("hexagon"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(llvm_component, values(\"hexagon\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `llvm_component`
+   --> compiler/rustc_llvm/src/lib.rs:218:9
+    |
+218 |         llvm_component = "xtensa",
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(llvm_component, values("xtensa"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(llvm_component, values(\"xtensa\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `llvm_component`
+   --> compiler/rustc_llvm/src/lib.rs:226:9
+    |
+226 |         llvm_component = "webassembly",
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(llvm_component, values("webassembly"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(llvm_component, values(\"webassembly\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `llvm_component`
+   --> compiler/rustc_llvm/src/lib.rs:234:9
+    |
+234 |         llvm_component = "bpf",
+    |         ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(llvm_component, values("bpf"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(llvm_component, values(\"bpf\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+       Fresh rustc_baked_icu_data v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_baked_icu_data)
+       Fresh rustc_ast_pretty v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_ast_pretty)
+       Fresh regex-automata v0.4.13
+       Fresh rand_core v0.9.3
+       Fresh libloading v0.8.9
+       Fresh either v1.15.0
+       Fresh ppv-lite86 v0.2.21
+       Fresh prettyplease v0.2.37
+warning: `nom` (lib) generated 13 warnings
+warning: `rustc_llvm` (lib) generated 19 warnings
+warning: `either` (lib) generated 1 warning (1 duplicate)
+       Fresh regex v1.12.3
+       Fresh clang-sys v1.8.1
+       Fresh rustc_error_messages v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_error_messages)
+       Fresh serde v1.0.228
+       Fresh cexpr v0.6.0
+       Fresh itertools v0.12.1
+       Fresh bitflags v2.10.0
+       Fresh rand_chacha v0.9.0
+       Fresh unic-langid-macros v0.9.6
+warning: `itertools` (lib) generated 6 warnings (6 duplicates)
+       Fresh bindgen v0.72.1
+       Fresh rand v0.9.2
+       Fresh unic-langid v0.9.6
+       Fresh rand_xoshiro v0.7.0
+       Fresh ref-cast-impl v1.0.25
+       Fresh serde_derive_internals v0.29.1
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_derive_internals-0.29.1/src/attr.rs:670:23
+    |
+670 |     pub fn serde_path(&self) -> Cow<syn::Path> {
+    |                       ^^^^^     ^^^^^^^^^^^^^^ the same lifetime is hidden here
+    |                       |
+    |                       the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+    = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+    |
+670 |     pub fn serde_path(&self) -> Cow<'_, syn::Path> {
+    |                                     +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_derive_internals-0.29.1/src/case.rs:45:37
+   |
+45 |     pub fn from_str(rename_all_str: &str) -> Result<Self, ParseError> {
+   |                                     ^^^^                  ^^^^^^^^^^ the same lifetime is hidden here
+   |                                     |
+   |                                     the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+45 |     pub fn from_str(rename_all_str: &str) -> Result<Self, ParseError<'_>> {
+   |                                                                     ++++
+
+       Fresh siphasher v1.0.2
+       Fresh smallvec v1.15.1
+       Fresh rustc_hir_id v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_hir_id)
+warning: `serde_derive_internals` (lib) generated 2 warnings
+       Fresh serde_json v1.0.145
+       Fresh phf_shared v0.13.1
+       Fresh schemars_derive v1.1.0
+       Fresh ref-cast v1.0.25
+       Fresh rustc_abi v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_abi)
+       Fresh dyn-clone v1.0.20
+       Fresh strsim v0.11.1
+       Fresh fnv v1.0.7
+       Fresh ident_case v1.0.1
+warning: use of deprecated trait `std::ascii::AsciiExt`: use inherent methods instead
+  --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ident_case-1.0.1/src/lib.rs:25:17
+   |
+25 | use std::ascii::AsciiExt;
+   |                 ^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+
+warning: unused import: `std::ascii::AsciiExt`
+  --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ident_case-1.0.1/src/lib.rs:25:5
+   |
+25 | use std::ascii::AsciiExt;
+   |     ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+       Fresh anstyle v1.0.13
+       Fresh serde_path_to_error v0.1.20
+warning: `ident_case` (lib) generated 2 warnings
+       Fresh schemars v1.1.0
+       Fresh darling_core v0.20.11
+       Fresh object v0.37.3
+       Fresh rustc_fs_util v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_fs_util)
+       Fresh fastrand v2.3.0
+       Fresh intl_pluralrules v7.0.2
+       Fresh intl-memoizer v0.5.3
+       Fresh fluent-langneg v0.13.1
+       Fresh odht v0.3.1
+warning: the feature `core_intrinsics` is internal to the compiler or standard library
+  --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/odht-0.3.1/src/lib.rs:56:42
+   |
+56 | #![cfg_attr(feature = "nightly", feature(core_intrinsics))]
+   |                                          ^^^^^^^^^^^^^^^
+   |
+   = note: using it is strongly discouraged
+   = note: `#[warn(internal_features)]` on by default
+
+       Fresh tinyvec_macros v0.1.1
+       Fresh utf8parse v0.2.2
+       Fresh annotate-snippets v0.11.5
+warning: `intl_pluralrules` (lib) generated 5 warnings (5 duplicates)
+warning: `odht` (lib) generated 1 warning
+       Fresh darling_macro v0.20.11
+       Fresh phf_generator v0.13.1
+       Fresh rustc_target v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_target)
+warning: unexpected `cfg` condition name: `bootstrap`
+  --> compiler/rustc_target/src/lib.rs:11:13
+   |
+11 | #![cfg_attr(bootstrap, feature(debug_closure_helpers))]
+   |             ^^^^^^^^^
+   |
+   = help: expected names are: `docsrs`, `feature`, and `test` and 31 more
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(bootstrap)'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(bootstrap)");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: `#[warn(unexpected_cfgs)]` on by default
+
+       Fresh anstyle-parse v0.2.7
+       Fresh fluent-bundle v0.16.0
+       Fresh tinyvec v1.10.0
+       Fresh anstyle-query v1.1.5
+       Fresh entities v1.0.1
+       Fresh is_terminal_polyfill v1.70.2
+       Fresh colorchoice v1.0.4
+warning: `rustc_target` (lib) generated 1 warning
+warning: `fluent-bundle` (lib) generated 1 warning (1 duplicate)
+       Fresh darling v0.20.11
+       Fresh phf_codegen v0.13.1
+       Fresh rustc_hir v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_hir)
+warning: unexpected `cfg` condition name: `bootstrap`
+ --> compiler/rustc_hir/src/lib.rs:6:13
+  |
+6 | #![cfg_attr(bootstrap, feature(debug_closure_helpers))]
+  |             ^^^^^^^^^
+  |
+  = help: expected names are: `docsrs`, `feature`, and `test` and 31 more
+  = help: consider using a Cargo feature instead
+  = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+           [lints.rust]
+           unexpected_cfgs = { level = "warn", check-cfg = ['cfg(bootstrap)'] }
+  = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(bootstrap)");` to the top of the `build.rs`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+  = note: `#[warn(unexpected_cfgs)]` on by default
+
+       Fresh unicode-normalization v0.1.24
+       Fresh anstream v0.6.21
+       Fresh rustc_fluent_macro v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_fluent_macro)
+       Fresh annotate-snippets v0.12.10
+       Fresh rustc_lint_defs v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_lint_defs)
+warning: unexpected `cfg` condition name: `bootstrap`
+    --> compiler/rustc_lint_defs/src/builtin.rs:2345:16
+     |
+2345 |     #[cfg_attr(bootstrap, doc = "```ignore")]
+     |                ^^^^^^^^^
+     |
+     = help: expected names are: `docsrs`, `feature`, and `test` and 31 more
+     = help: consider using a Cargo feature instead
+     = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+              [lints.rust]
+              unexpected_cfgs = { level = "warn", check-cfg = ['cfg(bootstrap)'] }
+     = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(bootstrap)");` to the top of the `build.rs`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+     = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition name: `bootstrap`
+    --> compiler/rustc_lint_defs/src/builtin.rs:2346:20
+     |
+2346 |     #[cfg_attr(not(bootstrap), doc = "```rust,no_run")]
+     |                    ^^^^^^^^^
+     |
+     = help: consider using a Cargo feature instead
+     = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+              [lints.rust]
+              unexpected_cfgs = { level = "warn", check-cfg = ['cfg(bootstrap)'] }
+     = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(bootstrap)");` to the top of the `build.rs`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `bootstrap`
+    --> compiler/rustc_lint_defs/src/builtin.rs:2355:16
+     |
+2355 |     #[cfg_attr(bootstrap, doc = "```")]
+     |                ^^^^^^^^^
+     |
+     = help: consider using a Cargo feature instead
+     = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+              [lints.rust]
+              unexpected_cfgs = { level = "warn", check-cfg = ['cfg(bootstrap)'] }
+     = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(bootstrap)");` to the top of the `build.rs`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `bootstrap`
+    --> compiler/rustc_lint_defs/src/builtin.rs:2356:20
+     |
+2356 |     #[cfg_attr(not(bootstrap), doc = "```")]
+     |                    ^^^^^^^^^
+     |
+     = help: consider using a Cargo feature instead
+     = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+              [lints.rust]
+              unexpected_cfgs = { level = "warn", check-cfg = ['cfg(bootstrap)'] }
+     = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(bootstrap)");` to the top of the `build.rs`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `bootstrap`
+    --> compiler/rustc_lint_defs/src/builtin.rs:4931:16
+     |
+4931 |     #[cfg_attr(bootstrap, doc = "```ignore")]
+     |                ^^^^^^^^^
+     |
+     = help: consider using a Cargo feature instead
+     = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+              [lints.rust]
+              unexpected_cfgs = { level = "warn", check-cfg = ['cfg(bootstrap)'] }
+     = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(bootstrap)");` to the top of the `build.rs`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `bootstrap`
+    --> compiler/rustc_lint_defs/src/builtin.rs:4932:20
+     |
+4932 |     #[cfg_attr(not(bootstrap), doc = "```rust,compile_fail")]
+     |                    ^^^^^^^^^
+     |
+     = help: consider using a Cargo feature instead
+     = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+              [lints.rust]
+              unexpected_cfgs = { level = "warn", check-cfg = ['cfg(bootstrap)'] }
+     = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(bootstrap)");` to the top of the `build.rs`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `bootstrap`
+    --> compiler/rustc_lint_defs/src/builtin.rs:4948:16
+     |
+4948 |     #[cfg_attr(bootstrap, doc = "```")]
+     |                ^^^^^^^^^
+     |
+     = help: consider using a Cargo feature instead
+     = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+              [lints.rust]
+              unexpected_cfgs = { level = "warn", check-cfg = ['cfg(bootstrap)'] }
+     = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(bootstrap)");` to the top of the `build.rs`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `bootstrap`
+    --> compiler/rustc_lint_defs/src/builtin.rs:4949:20
+     |
+4949 |     #[cfg_attr(not(bootstrap), doc = "```")]
+     |                    ^^^^^^^^^
+     |
+     = help: consider using a Cargo feature instead
+     = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+              [lints.rust]
+              unexpected_cfgs = { level = "warn", check-cfg = ['cfg(bootstrap)'] }
+     = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(bootstrap)");` to the top of the `build.rs`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `bootstrap`
+    --> compiler/rustc_lint_defs/src/builtin.rs:4975:16
+     |
+4975 |     #[cfg_attr(bootstrap, doc = "```ignore")]
+     |                ^^^^^^^^^
+     |
+     = help: consider using a Cargo feature instead
+     = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+              [lints.rust]
+              unexpected_cfgs = { level = "warn", check-cfg = ['cfg(bootstrap)'] }
+     = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(bootstrap)");` to the top of the `build.rs`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `bootstrap`
+    --> compiler/rustc_lint_defs/src/builtin.rs:4976:20
+     |
+4976 |     #[cfg_attr(not(bootstrap), doc = "```rust,compile_fail")]
+     |                    ^^^^^^^^^
+     |
+     = help: consider using a Cargo feature instead
+     = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+              [lints.rust]
+              unexpected_cfgs = { level = "warn", check-cfg = ['cfg(bootstrap)'] }
+     = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(bootstrap)");` to the top of the `build.rs`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `bootstrap`
+    --> compiler/rustc_lint_defs/src/builtin.rs:4989:16
+     |
+4989 |     #[cfg_attr(bootstrap, doc = "```")]
+     |                ^^^^^^^^^
+     |
+     = help: consider using a Cargo feature instead
+     = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+              [lints.rust]
+              unexpected_cfgs = { level = "warn", check-cfg = ['cfg(bootstrap)'] }
+     = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(bootstrap)");` to the top of the `build.rs`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `bootstrap`
+    --> compiler/rustc_lint_defs/src/builtin.rs:4990:20
+     |
+4990 |     #[cfg_attr(not(bootstrap), doc = "```")]
+     |                    ^^^^^^^^^
+     |
+     = help: consider using a Cargo feature instead
+     = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+              [lints.rust]
+              unexpected_cfgs = { level = "warn", check-cfg = ['cfg(bootstrap)'] }
+     = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(bootstrap)");` to the top of the `build.rs`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: `rustc_hir` (lib) generated 1 warning
+warning: `rustc_lint_defs` (lib) generated 12 warnings
+       Fresh derive_setters v0.1.8
+warning: field `name` is never read
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_setters-0.1.8/src/lib.rs:128:5
+    |
+127 | struct ContainerDef {
+    |        ------------ field in this struct
+128 |     name: Ident,
+    |     ^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+       Fresh termize v0.2.1
+       Fresh rustc_error_codes v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_error_codes)
+       Fresh jetscii v0.5.3
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:158:11
+    |
+158 | #[cfg(any(jetscii_sse4_2 = "yes", jetscii_sse4_2 = "maybe"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: expected names are: `docsrs`, `feature`, and `test` and 31 more
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("yes"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"yes\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:158:35
+    |
+158 | #[cfg(any(jetscii_sse4_2 = "yes", jetscii_sse4_2 = "maybe"))]
+    |                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("maybe"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"maybe\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:161:11
+    |
+161 | #[cfg(any(jetscii_sse4_2 = "maybe", jetscii_sse4_2 = "no"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("maybe"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"maybe\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:161:37
+    |
+161 | #[cfg(any(jetscii_sse4_2 = "maybe", jetscii_sse4_2 = "no"))]
+    |                                     ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("no"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"no\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:201:15
+    |
+201 |     #[cfg(any(jetscii_sse4_2 = "yes", jetscii_sse4_2 = "maybe"))]
+    |               ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("yes"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"yes\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:201:39
+    |
+201 |     #[cfg(any(jetscii_sse4_2 = "yes", jetscii_sse4_2 = "maybe"))]
+    |                                       ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("maybe"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"maybe\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:204:15
+    |
+204 |     #[cfg(any(jetscii_sse4_2 = "maybe", jetscii_sse4_2 = "no"))]
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("maybe"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"maybe\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:204:41
+    |
+204 |     #[cfg(any(jetscii_sse4_2 = "maybe", jetscii_sse4_2 = "no"))]
+    |                                         ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("no"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"no\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:225:23
+    |
+225 |             #[cfg(any(jetscii_sse4_2 = "yes", jetscii_sse4_2 = "maybe"))]
+    |                       ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("yes"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"yes\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:225:47
+    |
+225 |             #[cfg(any(jetscii_sse4_2 = "yes", jetscii_sse4_2 = "maybe"))]
+    |                                               ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("maybe"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"maybe\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:228:23
+    |
+228 |             #[cfg(any(jetscii_sse4_2 = "maybe", jetscii_sse4_2 = "no"))]
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("maybe"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"maybe\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:228:49
+    |
+228 |             #[cfg(any(jetscii_sse4_2 = "maybe", jetscii_sse4_2 = "no"))]
+    |                                                 ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("no"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"no\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:171:15
+    |
+171 |           #[cfg(jetscii_sse4_2 = "yes")]
+    |                 ^^^^^^^^^^^^^^^^^^^^^^
+...
+238 | /         dispatch! {
+239 | |             simd: unsafe { self.simd.find(haystack) },
+240 | |             fallback: self.fallback.find(haystack),
+241 | |         }
+    | |_________- in this macro invocation
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("yes"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"yes\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `dispatch` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:178:15
+    |
+178 |           #[cfg(jetscii_sse4_2 = "no")]
+    |                 ^^^^^^^^^^^^^^^^^^^^^
+...
+238 | /         dispatch! {
+239 | |             simd: unsafe { self.simd.find(haystack) },
+240 | |             fallback: self.fallback.find(haystack),
+241 | |         }
+    | |_________- in this macro invocation
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("no"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"no\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `dispatch` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:185:15
+    |
+185 |           #[cfg(jetscii_sse4_2 = "maybe")]
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+238 | /         dispatch! {
+239 | |             simd: unsafe { self.simd.find(haystack) },
+240 | |             fallback: self.fallback.find(haystack),
+241 | |         }
+    | |_________- in this macro invocation
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("maybe"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"maybe\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `dispatch` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:287:15
+    |
+287 |     #[cfg(any(jetscii_sse4_2 = "yes", jetscii_sse4_2 = "maybe"))]
+    |               ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("yes"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"yes\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:287:39
+    |
+287 |     #[cfg(any(jetscii_sse4_2 = "yes", jetscii_sse4_2 = "maybe"))]
+    |                                       ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("maybe"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"maybe\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:290:15
+    |
+290 |     #[cfg(any(jetscii_sse4_2 = "maybe", jetscii_sse4_2 = "no"))]
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("maybe"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"maybe\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:290:41
+    |
+290 |     #[cfg(any(jetscii_sse4_2 = "maybe", jetscii_sse4_2 = "no"))]
+    |                                         ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("no"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"no\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:297:23
+    |
+297 |             #[cfg(any(jetscii_sse4_2 = "yes", jetscii_sse4_2 = "maybe"))]
+    |                       ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("yes"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"yes\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:297:47
+    |
+297 |             #[cfg(any(jetscii_sse4_2 = "yes", jetscii_sse4_2 = "maybe"))]
+    |                                               ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("maybe"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"maybe\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:300:23
+    |
+300 |             #[cfg(any(jetscii_sse4_2 = "maybe", jetscii_sse4_2 = "no"))]
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("maybe"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"maybe\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:300:49
+    |
+300 |             #[cfg(any(jetscii_sse4_2 = "maybe", jetscii_sse4_2 = "no"))]
+    |                                                 ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("no"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"no\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:171:15
+    |
+171 |           #[cfg(jetscii_sse4_2 = "yes")]
+    |                 ^^^^^^^^^^^^^^^^^^^^^^
+...
+316 | /         dispatch! {
+317 | |             simd: unsafe { self.simd.find(haystack) },
+318 | |             fallback: self.fallback.find(haystack),
+319 | |         }
+    | |_________- in this macro invocation
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("yes"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"yes\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `dispatch` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:178:15
+    |
+178 |           #[cfg(jetscii_sse4_2 = "no")]
+    |                 ^^^^^^^^^^^^^^^^^^^^^
+...
+316 | /         dispatch! {
+317 | |             simd: unsafe { self.simd.find(haystack) },
+318 | |             fallback: self.fallback.find(haystack),
+319 | |         }
+    | |_________- in this macro invocation
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("no"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"no\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `dispatch` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition name: `jetscii_sse4_2`
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jetscii-0.5.3/src/lib.rs:185:15
+    |
+185 |           #[cfg(jetscii_sse4_2 = "maybe")]
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+316 | /         dispatch! {
+317 | |             simd: unsafe { self.simd.find(haystack) },
+318 | |             fallback: self.fallback.find(haystack),
+319 | |         }
+    | |_________- in this macro invocation
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(jetscii_sse4_2, values("maybe"))'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(jetscii_sse4_2, values(\"maybe\"))");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `dispatch` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+       Fresh rustc_feature v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_feature)
+       Fresh paste v1.0.15
+       Fresh caseless v0.2.2
+       Fresh phf v0.13.1
+warning: `derive_setters` (lib) generated 1 warning
+warning: `jetscii` (lib) generated 26 warnings
+       Fresh rustc_errors v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_errors)
+       Fresh getopts v0.2.24
+       Fresh unicode_categories v0.1.1
+warning: `...` range patterns are deprecated
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode_categories-0.1.1/src/lib.rs:229:23
+    |
+229 |             '\u{E000}'...'\u{F8FF}' => true,
+    |                       ^^^ help: use `..=` for an inclusive range
+    |
+    = warning: this is accepted in the current edition (Rust 2015) but is a hard error in Rust 2021!
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2021/warnings-promoted-to-error.html>
+    = note: `#[warn(ellipsis_inclusive_range_patterns)]` (part of `#[warn(rust_2021_compatibility)]`) on by default
+
+warning: `...` range patterns are deprecated
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode_categories-0.1.1/src/lib.rs:231:24
+    |
+231 |             '\u{F0000}'...'\u{FFFFD}' => true,
+    |                        ^^^ help: use `..=` for an inclusive range
+    |
+    = warning: this is accepted in the current edition (Rust 2015) but is a hard error in Rust 2021!
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2021/warnings-promoted-to-error.html>
+
+warning: `...` range patterns are deprecated
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode_categories-0.1.1/src/lib.rs:233:25
+    |
+233 |             '\u{100000}'...'\u{10FFFD}' => true,
+    |                         ^^^ help: use `..=` for an inclusive range
+    |
+    = warning: this is accepted in the current edition (Rust 2015) but is a hard error in Rust 2021!
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2021/warnings-promoted-to-error.html>
+
+warning: `...` range patterns are deprecated
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode_categories-0.1.1/src/lib.rs:252:23
+    |
+252 |             '\u{3400}'...'\u{4DB5}' => true,
+    |                       ^^^ help: use `..=` for an inclusive range
+    |
+    = warning: this is accepted in the current edition (Rust 2015) but is a hard error in Rust 2021!
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2021/warnings-promoted-to-error.html>
+
+warning: `...` range patterns are deprecated
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode_categories-0.1.1/src/lib.rs:254:23
+    |
+254 |             '\u{4E00}'...'\u{9FD5}' => true,
+    |                       ^^^ help: use `..=` for an inclusive range
+    |
+    = warning: this is accepted in the current edition (Rust 2015) but is a hard error in Rust 2021!
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2021/warnings-promoted-to-error.html>
+
+warning: `...` range patterns are deprecated
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode_categories-0.1.1/src/lib.rs:256:23
+    |
+256 |             '\u{AC00}'...'\u{D7A3}' => true,
+    |                       ^^^ help: use `..=` for an inclusive range
+    |
+    = warning: this is accepted in the current edition (Rust 2015) but is a hard error in Rust 2021!
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2021/warnings-promoted-to-error.html>
+
+warning: `...` range patterns are deprecated
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode_categories-0.1.1/src/lib.rs:258:24
+    |
+258 |             '\u{17000}'...'\u{187EC}' => true,
+    |                        ^^^ help: use `..=` for an inclusive range
+    |
+    = warning: this is accepted in the current edition (Rust 2015) but is a hard error in Rust 2021!
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2021/warnings-promoted-to-error.html>
+
+warning: `...` range patterns are deprecated
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode_categories-0.1.1/src/lib.rs:260:24
+    |
+260 |             '\u{20000}'...'\u{2A6D6}' => true,
+    |                        ^^^ help: use `..=` for an inclusive range
+    |
+    = warning: this is accepted in the current edition (Rust 2015) but is a hard error in Rust 2021!
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2021/warnings-promoted-to-error.html>
+
+warning: `...` range patterns are deprecated
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode_categories-0.1.1/src/lib.rs:262:24
+    |
+262 |             '\u{2A700}'...'\u{2B734}' => true,
+    |                        ^^^ help: use `..=` for an inclusive range
+    |
+    = warning: this is accepted in the current edition (Rust 2015) but is a hard error in Rust 2021!
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2021/warnings-promoted-to-error.html>
+
+warning: `...` range patterns are deprecated
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode_categories-0.1.1/src/lib.rs:264:24
+    |
+264 |             '\u{2B740}'...'\u{2B81D}' => true,
+    |                        ^^^ help: use `..=` for an inclusive range
+    |
+    = warning: this is accepted in the current edition (Rust 2015) but is a hard error in Rust 2021!
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2021/warnings-promoted-to-error.html>
+
+warning: `...` range patterns are deprecated
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode_categories-0.1.1/src/lib.rs:266:24
+    |
+266 |             '\u{2B820}'...'\u{2CEA1}' => true,
+    |                        ^^^ help: use `..=` for an inclusive range
+    |
+    = warning: this is accepted in the current edition (Rust 2015) but is a hard error in Rust 2021!
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2021/warnings-promoted-to-error.html>
+
+       Fresh typed-arena v2.0.2
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/typed-arena-2.0.2/src/lib.rs:495:21
+    |
+495 |     pub fn iter_mut(&mut self) -> IterMut<T> {
+    |                     ^^^^^^^^^     ^^^^^^^^^^ the same lifetime is hidden here
+    |                     |
+    |                     the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+    = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+    |
+495 |     pub fn iter_mut(&mut self) -> IterMut<'_, T> {
+    |                                           +++
+
+       Fresh unicode-segmentation v1.12.0
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode-segmentation-1.12.0/src/lib.rs:251:18
+    |
+251 |     fn graphemes(&self, is_extended: bool) -> Graphemes {
+    |                  ^^^^^                        ^^^^^^^^^ the same lifetime is hidden here
+    |                  |
+    |                  the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+    = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+    |
+251 |     fn graphemes(&self, is_extended: bool) -> Graphemes<'_> {
+    |                                                        ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode-segmentation-1.12.0/src/lib.rs:256:25
+    |
+256 |     fn grapheme_indices(&self, is_extended: bool) -> GraphemeIndices {
+    |                         ^^^^^                        ^^^^^^^^^^^^^^^ the same lifetime is hidden here
+    |                         |
+    |                         the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+256 |     fn grapheme_indices(&self, is_extended: bool) -> GraphemeIndices<'_> {
+    |                                                                     ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode-segmentation-1.12.0/src/lib.rs:261:22
+    |
+261 |     fn unicode_words(&self) -> UnicodeWords {
+    |                      ^^^^^     ^^^^^^^^^^^^ the same lifetime is hidden here
+    |                      |
+    |                      the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+261 |     fn unicode_words(&self) -> UnicodeWords<'_> {
+    |                                            ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode-segmentation-1.12.0/src/lib.rs:266:29
+    |
+266 |     fn unicode_word_indices(&self) -> UnicodeWordIndices {
+    |                             ^^^^^     ^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+    |                             |
+    |                             the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+266 |     fn unicode_word_indices(&self) -> UnicodeWordIndices<'_> {
+    |                                                         ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode-segmentation-1.12.0/src/lib.rs:271:26
+    |
+271 |     fn split_word_bounds(&self) -> UWordBounds {
+    |                          ^^^^^     ^^^^^^^^^^^ the same lifetime is hidden here
+    |                          |
+    |                          the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+271 |     fn split_word_bounds(&self) -> UWordBounds<'_> {
+    |                                               ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode-segmentation-1.12.0/src/lib.rs:276:33
+    |
+276 |     fn split_word_bound_indices(&self) -> UWordBoundIndices {
+    |                                 ^^^^^     ^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+    |                                 |
+    |                                 the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+276 |     fn split_word_bound_indices(&self) -> UWordBoundIndices<'_> {
+    |                                                            ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode-segmentation-1.12.0/src/lib.rs:281:26
+    |
+281 |     fn unicode_sentences(&self) -> UnicodeSentences {
+    |                          ^^^^^     ^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+    |                          |
+    |                          the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+281 |     fn unicode_sentences(&self) -> UnicodeSentences<'_> {
+    |                                                    ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode-segmentation-1.12.0/src/lib.rs:286:30
+    |
+286 |     fn split_sentence_bounds(&self) -> USentenceBounds {
+    |                              ^^^^^     ^^^^^^^^^^^^^^^ the same lifetime is hidden here
+    |                              |
+    |                              the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+286 |     fn split_sentence_bounds(&self) -> USentenceBounds<'_> {
+    |                                                       ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode-segmentation-1.12.0/src/lib.rs:291:37
+    |
+291 |     fn split_sentence_bound_indices(&self) -> USentenceBoundIndices {
+    |                                     ^^^^^     ^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+    |                                     |
+    |                                     the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+291 |     fn split_sentence_bound_indices(&self) -> USentenceBoundIndices<'_> {
+    |                                                                    ++++
+
+       Fresh tblgen v0.7.2 (/home/arshadm/Workspace/projects/spinorml/rust/src/tblgen-rs)
+       Fresh rustc_type_ir_macros v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_type_ir_macros)
+       Fresh unindent v0.2.4
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unindent-0.2.4/src/unindent.rs:103:14
+    |
+103 |     fn lines(&self) -> Split<u8, fn(&u8) -> bool>;
+    |              ^^^^^     ^^^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+    |              |
+    |              the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+    = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+    |
+103 |     fn lines(&self) -> Split<'_, u8, fn(&u8) -> bool>;
+    |                              +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /home/arshadm/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unindent-0.2.4/src/unindent.rs:107:14
+    |
+107 |     fn lines(&self) -> Split<u8, fn(&u8) -> bool> {
+    |              ^^^^^     ^^^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+    |              |
+    |              the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+107 |     fn lines(&self) -> Split<'_, u8, fn(&u8) -> bool> {
+    |                              +++
+
+       Fresh datafrog v2.0.1
+warning: `unicode_categories` (lib) generated 11 warnings
+warning: `typed-arena` (lib) generated 1 warning
+warning: `unicode-segmentation` (lib) generated 9 warnings
+warning: `unindent` (lib) generated 2 warnings
+       Fresh convert_case v0.11.0
+       Fresh rustc_session v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_session)
+       Fresh comrak v0.50.0
+       Fresh rustc_type_ir v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_type_ir)
+       Fresh polonius-engine v0.13.0
+       Fresh mlir-sys v210.0.1 (/home/arshadm/Workspace/projects/spinorml/rust/src/mlir-sys)
+       Fresh rustc_hir_pretty v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_hir_pretty)
+       Fresh gsgdt v0.1.2
+       Fresh melior-macro v0.19.0 (/home/arshadm/Workspace/projects/spinorml/rust/src/melior/macro)
+       Fresh rustc_apfloat v0.2.3+llvm-462a31f5a5ab
+       Fresh rustc_query_system v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_query_system)
+       Dirty rustc_mlir v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_mlir): the file `compiler/rustc_mlir/mlir-wrapper` has changed (1773744251.123772267s, 19s after last build at 1773744232.899767729s)
+   Compiling rustc_mlir v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_mlir)
+       Fresh rustc_middle v0.0.0 (/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_middle)
+       Fresh melior v0.26.4 (/home/arshadm/Workspace/projects/spinorml/rust/src/melior/melior)
+     Running `CARGO=/home/arshadm/.rustup/toolchains/nightly-2025-12-05-x86_64-unknown-linux-gnu/bin/cargo CARGO_CFG_DEBUG_ASSERTIONS='' CARGO_CFG_FEATURE=default,triton CARGO_CFG_FMT_DEBUG=full CARGO_CFG_OVERFLOW_CHECKS='' CARGO_CFG_PANIC=unwind CARGO_CFG_RELOCATION_MODEL=pic CARGO_CFG_TARGET_ABI='' CARGO_CFG_TARGET_ARCH=x86_64 CARGO_CFG_TARGET_ENDIAN=little CARGO_CFG_TARGET_ENV=gnu CARGO_CFG_TARGET_FAMILY=unix CARGO_CFG_TARGET_FEATURE=fxsr,sse,sse2,x87 CARGO_CFG_TARGET_HAS_ATOMIC=16,32,64,8,ptr CARGO_CFG_TARGET_HAS_ATOMIC_EQUAL_ALIGNMENT=16,32,64,8,ptr CARGO_CFG_TARGET_HAS_ATOMIC_LOAD_STORE=16,32,64,8,ptr CARGO_CFG_TARGET_HAS_RELIABLE_F128='' CARGO_CFG_TARGET_HAS_RELIABLE_F16='' CARGO_CFG_TARGET_HAS_RELIABLE_F16_MATH='' CARGO_CFG_TARGET_OS=linux CARGO_CFG_TARGET_POINTER_WIDTH=64 CARGO_CFG_TARGET_THREAD_LOCAL='' CARGO_CFG_TARGET_VENDOR=unknown CARGO_CFG_UB_CHECKS='' CARGO_CFG_UNIX='' CARGO_ENCODED_RUSTFLAGS='' CARGO_FEATURE_DEFAULT=1 CARGO_FEATURE_TRITON=1 CARGO_MANIFEST_DIR=/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_mlir CARGO_MANIFEST_PATH=/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_mlir/Cargo.toml CARGO_PKG_AUTHORS='' CARGO_PKG_DESCRIPTION='' CARGO_PKG_HOMEPAGE='' CARGO_PKG_LICENSE='' CARGO_PKG_LICENSE_FILE='' CARGO_PKG_NAME=rustc_mlir CARGO_PKG_README='' CARGO_PKG_REPOSITORY='' CARGO_PKG_RUST_VERSION='' CARGO_PKG_VERSION=0.0.0 CARGO_PKG_VERSION_MAJOR=0 CARGO_PKG_VERSION_MINOR=0 CARGO_PKG_VERSION_PATCH=0 CARGO_PKG_VERSION_PRE='' DEBUG=true HOST=x86_64-unknown-linux-gnu LD_LIBRARY_PATH='/home/arshadm/Workspace/projects/spinorml/rust/target/debug:/home/arshadm/Workspace/projects/spinorml/rust/target/debug/deps:/home/arshadm/.rustup/toolchains/nightly-2025-12-05-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib:/home/arshadm/.rustup/toolchains/nightly-2025-12-05-x86_64-unknown-linux-gnu/lib::/home/arshadm/Workspace/projects/spinorml/teenygrad/target/cmake-build/install/lib' NUM_JOBS=12 OPT_LEVEL=0 OUT_DIR=/home/arshadm/Workspace/projects/spinorml/rust/target/debug/build/rustc_mlir-90be9a8355bf07d3/out PROFILE=debug RUSTC=/home/arshadm/.rustup/toolchains/nightly-2025-12-05-x86_64-unknown-linux-gnu/bin/rustc RUSTDOC=/home/arshadm/.rustup/toolchains/nightly-2025-12-05-x86_64-unknown-linux-gnu/bin/rustdoc TARGET=x86_64-unknown-linux-gnu /home/arshadm/Workspace/projects/spinorml/rust/target/debug/build/rustc_mlir-612e23fc970b7b4b/build-script-build`
+[rustc_mlir 0.0.0] CMAKE_TOOLCHAIN_FILE_x86_64-unknown-linux-gnu = None
+[rustc_mlir 0.0.0] CMAKE_TOOLCHAIN_FILE_x86_64_unknown_linux_gnu = None
+[rustc_mlir 0.0.0] HOST_CMAKE_TOOLCHAIN_FILE = None
+[rustc_mlir 0.0.0] CMAKE_TOOLCHAIN_FILE = None
+[rustc_mlir 0.0.0] CMAKE_PREFIX_PATH_x86_64-unknown-linux-gnu = None
+[rustc_mlir 0.0.0] CMAKE_PREFIX_PATH_x86_64_unknown_linux_gnu = None
+[rustc_mlir 0.0.0] HOST_CMAKE_PREFIX_PATH = None
+[rustc_mlir 0.0.0] CMAKE_PREFIX_PATH = None
+[rustc_mlir 0.0.0] CMAKE_x86_64-unknown-linux-gnu = None
+[rustc_mlir 0.0.0] CMAKE_x86_64_unknown_linux_gnu = None
+[rustc_mlir 0.0.0] HOST_CMAKE = None
+[rustc_mlir 0.0.0] CMAKE = None
+[rustc_mlir 0.0.0] running: cd "/home/arshadm/Workspace/projects/spinorml/rust/target/build/mlir-wrapper-build/build" && CMAKE_PREFIX_PATH="" LC_ALL="C" "cmake" "/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_mlir/mlir-wrapper" "-B" "/home/arshadm/Workspace/projects/spinorml/rust/target/build/mlir-wrapper-build/build" "-G" "Ninja" "-DCMAKE_BUILD_TYPE=Release" "-DLLVM_DIR=/home/arshadm/Workspace/projects/spinorml/rust/target/build/llvm-build/build/lib/cmake/llvm" "-DMLIR_DIR=/home/arshadm/Workspace/projects/spinorml/rust/target/build/llvm-build/build/lib/cmake/mlir" "-DTRITON_SOURCE_DIR=/home/arshadm/Workspace/projects/spinorml/rust/src/triton" "-DTRITON_BUILD_DIR=/home/arshadm/Workspace/projects/spinorml/rust/target/build/triton-build/build" "-DCMAKE_INSTALL_PREFIX=/home/arshadm/Workspace/projects/spinorml/rust/target/build/mlir-wrapper-build" "-DCMAKE_C_FLAGS= -ffunction-sections -fdata-sections -fPIC -m64 -w" "-DCMAKE_C_COMPILER=/usr/bin/cc" "-DCMAKE_CXX_FLAGS= -ffunction-sections -fdata-sections -fPIC -m64 -w" "-DCMAKE_CXX_COMPILER=/usr/bin/c++" "-DCMAKE_ASM_FLAGS= -ffunction-sections -fdata-sections -fPIC -m64 -w" "-DCMAKE_ASM_COMPILER=/usr/bin/cc"
+[rustc_mlir 0.0.0] -- Found LLVM 22.0.0git
+[rustc_mlir 0.0.0] -- Using LLVMConfig.cmake in: /home/arshadm/Workspace/projects/spinorml/rust/target/build/llvm-build/build/lib/cmake/llvm
+[rustc_mlir 0.0.0] -- Using MLIRConfig.cmake in: /home/arshadm/Workspace/projects/spinorml/rust/target/build/llvm-build/build/lib/cmake/mlir
+[rustc_mlir 0.0.0] -- Building with -fPIC
+[rustc_mlir 0.0.0] -- Triton source: /home/arshadm/Workspace/projects/spinorml/rust/src/triton
+[rustc_mlir 0.0.0] -- Triton build: /home/arshadm/Workspace/projects/spinorml/rust/target/build/triton-build/build
+[rustc_mlir 0.0.0] -- Configuring done (0.1s)
+[rustc_mlir 0.0.0] -- Generating done (0.0s)
+[rustc_mlir 0.0.0] -- Build files have been written to: /home/arshadm/Workspace/projects/spinorml/rust/target/build/mlir-wrapper-build/build
+[rustc_mlir 0.0.0] running: cd "/home/arshadm/Workspace/projects/spinorml/rust/target/build/mlir-wrapper-build/build" && LC_ALL="C" "cmake" "--build" "/home/arshadm/Workspace/projects/spinorml/rust/target/build/mlir-wrapper-build/build" "--target" "install" "--config" "Debug" "--parallel" "12"
+[rustc_mlir 0.0.0] [1/4] Building CXX object CMakeFiles/mlir-wrapper.dir/MLIRWrapper.cpp.o
+[rustc_mlir 0.0.0] [2/4] Building CXX object CMakeFiles/mlir-wrapper.dir/triton/TritonWrapper.cpp.o
+[rustc_mlir 0.0.0] [3/4] Linking CXX static library libmlir-wrapper.a
+[rustc_mlir 0.0.0] [3/4] Install the project...
+[rustc_mlir 0.0.0] -- Install configuration: "Release"
+[rustc_mlir 0.0.0] -- Installing: /home/arshadm/Workspace/projects/spinorml/rust/target/build/mlir-wrapper-build/lib/libmlir-wrapper.a
+[rustc_mlir 0.0.0] cargo:root=/home/arshadm/Workspace/projects/spinorml/rust/target/build/mlir-wrapper-build
+[rustc_mlir 0.0.0] cargo:rustc-env=LLVM_INCLUDE_DIRECTORY=/home/arshadm/Workspace/projects/spinorml/rust/target/install/include
+[rustc_mlir 0.0.0] cargo:rustc-env=TRITON_INCLUDE_DIRECTORY=/home/arshadm/Workspace/projects/spinorml/rust/src/triton/include
+[rustc_mlir 0.0.0] cargo:rustc-link-search=native=/home/arshadm/Workspace/projects/spinorml/rust/target/build/mlir-wrapper-build/lib
+[rustc_mlir 0.0.0] cargo:rustc-link-lib=static=mlir-wrapper
+[rustc_mlir 0.0.0] cargo:rustc-link-search=native=/home/arshadm/Workspace/projects/spinorml/rust/target/build/llvm-build/build/lib
+[rustc_mlir 0.0.0] cargo:rustc-link-lib=LLVMSupport
+[rustc_mlir 0.0.0] cargo:rustc-link-lib=LLVMCore
+[rustc_mlir 0.0.0] cargo:rustc-link-search=native=/home/arshadm/Workspace/projects/spinorml/rust/target/build/triton-build/build
+[rustc_mlir 0.0.0] cargo:rustc-link-lib=triton
+[rustc_mlir 0.0.0] cargo:rustc-link-lib=stdc++
+[rustc_mlir 0.0.0] cargo:rerun-if-changed=mlir-wrapper/
+[rustc_mlir 0.0.0] cargo:include=/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_mlir/mlir-wrapper
+[rustc_mlir 0.0.0] cargo:out_dir=/home/arshadm/Workspace/projects/spinorml/rust/target/debug/build/rustc_mlir-90be9a8355bf07d3/out
+     Running `CARGO=/home/arshadm/.rustup/toolchains/nightly-2025-12-05-x86_64-unknown-linux-gnu/bin/cargo CARGO_CRATE_NAME=rustc_mlir CARGO_MANIFEST_DIR=/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_mlir CARGO_MANIFEST_PATH=/home/arshadm/Workspace/projects/spinorml/rust/compiler/rustc_mlir/Cargo.toml CARGO_PKG_AUTHORS='' CARGO_PKG_DESCRIPTION='' CARGO_PKG_HOMEPAGE='' CARGO_PKG_LICENSE='' CARGO_PKG_LICENSE_FILE='' CARGO_PKG_NAME=rustc_mlir CARGO_PKG_README='' CARGO_PKG_REPOSITORY='' CARGO_PKG_RUST_VERSION='' CARGO_PKG_VERSION=0.0.0 CARGO_PKG_VERSION_MAJOR=0 CARGO_PKG_VERSION_MINOR=0 CARGO_PKG_VERSION_PATCH=0 CARGO_PKG_VERSION_PRE='' CARGO_PRIMARY_PACKAGE=1 CARGO_SBOM_PATH='' LD_LIBRARY_PATH='/home/arshadm/Workspace/projects/spinorml/rust/target/debug/deps:/home/arshadm/.rustup/toolchains/nightly-2025-12-05-x86_64-unknown-linux-gnu/lib::/home/arshadm/Workspace/projects/spinorml/teenygrad/target/cmake-build/install/lib:/home/arshadm/Workspace/projects/spinorml/rust/target/debug/build/tblgen-e6290bc03141e324/out' LLVM_INCLUDE_DIRECTORY=/home/arshadm/Workspace/projects/spinorml/rust/target/install/include OUT_DIR=/home/arshadm/Workspace/projects/spinorml/rust/target/debug/build/rustc_mlir-90be9a8355bf07d3/out TRITON_INCLUDE_DIRECTORY=/home/arshadm/Workspace/projects/spinorml/rust/src/triton/include /home/arshadm/.rustup/toolchains/nightly-2025-12-05-x86_64-unknown-linux-gnu/bin/rustc --crate-name rustc_mlir --edition=2021 compiler/rustc_mlir/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C embed-bitcode=no -C debuginfo=2 --cfg 'feature="default"' --cfg 'feature="triton"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("default", "triton"))' -C metadata=175bf887df96758b -C extra-filename=-981739968a1a2d0b --out-dir /home/arshadm/Workspace/projects/spinorml/rust/target/debug/deps -C incremental=/home/arshadm/Workspace/projects/spinorml/rust/target/debug/incremental -L dependency=/home/arshadm/Workspace/projects/spinorml/rust/target/debug/deps --extern melior=/home/arshadm/Workspace/projects/spinorml/rust/target/debug/deps/libmelior-4c9dbc6fb426014e.rmeta --extern melior_macro=/home/arshadm/Workspace/projects/spinorml/rust/target/debug/deps/libmelior_macro-ded047da112eb391.so --extern mlir_sys=/home/arshadm/Workspace/projects/spinorml/rust/target/debug/deps/libmlir_sys-3bdf8ea63548c1f2.rmeta --extern rustc_ast=/home/arshadm/Workspace/projects/spinorml/rust/target/debug/deps/librustc_ast-bd3561eb1836e86e.rmeta --extern rustc_errors=/home/arshadm/Workspace/projects/spinorml/rust/target/debug/deps/librustc_errors-519d959506c4fcd1.rmeta --extern rustc_fluent_macro=/home/arshadm/Workspace/projects/spinorml/rust/target/debug/deps/librustc_fluent_macro-22c93940c6eb499b.so --extern rustc_macros=/home/arshadm/Workspace/projects/spinorml/rust/target/debug/deps/librustc_macros-9de95479dad67eec.so --extern rustc_middle=/home/arshadm/Workspace/projects/spinorml/rust/target/debug/deps/librustc_middle-e41bbcc2e1016f00.rmeta -L native=/home/arshadm/Workspace/projects/spinorml/rust/target/debug/build/psm-abfaafc7855c4283/out -L native=/home/arshadm/Workspace/projects/spinorml/rust/target/debug/build/blake3-8e4fb882c2a47788/out -L native=/home/arshadm/Workspace/projects/spinorml/rust/target/debug/build/blake3-8e4fb882c2a47788/out -L native=/home/arshadm/Workspace/projects/spinorml/rust/target/build/mlir-wrapper-build/lib -L native=/home/arshadm/Workspace/projects/spinorml/rust/target/build/llvm-build/build/lib -L native=/home/arshadm/Workspace/projects/spinorml/rust/target/build/triton-build/build -L /home/arshadm/Workspace/projects/spinorml/rust/target/install/lib -l static=mlir-wrapper -l LLVMSupport -l LLVMCore -l triton -l stdc++`
+warning: unused import: `melior::ir::attribute::IntegerAttribute`
+  --> compiler/rustc_mlir/src/shared/arith.rs:21:5
+   |
+21 | use melior::ir::attribute::IntegerAttribute;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `RankedTensorType`
+  --> compiler/rustc_mlir/src/shared/arith.rs:22:39
+   |
+22 | use melior::ir::r#type::{IntegerType, RankedTensorType};
+   |                                       ^^^^^^^^^^^^^^^^
+
+warning: unused import: `melior::ir::r#type::IntegerType`
+  --> compiler/rustc_mlir/src/shared/attr.rs:18:5
+   |
+18 | use melior::ir::r#type::IntegerType;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `melior::ir::operation::OperationBuilder`
+  --> compiler/rustc_mlir/src/triton/mod.rs:22:5
+   |
+22 | use melior::ir::operation::OperationBuilder;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Identifier` and `Operation`
+  --> compiler/rustc_mlir/src/triton/mod.rs:24:18
+   |
+24 | use melior::ir::{Identifier, Location, Operation, Region, Type, TypeLike, Value};
+   |                  ^^^^^^^^^^            ^^^^^^^^^
+
+warning: unused import: `TypeLike`
+  --> compiler/rustc_mlir/src/triton/tensor.rs:21:56
+   |
+21 | use melior::ir::{Attribute, Location, Operation, Type, TypeLike, Value};
+   |                                                        ^^^^^^^^
+
+warning: unused import: `crate::ffi::mlirCreateTritonPointerType`
+  --> compiler/rustc_mlir/src/triton/tensor.rs:24:5
+   |
+24 | use crate::ffi::mlirCreateTritonPointerType;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `rustc_mlir` (lib) generated 7 warnings (run `cargo fix --lib -p rustc_mlir` to apply 7 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 15.19s

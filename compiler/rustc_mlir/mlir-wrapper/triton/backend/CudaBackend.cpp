@@ -135,7 +135,7 @@ LogicalResult CudaBackend::makeLLVMIR(MLIRContext &context, ModuleOp module) {
   return LogicalResult::success();
 }
 
-LogicalResult CudaBackend::generatePtx(MLIRContext &context, ModuleOp module) {
+LogicalResult CudaBackend::makeASM(MLIRContext &context, ModuleOp module) {
   // TODO: remove hardcoded values
   int ptx_version = 120;
   std::string triple = "nvptx64-nvidia-cuda";
@@ -461,6 +461,10 @@ CudaBackend::createTritonGPUProxyFenceInsertionWrapper(int32_t capability) {
   ttng::TritonGPUProxyFenceInsertionOptions options;
   options.computeCapability = capability;
   return ttng::createTritonGPUProxyFenceInsertion(options);
+}
+
+LogicalResult CudaBackend::makeBIN(MLIRContext &context, ModuleOp module) {
+  return LogicalResult::success();
 }
 
 LogicalResult

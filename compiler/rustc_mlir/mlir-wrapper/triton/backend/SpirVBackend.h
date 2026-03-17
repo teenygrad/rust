@@ -21,7 +21,6 @@
 #include <map>
 #include <optional>
 #include <string>
-#include <vector>
 
 #include "Backend.h"
 
@@ -65,8 +64,9 @@ public:
   virtual LogicalResult makeLLVMIR(MLIRContext &context,
                                    ModuleOp module) override;
 
-  /// Runs the TritonGPU → SPIR-V translation and stores the result in m_asm.
-  LogicalResult generateSPIRV(MLIRContext &context, ModuleOp module);
+  virtual LogicalResult makeASM(MLIRContext &context, ModuleOp module) override;
+
+  virtual LogicalResult makeBIN(MLIRContext &context, ModuleOp module) override;
 
 private:
   SpirVOptions m_options;

@@ -150,6 +150,10 @@ public:
 
   virtual LogicalResult makeLLVMIR(MLIRContext &context, ModuleOp module) = 0;
 
+  virtual LogicalResult makeASM(MLIRContext &context, ModuleOp module) = 0;
+
+  virtual LogicalResult makeBIN(MLIRContext &context, ModuleOp module) = 0;
+
   void printIR(std::string stage, ModuleOp module);
 
   const char *getLLIR() const { return m_llir.c_str(); }

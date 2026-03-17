@@ -20,6 +20,7 @@
 
 #include "TritonCompiler.h"
 #include "backend/CudaBackend.h"
+#include "backend/SpirVBackend.h"
 
 using namespace std;
 
@@ -29,7 +30,11 @@ namespace triton {
 TritonCompiler::TritonCompiler(MLIRContext *context, std::string target,
                                std::string options)
     : Compiler(context, target, options) {
-  backend = new CudaBackend(target, CudaOptions());
+  if (target.find("spirv") != std::string::npos) {
+    backend = new SpirVBackend(target, SpirVOptions());
+  } else {
+    backend = new CudaBackend(target, CudaOptions());
+  }
   backend->loadDialects(*context);
 }
 
@@ -42,14 +47,17 @@ LogicalResult TritonCompiler::compile(ModuleOp mlir_module) {
     return result;
   }
 
-  // The module is now in LLIR format, so we can generate the output from it.
-  CudaBackend *cudaBackend = dynamic_cast<CudaBackend *>(backend);
-  if (cudaBackend != nullptr) {
-    auto ptxResult = cudaBackend->generatePtx(*context, mlir_module);
-    if (failed(ptxResult)) {
-      llvm::errs() << "Failed to generate PTX from CUDA backend.\n";
-      return ptxResult;
-    }
+  // Generate ASM and BIN from the backend
+  auto asmResult = backend->makeASM(*context, mlir_module);
+  if (failed(asmResult)) {
+    llvm::errs() << "Failed to generate ASM from backend.\n";
+    return asmResult;
+  }
+
+  auto binResult = backend->makeBIN(*context, mlir_module);
+  if (failed(binResult)) {
+    llvm::errs() << "Failed to generate BIN from backend.\n";
+    return binResult;
   }
 
   return LogicalResult::success();
