@@ -214,10 +214,8 @@ fn get_adt_handler(adt: &str) -> AdtHandler {
         let entries: Vec<(&'static str, AdtHandler)> = vec![
             ("triton::llvm::triton::tensor::Tensor", triton_tensor_handler),
             ("triton::llvm::triton::pointer::Pointer", triton_pointer_handler),
-            ("triton::llvm::triton::num::I32", triton_i32_handler),
-            ("triton::llvm::triton::num::F32", triton_f32_handler),
             ("triton::llvm::triton::types::Bool", triton_bool_handler),
-            ("triton::ProgramAxis", triton_program_axis_handler),
+            ("triton::Axis", triton_program_axis_handler),
         ];
         entries.into_iter().collect()
     });
@@ -247,24 +245,6 @@ pub fn triton_pointer_handler<'tcx, 'c>(
     let arg_ty = args[0].expect_ty();
     let arg_type = type_mapper.map_type(context, tcx, &arg_ty);
     pointer_type(arg_type)
-}
-
-pub fn triton_i32_handler<'tcx, 'c>(
-    _type_mapper: &TypeMapper,
-    context: &'c Context,
-    _tcx: &TyCtxt<'tcx>,
-    _args: &[GenericArg<'tcx>],
-) -> Type<'c> {
-    IntegerType::new(context, 32).into()
-}
-
-pub fn triton_f32_handler<'tcx, 'c>(
-    _type_mapper: &TypeMapper,
-    context: &'c Context,
-    _tcx: &TyCtxt<'tcx>,
-    _args: &[GenericArg<'tcx>],
-) -> Type<'c> {
-    Type::float32(context)
 }
 
 pub fn triton_bool_handler<'tcx, 'c>(

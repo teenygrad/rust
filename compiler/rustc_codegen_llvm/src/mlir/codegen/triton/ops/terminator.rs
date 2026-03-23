@@ -78,22 +78,10 @@ impl<'a> TritonCodegen<'a> {
                 todo!("UnwindTerminate: {:?}", unwind_terminate_reason)
             }
             rustc_middle::mir::TerminatorKind::Unreachable => todo!("Unreachable"),
-            rustc_middle::mir::TerminatorKind::Drop {
-                place,
-                target,
-                unwind,
-                replace,
-                drop,
-                async_fut,
-            } => todo!(
-                "Drop: {:?} {:?} {:?} {:?} {:?} {:?}",
-                place,
-                target,
-                unwind,
-                replace,
-                drop,
-                async_fut
-            ),
+            rustc_middle::mir::TerminatorKind::Drop { target, .. } => {
+                // All kernel types are Copy with no destructors; treat as goto target.
+                self.codegen_goto(target, mlir_block, basic_blocks)
+            }
             rustc_middle::mir::TerminatorKind::Call {
                 func,
                 args,

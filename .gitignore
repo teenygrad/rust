@@ -109,6 +109,7 @@ flake.lock
 .bv/
 todo.md
 axm.out
+kernel.txt
 context.md
 compile_commands.json
 .clangd

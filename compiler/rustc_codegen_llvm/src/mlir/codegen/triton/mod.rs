@@ -466,8 +466,6 @@ impl<'a> TritonCodegen<'a> {
                     self.codegen_create_pointer(
                         tcx, instance, mir, index_vec, mlir_block, ssa_values,
                     )
-                } else if "triton::llvm::triton::num::I32" == adt_name {
-                    self.codegen_create_i32(tcx, instance, mir, index_vec, mlir_block, ssa_values)
                 } else {
                     todo!(
                         "codegen_aggregate_create: {:?} {:?} {:?}",
@@ -551,22 +549,6 @@ impl<'a> TritonCodegen<'a> {
         Ok(Some(pointer_result.into()))
     }
 
-    fn codegen_create_i32<'tcx>(
-        &self,
-        tcx: TyCtxt<'tcx>,
-        instance: &Instance<'tcx>,
-        mir: &Body<'tcx>,
-        index_vec: &IndexVec<FieldIdx, Operand<'tcx>>,
-        mlir_block: &BlockRef<'a, 'a>,
-        ssa_values: &mut SsaValues<'a, 'a>,
-    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
-        let arg1 = index_vec.get(FieldIdx::from_usize(0)).expect("arg1 not found");
-        let value =
-            self.codegen_operand(tcx, instance, arg1, arg1.ty(mir, tcx), mlir_block, ssa_values)?;
-        println!("codegen_create_i32: value: {:?}", value);
-        Ok(Some(value))
-    }
-
     fn codegen_const_adt<'tcx>(
         &self,
         tcx: TyCtxt<'tcx>,
@@ -615,8 +597,6 @@ impl<'a> TritonCodegen<'a> {
             let pointer_result = pointer_op.result(0).unwrap();
             mlir_block.append_operation(pointer_op);
             Ok(pointer_result.into())
-        } else if name == "triton::llvm::triton::num::I32" {
-            Ok(value)
         } else {
             todo!("Adt: {:?}", adt_def)
         }
@@ -896,6 +876,10 @@ impl<'a> TritonCodegen<'a> {
                             mlir_block,
                         )?;
                         Ok(result)
+                    }
+                    TyKind::Int(_) | TyKind::Uint(_) | TyKind::Float(_) | TyKind::Bool => {
+                        // Constant already has the right primitive type — return as-is.
+                        Ok(value)
                     }
                     _ => todo!("Constant cast normalized_ty: {:?}", normalized_ty),
                 }
