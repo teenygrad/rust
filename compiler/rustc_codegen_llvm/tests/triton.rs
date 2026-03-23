@@ -54,7 +54,7 @@ impl LlvmCompiler {
         // Use custom callbacks that register the MLIR backend
         let mut callbacks = MlirBackendCallbacks;
         let exe_name = "/home/arshadm/.cargo/bin/rustc".to_string(); // AXM FIXME: remove this once API changes
-        let output = format!("-o{}", working_dir.join("kernel.mlir").display());
+        let output = format!("-o{}", working_dir.join("kernel.asm").display());
         let build_type = "-Copt-level=3".to_string(); // Use opt-level=3 for release build
         let panic_abort = "-Cpanic=abort".to_string();
         let target = format!("--target={}", target);

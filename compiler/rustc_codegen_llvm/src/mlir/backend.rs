@@ -20,6 +20,7 @@
 //! with rustc's compilation pipeline.
 
 use std::any::Any;
+use std::ffi::CString;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -27,7 +28,7 @@ use std::time::Instant;
 use melior::ir::operation::OperationLike;
 use melior::pass;
 use melior::pass::PassManager;
-use rustc_codegen_ssa::back::lto::{SerializedModule, ThinModule};
+use rustc_codegen_ssa::back::lto::{SerializedModule, ThinModule, ThinShared};
 use rustc_codegen_ssa::back::write::{
     CodegenContext, FatLtoInput, ModuleConfig, TargetMachineFactoryConfig, TargetMachineFactoryFn,
 };
@@ -200,13 +201,14 @@ fn compile_module(mlir_module: &mut MlirModule<'static>) -> Result<(), MlirError
         return Err(MlirError::CodegenFailed { err: "Triton compilation failed".to_string() });
     }
 
-    let output = mlir_module.compiler.get_asm();
-    if output.is_none() {
-        return Err(MlirError::CodegenFailed { err: "Triton compilation failed".to_string() });
-    }
+    let ptx = mlir_module
+        .compiler
+        .get_asm()
+        .ok_or_else(|| MlirError::CodegenFailed { err: "Triton returned no ASM".to_string() })?
+        .to_owned();
 
-    let output = output.unwrap();
-    eprintln!("Triton PTX output: {}", output);
+    eprintln!("Triton PTX output ({} bytes): {}", ptx.len(), ptx);
+    mlir_module.ptx_asm = Some(ptx);
     Ok(())
 }
 
@@ -253,11 +255,25 @@ impl WriteBackendMethods for MlirCodegenBackend {
         _cgcx: &CodegenContext<Self>,
         _exported_symbols_for_lto: &[String],
         _each_linked_rlib_for_lto: &[PathBuf],
-        _modules: Vec<(String, Self::ThinBuffer)>,
+        modules: Vec<(String, Self::ThinBuffer)>,
         cached_modules: Vec<(SerializedModule<Self::ModuleBuffer>, WorkProduct)>,
     ) -> (Vec<ThinModule<Self>>, Vec<WorkProduct>) {
-        info!("MLIR: run_thin_lto (not implemented)");
-        (Vec::new(), cached_modules.into_iter().map(|(_, wp)| wp).collect())
+        // No-op thin LTO: pass modules through unchanged. Each module is
+        // wrapped in a ThinModule so optimize_thin can handle it individually.
+        let (names, buffers): (Vec<_>, Vec<_>) = modules.into_iter().unzip();
+        let module_names =
+            names.iter().map(|n| CString::new(n.as_str()).unwrap()).collect::<Vec<_>>();
+        let num_modules = module_names.len();
+        let shared = Arc::new(ThinShared {
+            data: ThinData {},
+            thin_buffers: buffers,
+            serialized_modules: Vec::new(),
+            module_names,
+        });
+        let thin_modules =
+            (0..num_modules).map(|idx| ThinModule { shared: Arc::clone(&shared), idx }).collect();
+        let work_products = cached_modules.into_iter().map(|(_, wp)| wp).collect();
+        (thin_modules, work_products)
     }
 
     fn optimize(
@@ -276,13 +292,17 @@ impl WriteBackendMethods for MlirCodegenBackend {
 
     fn optimize_thin(
         _cgcx: &CodegenContext<Self>,
-        _thin: ThinModule<Self>,
+        thin: ThinModule<Self>,
     ) -> ModuleCodegen<Self::Module> {
-        info!("MLIR: optimize_thin (not implemented)");
-        panic!("Thin LTO optimization not yet implemented")
+        let name = thin.name().to_string();
+        info!("MLIR: optimize_thin '{}' (pass-through)", name);
+        // Recover the PTX that was serialized into the thin buffer by prepare_thin.
+        let ptx = String::from_utf8(thin.data().to_vec()).ok();
+        let mut m = MlirModule::new(&name);
+        m.ptx_asm = ptx;
+        ModuleCodegen::new_regular(name, m)
     }
 
-    #[allow(unreachable_code)]
     fn codegen(
         cgcx: &CodegenContext<Self>,
         module: ModuleCodegen<Self::Module>,
@@ -291,15 +311,25 @@ impl WriteBackendMethods for MlirCodegenBackend {
         info!("=== MLIR codegen ===");
         info!("Module name: {}", module.name);
 
-        let frontend = cgcx.opts.frontend.expect("frontend not set");
-        info!("Frontend: {:?}", frontend);
+        // ptx_asm is populated either directly (no-LTO path) or via
+        // prepare_thin → optimize_thin (ThinLocal LTO path).
+        let ptx = module.module_llvm.ptx_asm.as_deref().unwrap_or_else(|| {
+            panic!("No PTX available for module '{}' — Triton compilation may not have run", module.name)
+        });
 
-        // TODO: Implement actual MLIR to native code generation
-        // For now, return an empty compiled module
+        let out_path = cgcx.output_filenames.temp_path_for_cgu(
+            rustc_session::config::OutputType::Object,
+            &module.name,
+            cgcx.invocation_temp.as_deref(),
+        );
+        std::fs::write(&out_path, ptx.as_bytes())
+            .unwrap_or_else(|e| panic!("Failed to write PTX to {}: {}", out_path.display(), e));
+        info!("PTX written to {} ({} bytes)", out_path.display(), ptx.len());
+
         CompiledModule {
             name: module.name,
             kind: module.kind,
-            object: None,
+            object: Some(out_path),
             dwarf_object: None,
             bytecode: None,
             assembly: None,
@@ -310,7 +340,9 @@ impl WriteBackendMethods for MlirCodegenBackend {
 
     fn prepare_thin(module: ModuleCodegen<Self::Module>) -> (String, Self::ThinBuffer) {
         info!("MLIR: prepare_thin for '{}'", module.name);
-        (module.name, ThinBuffer::new())
+        // Serialize the PTX into the thin buffer so optimize_thin can recover it.
+        let ptx_bytes = module.module_llvm.ptx_asm.map(|s| s.into_bytes()).unwrap_or_default();
+        (module.name, ThinBuffer { data: ptx_bytes })
     }
 
     fn serialize_module(module: ModuleCodegen<Self::Module>) -> (String, Self::ModuleBuffer) {
@@ -374,7 +406,33 @@ impl CodegenBackend for MlirCodegenBackend {
         (codegen_results, work_products)
     }
 
-    // Uses default link implementation from the trait
+    fn link(
+        &self,
+        sess: &Session,
+        codegen_results: rustc_codegen_ssa::CodegenResults,
+        _metadata: rustc_metadata::EncodedMetadata,
+        outputs: &OutputFilenames,
+    ) {
+        use rustc_session::config::OutputType;
+        info!("MLIR: link (writing PTX output)");
+
+        // produce_final_output_artifacts only copies temp files for output
+        // types listed in --emit. For PTX there is no linking step, so we
+        // copy each module's object (PTX) directly to the -o destination.
+        let out = outputs.path(OutputType::Object);
+        for module in &codegen_results.modules {
+            if let Some(obj) = &module.object {
+                if let Err(e) = std::fs::copy(obj, out.as_path()) {
+                    sess.dcx().fatal(format!(
+                        "failed to write PTX output to {}: {}",
+                        out.as_path().display(),
+                        e
+                    ));
+                }
+                info!("PTX written to {}", out.as_path().display());
+            }
+        }
+    }
 
     fn print(&self, req: &PrintRequest, out: &mut String, _sess: &Session) {
         match req.kind {
