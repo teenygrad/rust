@@ -108,6 +108,7 @@ flake.lock
 # bv (beads viewer) local config and caches
 .bv/
 todo.md
+axm.out
 context.md
 compile_commands.json
 .clangd

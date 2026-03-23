@@ -196,7 +196,7 @@ impl<'a> TritonCodegen<'a> {
             "triton::types::Comparison::lt" => {
                 TritonCodegen::codegen_lt_call as LocalCallHandler<'a, 'tcx>
             }
-            "triton::types::AddOffsets::add_offset" => {
+            "triton::types::AddOffsets::add_offsets" => {
                 TritonCodegen::codegen_add_ptr as LocalCallHandler<'a, 'tcx>
             }
             _ => TritonCodegen::codegen_call as LocalCallHandler<'a, 'tcx>,
