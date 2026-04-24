@@ -140,6 +140,18 @@ pub(crate) struct CodegenState<'c, 'p> {
     /// Later predecessors (processed after the join in DFS) use these saved values
     /// instead of the stale join-block arg values that are now in ssa_values.
     pub(crate) pre_join_ssa_values: HashMap<(BasicBlock, Local), Value<'c, 'p>>,
+    /// The MIR basic block currently being codegen'd (updated before each block's terminator).
+    pub(crate) current_bb: Option<BasicBlock>,
+    /// (split_bb) → vec of (local, join_bb): when processing split_bb's terminator,
+    /// save ssa_values[local] into pre_split_values[(join_bb, local)].
+    pub(crate) pre_split_save_by_split: HashMap<BasicBlock, Vec<(Local, BasicBlock)>>,
+    /// (join_bb, local) → the SSA value of `local` before any arm of the if/else ran.
+    /// Used by pass-through predecessors that didn't explicitly reassign the local.
+    pub(crate) pre_split_values: HashMap<(BasicBlock, Local), Value<'c, 'p>>,
+    /// (join_bb, local, pred_bb): these predecessors are "pass-through" arms that did not
+    /// explicitly reassign `local` on their path to `join_bb`.  When they emit their branch to
+    /// `join_bb`, they must use `pre_split_values` instead of stale `ssa_values`.
+    pub(crate) pass_through_phi_preds: HashSet<(BasicBlock, Local, BasicBlock)>,
 }
 
 impl<'c, 'p> CodegenState<'c, 'p> {
@@ -162,6 +174,10 @@ impl<'c, 'p> CodegenState<'c, 'p> {
             phi_join_locals: HashMap::new(),
             phi_block_args: HashMap::new(),
             pre_join_ssa_values: HashMap::new(),
+            current_bb: None,
+            pre_split_save_by_split: HashMap::new(),
+            pre_split_values: HashMap::new(),
+            pass_through_phi_preds: HashSet::new(),
         }
     }
 }
@@ -333,10 +349,64 @@ pub(crate) fn extract_switch_const<'tcx>(
     result
 }
 
-/// BFS reachability analysis from bb0, constant-folding `SwitchInt` when the discriminant
-/// is statically known.  Returns (set, vec) where the vec preserves BFS order — the correct
-/// topological order for SSA value availability.  Use the vec for block *processing* order
-/// and the set for O(1) membership tests.
+/// Returns the effective successors of `bb` within the reachable set, applying constant-folding
+/// for `SwitchInt` when the discriminant is statically known.
+fn block_effective_successors<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    instance: &Instance<'tcx>,
+    mir: &Body<'tcx>,
+    bb: BasicBlock,
+    const_disc_locals: &HashMap<Local, u64>,
+    reachable: &HashSet<BasicBlock>,
+) -> Vec<BasicBlock> {
+    use rustc_middle::mir::TerminatorKind;
+    match &mir.basic_blocks[bb].terminator().kind {
+        TerminatorKind::Goto { target } => {
+            if reachable.contains(target) { vec![*target] } else { vec![] }
+        }
+        TerminatorKind::SwitchInt { discr, targets } => {
+            if let Some(const_val) = extract_switch_const(tcx, instance, discr, const_disc_locals) {
+                let target = targets
+                    .iter()
+                    .find(|(val, _)| *val == const_val as u128)
+                    .map(|(_, bb)| bb)
+                    .unwrap_or_else(|| targets.otherwise());
+                if reachable.contains(&target) { vec![target] } else { vec![] }
+            } else {
+                let mut succs: Vec<BasicBlock> = targets
+                    .iter()
+                    .map(|(_, bb)| bb)
+                    .filter(|s| reachable.contains(s))
+                    .collect();
+                let otherwise = targets.otherwise();
+                if reachable.contains(&otherwise) && !succs.contains(&otherwise) {
+                    succs.push(otherwise);
+                }
+                succs
+            }
+        }
+        TerminatorKind::Return | TerminatorKind::Unreachable => vec![],
+        TerminatorKind::Call { target, .. } => {
+            target.filter(|t| reachable.contains(t)).map(|t| vec![t]).unwrap_or_default()
+        }
+        TerminatorKind::Drop { target, .. } => {
+            if reachable.contains(target) { vec![*target] } else { vec![] }
+        }
+        TerminatorKind::Assert { target, .. } => {
+            if reachable.contains(target) { vec![*target] } else { vec![] }
+        }
+        _ => mir.basic_blocks[bb]
+            .terminator()
+            .successors()
+            .filter(|s| reachable.contains(s))
+            .collect(),
+    }
+}
+
+/// Reachability analysis from bb0, constant-folding `SwitchInt` when the discriminant is
+/// statically known.  Returns (set, vec) where the vec is in **topological order** — each
+/// block appears after all its non-back-edge predecessors.  Blocks remaining in cycles
+/// (loop back edges) are appended at the end and are excluded from phi analysis anyway.
 fn compute_reachable_blocks<'tcx>(
     tcx: TyCtxt<'tcx>,
     instance: &Instance<'tcx>,
@@ -344,17 +414,17 @@ fn compute_reachable_blocks<'tcx>(
     const_disc_locals: &HashMap<Local, u64>,
 ) -> (HashSet<BasicBlock>, Vec<BasicBlock>) {
     use rustc_middle::mir::TerminatorKind;
+    use std::collections::VecDeque;
 
     println!("[REACH-START] total blocks={}", mir.basic_blocks.len());
     let mut reachable: HashSet<BasicBlock> = HashSet::new();
-    let mut ordered: Vec<BasicBlock> = Vec::new();
     let mut queue: Vec<BasicBlock> = vec![BasicBlock::from_u32(0)];
 
+    // Phase 1: DFS to collect the reachable set (with constant-folded SwitchInt pruning).
     while let Some(bb) = queue.pop() {
         if !reachable.insert(bb) {
             continue;
         }
-        ordered.push(bb);
         let bb_data = &mir.basic_blocks[bb];
         println!("[REACH-TERM] bb={:?} kind={}", bb, match &bb_data.terminator().kind {
             TerminatorKind::Goto { .. } => "Goto",
@@ -412,24 +482,217 @@ fn compute_reachable_blocks<'tcx>(
         }
     }
 
+    // Phase 2: Topological sort via Kahn's algorithm.
+    // Build in-degree counts for the reachable subgraph (effective edges, with const-folding).
+    let mut in_degree: HashMap<BasicBlock, usize> = HashMap::new();
+    for &bb in &reachable {
+        in_degree.entry(bb).or_insert(0);
+        for succ in block_effective_successors(tcx, instance, mir, bb, const_disc_locals, &reachable) {
+            *in_degree.entry(succ).or_insert(0) += 1;
+        }
+    }
+
+    // Initialize with zero-in-degree blocks (bb0 for well-formed MIR).
+    let mut topo_queue: VecDeque<BasicBlock> = {
+        let mut v: Vec<BasicBlock> = in_degree
+            .iter()
+            .filter_map(|(&bb, &d)| if d == 0 { Some(bb) } else { None })
+            .collect();
+        v.sort(); // deterministic: bb0 first
+        v.into()
+    };
+
+    let mut ordered: Vec<BasicBlock> = Vec::new();
+    while let Some(bb) = topo_queue.pop_front() {
+        ordered.push(bb);
+        for succ in block_effective_successors(tcx, instance, mir, bb, const_disc_locals, &reachable) {
+            let d = in_degree.get_mut(&succ).unwrap();
+            *d -= 1;
+            if *d == 0 {
+                topo_queue.push_back(succ);
+            }
+        }
+    }
+    // Blocks remaining with non-zero in-degree are in loops (back edges).
+    // Append them at the end; they are excluded from phi analysis (loop_region_blocks).
+    let mut remaining: Vec<BasicBlock> = in_degree
+        .iter()
+        .filter_map(|(&bb, &d)| if d > 0 { Some(bb) } else { None })
+        .collect();
+    remaining.sort();
+    ordered.extend(remaining);
+
     (reachable, ordered)
 }
 
+/// Collect locals assigned in the linear chain starting at `start`, tracing backward through
+/// single-predecessor blocks.  Stops when it reaches:
+///   • a block that is a direct predecessor of the join block (the divergence point)
+///   • a block with multiple forward successors (another branch point)
+///   • a block with multiple predecessors (inner join) — also folds in that join's phi locals
+///   • an already-visited block
+///
+/// `phi_result_so_far` allows including phi locals from already-processed inner join blocks,
+/// which propagates them upward to outer join blocks.
+fn collect_chain_locals<'tcx>(
+    start: BasicBlock,
+    join_preds: &HashSet<BasicBlock>,
+    mir: &Body<'tcx>,
+    pred_map: &HashMap<BasicBlock, HashSet<BasicBlock>>,
+    reachable_bbs: &HashSet<BasicBlock>,
+    loop_region_blocks: &HashSet<BasicBlock>,
+    phi_result_so_far: &HashMap<BasicBlock, Vec<Local>>,
+    // Only FULL phi locals (assigned in every predecessor arm) from inner joins are propagated
+    // outward.  Partial phi locals are temporaries internal to the inner join and must not appear
+    // as phi candidates at the enclosing outer join.
+    phi_full_locals_so_far: &HashMap<BasicBlock, Vec<Local>>,
+) -> HashSet<Local> {
+    let mut locals: HashSet<Local> = HashSet::new();
+    let mut current = start;
+    let mut visited: HashSet<BasicBlock> = HashSet::new();
+    loop {
+        if !visited.insert(current) {
+            break;
+        }
+        // Count forward successors FIRST — if this is a divergence point (split block),
+        // stop WITHOUT collecting its assignments (they execute before any arm diverges,
+        // so they are not arm-specific and must not become phi candidates at the join).
+        let succ_count = mir.basic_blocks[current]
+            .terminator()
+            .successors()
+            .filter(|&s| reachable_bbs.contains(&s) && !loop_region_blocks.contains(&s))
+            .count();
+        if succ_count != 1 {
+            // Divergence point — stop without collecting this block's assignments.
+            break;
+        }
+        // Follow the single backward predecessor.
+        let filtered_preds: Vec<BasicBlock> = pred_map
+            .get(&current)
+            .map(|ps| {
+                ps.iter()
+                    .filter(|&&b| {
+                        reachable_bbs.contains(&b) && !loop_region_blocks.contains(&b)
+                    })
+                    .copied()
+                    .collect()
+            })
+            .unwrap_or_default();
+        if filtered_preds.len() != 1 {
+            // Inner join block — stop, but propagate its FULL phi locals (assigned in every arm)
+            // so outer joins can see them.  Partial phi locals (assigned in only some arms) are
+            // implementation details of the inner join's computation and must NOT escape outward.
+            // Also exclude any locals StorageDead'd in this block.
+            if let Some(inner_full_phi_locals) = phi_full_locals_so_far.get(&current) {
+                let block_dead: std::collections::HashSet<Local> = mir.basic_blocks[current]
+                    .statements
+                    .iter()
+                    .filter_map(|s| {
+                        if let StatementKind::StorageDead(l) = &s.kind { Some(*l) } else { None }
+                    })
+                    .collect();
+                for &phi_local in inner_full_phi_locals {
+                    if !block_dead.contains(&phi_local) {
+                        locals.insert(phi_local);
+                    }
+                }
+            }
+            break;
+        }
+        // Collect all assignments in this block (only for non-diverging pass-through blocks).
+        for stmt in &mir.basic_blocks[current].statements {
+            if let StatementKind::Assign(assign) = &stmt.kind {
+                let (place, _) = assign.as_ref();
+                if place.projection.is_empty() {
+                    locals.insert(place.local);
+                }
+            }
+        }
+        let prev = filtered_preds[0];
+        // Stop when we reach a direct predecessor of the join block (divergence point).
+        if join_preds.contains(&prev) {
+            break;
+        }
+        current = prev;
+    }
+    locals
+}
+
+/// Trace backward from `start` through single-predecessor blocks to find the block where the
+/// chain diverges (succ_count != 1).  That block is the "split block" — the block whose
+/// terminator branches into the multiple arms that eventually join at the join block.
+///
+/// Returns `None` if the traversal hits an inner join block or a cycle before finding a split.
+fn find_split_block<'tcx>(
+    start: BasicBlock,
+    join_preds: &HashSet<BasicBlock>,
+    mir: &Body<'tcx>,
+    pred_map: &HashMap<BasicBlock, HashSet<BasicBlock>>,
+    reachable_bbs: &HashSet<BasicBlock>,
+    loop_region_blocks: &HashSet<BasicBlock>,
+) -> Option<BasicBlock> {
+    let mut current = start;
+    let mut visited: HashSet<BasicBlock> = HashSet::new();
+    loop {
+        if !visited.insert(current) {
+            return None;
+        }
+        let succ_count = mir.basic_blocks[current]
+            .terminator()
+            .successors()
+            .filter(|&s| reachable_bbs.contains(&s) && !loop_region_blocks.contains(&s))
+            .count();
+        if succ_count != 1 {
+            return Some(current);
+        }
+        let filtered_preds: Vec<BasicBlock> = pred_map
+            .get(&current)
+            .map(|ps| {
+                ps.iter()
+                    .filter(|&&b| reachable_bbs.contains(&b) && !loop_region_blocks.contains(&b))
+                    .copied()
+                    .collect()
+            })
+            .unwrap_or_default();
+        if filtered_preds.len() != 1 {
+            return None; // Inner join — no single split block.
+        }
+        let prev = filtered_preds[0];
+        if join_preds.contains(&prev) {
+            return None; // Reached a direct predecessor of the outer join without finding a split.
+        }
+        current = prev;
+    }
+}
+
 /// For each join block (2+ reachable non-loop predecessors), collect the set of MIR locals
-/// that are assigned via simple `Assign` statements in any direct predecessor block.
+/// that are assigned via simple `Assign` statements in any predecessor chain.
 /// These locals need MLIR block arguments (phi nodes) at the join block so that the SSA
 /// value used after the join is dominated by its definition regardless of the taken path.
 ///
+/// Also handles *partial* phi locals — locals assigned in some but not all predecessor chains.
+/// For these, the pass-through arms retain the "pre-split" value (the value before the if/else
+/// divergence).  We record:
+///   • `pre_split_save_by_split`: (split_bb) → [(local, join_bb)] — when split_bb's terminator
+///      is processed, save ssa_values[local] into pre_split_values[(join_bb, local)].
+///   • `pass_through_phi_preds`: (join_bb, local, pred_bb) — this predecessor is a pass-through
+///      arm and must use pre_split_values instead of the potentially-stale ssa_values.
+///
 /// Locals tracked as Option or tuple are excluded — those are managed via separate tables.
 ///
-/// This function traces backward through single-predecessor linear chains from each
-/// predecessor of the join block, so it catches assignments that are a few hops back.
+/// Join blocks are processed in `topo_ordered` order (inner joins before outer joins) so that
+/// phi locals from inner joins can be propagated outward to nested outer join blocks.
 fn compute_phi_join_locals<'tcx>(
     tcx: TyCtxt<'tcx>,
     mir: &Body<'tcx>,
     reachable_bbs: &HashSet<BasicBlock>,
     loop_region_blocks: &HashSet<BasicBlock>,
-) -> HashMap<BasicBlock, Vec<Local>> {
+    topo_ordered: &[BasicBlock],
+) -> (
+    HashMap<BasicBlock, Vec<Local>>,
+    HashMap<BasicBlock, Vec<(Local, BasicBlock)>>,
+    HashSet<(BasicBlock, Local, BasicBlock)>,
+) {
     // Build a predecessor map restricted to non-loop reachable blocks.
     let mut pred_map: HashMap<BasicBlock, HashSet<BasicBlock>> = HashMap::new();
     for &bb in reachable_bbs {
@@ -443,88 +706,54 @@ fn compute_phi_join_locals<'tcx>(
         }
     }
 
-    // Helper: collect all locals assigned in the linear chain starting at `start`,
-    // tracing backward through single-predecessor blocks.  Stops when we reach:
-    //   • a block that is also a direct predecessor of the join block (the divergence pt)
-    //   • a block with multiple forward successors (another branch point)
-    //   • a block with multiple predecessors (another join point)
-    //   • an already-visited block
-    let collect_chain_locals = |start: BasicBlock, join_preds: &HashSet<BasicBlock>| -> HashSet<Local> {
-        let mut locals: HashSet<Local> = HashSet::new();
-        let mut current = start;
-        let mut visited: HashSet<BasicBlock> = HashSet::new();
-        loop {
-            if !visited.insert(current) {
-                break;
-            }
-            // Collect all assignments in this block.
-            for stmt in &mir.basic_blocks[current].statements {
-                if let StatementKind::Assign(assign) = &stmt.kind {
-                    let (place, _) = assign.as_ref();
-                    if place.projection.is_empty() {
-                        locals.insert(place.local);
-                    }
-                }
-            }
-            // Count forward successors (in the filtered graph).
-            let succ_count = mir.basic_blocks[current]
-                .terminator()
-                .successors()
-                .filter(|&s| reachable_bbs.contains(&s) && !loop_region_blocks.contains(&s))
-                .count();
-            if succ_count != 1 {
-                // Divergence point — stop.
-                break;
-            }
-            // Follow the single backward predecessor.
-            let filtered_preds: Vec<BasicBlock> = pred_map
-                .get(&current)
-                .map(|ps| {
-                    ps.iter()
-                        .filter(|&&b| {
-                            reachable_bbs.contains(&b) && !loop_region_blocks.contains(&b)
-                        })
-                        .copied()
-                        .collect()
-                })
-                .unwrap_or_default();
-            if filtered_preds.len() != 1 {
-                break; // Another join point or entry — stop.
-            }
-            let prev = filtered_preds[0];
-            // Stop when we reach another direct predecessor of the join block
-            // (that is the divergence point shared by all paths).
-            if join_preds.contains(&prev) {
-                break;
-            }
-            current = prev;
-        }
-        locals
-    };
-
     let mut result: HashMap<BasicBlock, Vec<Local>> = HashMap::new();
-    for (join_bb, preds) in &pred_map {
-        if preds.len() < 2 {
-            continue;
-        }
-        // Count how many predecessor chains each local appears in.
-        // A local is only a valid phi if it's redefined on 2+ distinct paths — otherwise
-        // it has no value on the "other" path and can't be passed as a block arg.
+    // Tracks only the full phi locals (assigned in every predecessor arm) for inner-join
+    // propagation.  Kept separate so that partial phi locals (temporaries internal to an inner
+    // join's arms) are not incorrectly exposed to enclosing outer joins.
+    let mut phi_full_locals: HashMap<BasicBlock, Vec<Local>> = HashMap::new();
+    let mut pre_split_save_by_split: HashMap<BasicBlock, Vec<(Local, BasicBlock)>> = HashMap::new();
+    let mut pass_through_phi_preds: HashSet<(BasicBlock, Local, BasicBlock)> = HashSet::new();
+
+    // Process join blocks in topological order so inner joins are handled before outer joins.
+    for &join_bb in topo_ordered {
+        let preds = match pred_map.get(&join_bb) {
+            Some(p) if p.len() >= 2 => p,
+            _ => continue,
+        };
+
+        // Collect per-predecessor chain locals and aggregate into chain_count.
         let mut chain_count: HashMap<Local, usize> = HashMap::new();
         let mut local_order: Vec<Local> = Vec::new();
+        let mut per_pred_locals: HashMap<BasicBlock, HashSet<Local>> = HashMap::new();
         for &pred_bb in preds {
-            for local in collect_chain_locals(pred_bb, preds) {
+            let locals = collect_chain_locals(
+                pred_bb,
+                preds,
+                mir,
+                &pred_map,
+                reachable_bbs,
+                loop_region_blocks,
+                &result,
+                &phi_full_locals,
+            );
+            for &local in &locals {
                 let entry = chain_count.entry(local).or_insert(0);
                 if *entry == 0 {
                     local_order.push(local);
                 }
                 *entry += 1;
             }
+            per_pred_locals.insert(pred_bb, locals);
         }
+
+        let n_preds = preds.len();
         let mut phi_locals: Vec<Local> = Vec::new();
+        let mut phi_full: Vec<Local> = Vec::new();
         for local in local_order {
-            if chain_count[&local] < 2 {
-                continue; // Only redefined on one path — no phi needed.
+            let count = chain_count[&local];
+            if count == 0 {
+                // Not assigned in any predecessor chain — no phi needed.
+                continue;
             }
             let raw_ty = mir.local_decls[local].ty;
             // Skip Option and Tuple locals — tracked in separate tables.
@@ -534,19 +763,22 @@ fn compute_phi_join_locals<'tcx>(
             if matches!(raw_ty.kind(), rustc_middle::ty::TyKind::Tuple(_)) {
                 continue;
             }
-            phi_locals.push(local);
+            // Only full phi locals (assigned in every predecessor arm) become block arguments.
+            // Partial phi locals (only some arms) are internal arm temporaries; they have no
+            // meaningful "pre-split" value and must not generate phi block args.
+            if count == n_preds {
+                phi_locals.push(local);
+                phi_full.push(local);
+            }
         }
         if !phi_locals.is_empty() {
-            println!(
-                "[PHI] join block {:?} has {} phi locals: {:?}",
-                join_bb,
-                phi_locals.len(),
-                phi_locals
-            );
-            result.insert(*join_bb, phi_locals);
+            result.insert(join_bb, phi_locals);
+        }
+        if !phi_full.is_empty() {
+            phi_full_locals.insert(join_bb, phi_full);
         }
     }
-    result
+    (result, pre_split_save_by_split, pass_through_phi_preds)
 }
 
 /// Detect all Range-based `for` loops in the MIR body.
@@ -1481,9 +1713,12 @@ impl<'a> TritonCodegen<'a> {
         );
 
         // Compute phi (block-argument) locals for join blocks in the non-loop CFG.
-        let phi_join_locals =
-            compute_phi_join_locals(tcx, mir, &reachable_bbs, &loop_region_blocks);
+        // Pass the topologically-ordered block list so inner joins are processed before outer joins.
+        let (phi_join_locals, pre_split_save_by_split, pass_through_phi_preds) =
+            compute_phi_join_locals(tcx, mir, &reachable_bbs, &loop_region_blocks, &bfs_ordered_bbs);
         state.phi_join_locals = phi_join_locals;
+        state.pre_split_save_by_split = pre_split_save_by_split;
+        state.pass_through_phi_preds = pass_through_phi_preds;
 
         // Create MLIR blocks for all non-loop-region, reachable MIR blocks.
         // Index order is fine for block *creation* — MLIR blocks just need to exist before
@@ -1609,6 +1844,9 @@ impl<'a> TritonCodegen<'a> {
         for stmt in &bb_data.statements {
             self.codegen_statement(tcx, instance, mir, stmt, mlir_block, state)?;
         }
+
+        // Track the current block so codegen_terminator can save pre-split values.
+        state.current_bb = Some(bb);
 
         // Codegen the block terminator.
         self.codegen_terminator(

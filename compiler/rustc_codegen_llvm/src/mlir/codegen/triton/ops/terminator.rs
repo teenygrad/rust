@@ -66,6 +66,24 @@ impl<'a> TritonCodegen<'a> {
     ) -> Result<(), MlirError> {
         //println!("[DEBUG] TritonCodegen::codegen_terminator: ssa_values: {:?} terminator: {:?}", state.ssa_values, terminator);
 
+        // If this block is a "split block" for any partial phi join, save the pre-split SSA values
+        // now — before any arm of the if/else executes and corrupts ssa_values.
+        // Skip saving if ssa_values[local] is already the join's own phi block arg (stale):
+        // that means the join was processed before this block in BFS and the stale case will
+        // be handled by the `current == existing_arg` path in codegen_goto via pre_join_ssa_values.
+        if let Some(current_bb) = state.current_bb {
+            if let Some(saves) = state.pre_split_save_by_split.get(&current_bb).cloned() {
+                for (local, join_bb) in saves {
+                    if let Some(&val) = state.ssa_values.get(&local) {
+                        let is_stale = state.phi_block_args.get(&(join_bb, local)) == Some(&val);
+                        if !is_stale {
+                            state.pre_split_values.entry((join_bb, local)).or_insert(val);
+                        }
+                    }
+                }
+            }
+        }
+
         let location =
             span_to_location(self.module.context(), tcx, terminator.source_info.span);
 
@@ -190,6 +208,8 @@ impl<'a> TritonCodegen<'a> {
             "core::ops::Mul::mul" => TritonCodegen::codegen_mul_call as LocalCallHandler<'a, 'tcx>,
             "core::ops::Add::add" => TritonCodegen::codegen_add_call as LocalCallHandler<'a, 'tcx>,
             "core::ops::Sub::sub" => TritonCodegen::codegen_sub_call as LocalCallHandler<'a, 'tcx>,
+            "core::ops::BitAnd::bitand" => TritonCodegen::codegen_and_call as LocalCallHandler<'a, 'tcx>,
+            "core::ops::BitOr::bitor" => TritonCodegen::codegen_or_call as LocalCallHandler<'a, 'tcx>,
             "core::ops::Div::div" => TritonCodegen::codegen_fdiv_call as LocalCallHandler<'a, 'tcx>,
             "triton::Triton::program_id" => {
                 TritonCodegen::codegen_program_id as LocalCallHandler<'a, 'tcx>
@@ -212,6 +232,11 @@ impl<'a> TritonCodegen<'a> {
             "triton::types::Comparison::lt" => {
                 TritonCodegen::codegen_lt_call as LocalCallHandler<'a, 'tcx>
             }
+            "triton::types::Comparison::ge" => TritonCodegen::codegen_ge_call as LocalCallHandler<'a, 'tcx>,
+            "triton::types::Comparison::gt" => TritonCodegen::codegen_gt_call as LocalCallHandler<'a, 'tcx>,
+            "triton::types::Comparison::le" => TritonCodegen::codegen_le_call as LocalCallHandler<'a, 'tcx>,
+            "triton::types::Comparison::eq" => TritonCodegen::codegen_eq_call as LocalCallHandler<'a, 'tcx>,
+            "triton::types::Comparison::ne" => TritonCodegen::codegen_ne_call as LocalCallHandler<'a, 'tcx>,
             "triton::Triton::gt" => TritonCodegen::codegen_gt_call as LocalCallHandler<'a, 'tcx>,
             "triton::Triton::ge" => TritonCodegen::codegen_ge_call as LocalCallHandler<'a, 'tcx>,
             "triton::Triton::lt" => TritonCodegen::codegen_triton_lt_call as LocalCallHandler<'a, 'tcx>,
@@ -714,6 +739,24 @@ impl<'a> TritonCodegen<'a> {
                                         "codegen_goto: stale phi local {:?} at {:?} but no pre-join save",
                                         local, target
                                     ))
+                            } else if let Some(current_bb) = state.current_bb {
+                                if state.pass_through_phi_preds.contains(&(*target, *local, current_bb)) {
+                                    // Pass-through arm: this predecessor did not explicitly reassign
+                                    // the local.  Use the pre-split value saved when the split block's
+                                    // terminator ran (before any arm corrupted ssa_values).
+                                    *state.pre_split_values.get(&(*target, *local))
+                                        .unwrap_or_else(|| panic!(
+                                            "codegen_goto: pass-through pred {:?} has no pre_split_value \
+                                             for local {:?} at join {:?}",
+                                            current_bb, local, target
+                                        ))
+                                } else {
+                                    // The predecessor redefined this local on its path — use that.
+                                    current.unwrap_or_else(|| panic!(
+                                        "codegen_goto: phi local {:?} not in ssa_values at branch to {:?}",
+                                        local, target
+                                    ))
+                                }
                             } else {
                                 // The predecessor redefined this local on its path — use that.
                                 current.unwrap_or_else(|| panic!(
@@ -735,7 +778,20 @@ impl<'a> TritonCodegen<'a> {
                                 "[PHI] lazy: added arg for local {:?} at {:?} type {:?}",
                                 local, target, ssa_val.r#type()
                             );
-                            ssa_val
+                            // Check pass-through even for the first predecessor.
+                            if let Some(current_bb) = state.current_bb {
+                                if state.pass_through_phi_preds.contains(&(*target, *local, current_bb)) {
+                                    *state.pre_split_values.get(&(*target, *local))
+                                        .unwrap_or_else(|| panic!(
+                                            "codegen_goto (first pred): pass-through {:?} has no pre_split_value for {:?} at {:?}",
+                                            current_bb, local, target
+                                        ))
+                                } else {
+                                    ssa_val
+                                }
+                            } else {
+                                ssa_val
+                            }
                         }
                     })
                     .collect()
