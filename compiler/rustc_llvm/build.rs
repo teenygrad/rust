@@ -221,6 +221,12 @@ fn build_triton(llvm_config: &Path, workspace_root: &Path) -> PathBuf {
         .define("LLVM_SYSPATH", &llvm_prefix)
         .define("TRITON_BUILD_PYTHON_MODULE", python_module)
         .define("TRITON_BUILD_PROTON", proton)
+        // We don't need Triton's own C++ unit tests, and TRITON_BUILD_UT=ON
+        // (the default) pulls googletest via CMake FetchContent at configure
+        // time -- an extra network dependency that's flaky in this environment
+        // and, once a clone attempt fails partway, leaves a corrupted checkout
+        // that breaks every subsequent cmake configure until manually removed.
+        .define("TRITON_BUILD_UT", "OFF")
         .define("TRITON_CODEGEN_BACKENDS", backends)
         .define("TRITON_WHEEL_DIR", "/tmp")
         .define("CMAKE_BUILD_TYPE", build_type)
