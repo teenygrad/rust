@@ -227,6 +227,13 @@ fn build_triton(llvm_config: &Path, workspace_root: &Path) -> PathBuf {
         // and, once a clone attempt fails partway, leaves a corrupted checkout
         // that breaks every subsequent cmake configure until manually removed.
         .define("TRITON_BUILD_UT", "OFF")
+        // ccache has been producing intermittently corrupted object files/archive
+        // members in this environment (ar/ranlib failures: "file truncated",
+        // "invalid size field in group section header"), recurring across
+        // multiple full-clean rebuild attempts on different files each time.
+        // Disable it here rather than chase a root cause in a caching layer
+        // that isn't this project's own code.
+        .define("TRITON_BUILD_WITH_CCACHE", "OFF")
         .define("TRITON_CODEGEN_BACKENDS", backends)
         .define("TRITON_WHEEL_DIR", "/tmp")
         .define("CMAKE_BUILD_TYPE", build_type)
