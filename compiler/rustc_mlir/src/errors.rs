@@ -21,10 +21,10 @@ use rustc_macros::Diagnostic;
 
 #[derive(Debug, Diagnostic)]
 pub enum Error {
-    #[diag(mlir_invalid_type)]
+    #[diag("\"Invalid type {$msg}\"")]
     InvalidType { msg: String },
 
-    #[diag(mlir_incompatible_types)]
+    #[diag("\"Incompatible types: {$lhs} - {$rhs}\"")]
     IncompatibleTypes { lhs: String, rhs: String },
 }
 
