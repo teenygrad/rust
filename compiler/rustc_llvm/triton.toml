@@ -1,6 +1,10 @@
 # triton config
 build_type = "Release"
-backends = "amd;nvidia;spirv"
+# spirv dropped: teenygrad's own experimental Intel-GPU backend, uses a
+# deprecated MLIR pass-registration macro (GEN_PASS_CLASSES) that doesn't
+# compile against LLVM 22.x. Currently unused by the CUDA/NVIDIA pipeline;
+# needs a migration to MLIR's per-pass macros before re-enabling.
+backends = "amd;nvidia"
 python_module = "ON"
 proton = "OFF"
 
