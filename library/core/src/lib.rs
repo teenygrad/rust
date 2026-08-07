@@ -48,7 +48,7 @@
     html_playground_url = "https://play.rust-lang.org/",
     issue_tracker_base_url = "https://github.com/rust-lang/rust/issues/",
     test(no_crate_inject, attr(deny(warnings))),
-    test(attr(allow(dead_code, deprecated, unused_variables, unused_mut)))
+    test(attr(allow(dead_code, deprecated, unused_variables, unused_mut, duplicate_features)))
 )]
 #![doc(rust_logo)]
 #![doc(auto_cfg(hide(
@@ -107,11 +107,10 @@
 #![feature(core_intrinsics)]
 #![feature(coverage_attribute)]
 #![feature(disjoint_bitor)]
-#![feature(internal_impls_macro)]
-#![feature(link_cfg)]
 #![feature(offset_of_enum)]
 #![feature(panic_internals)]
 #![feature(pattern_type_macro)]
+#![feature(sealed)]
 #![feature(ub_checks)]
 // tidy-alphabetical-end
 //
@@ -137,12 +136,14 @@
 #![feature(extern_types)]
 #![feature(f16)]
 #![feature(f128)]
+#![feature(field_projections)]
 #![feature(freeze_impls)]
 #![feature(fundamental)]
 #![feature(funnel_shifts)]
 #![feature(intra_doc_pointers)]
 #![feature(intrinsics)]
 #![feature(lang_items)]
+#![feature(link_cfg)]
 #![feature(link_llvm_intrinsics)]
 #![feature(macro_metavar_expr)]
 #![feature(macro_metavar_expr_concat)]
@@ -181,6 +182,7 @@
 #![feature(hexagon_target_feature)]
 #![feature(loongarch_target_feature)]
 #![feature(mips_target_feature)]
+#![feature(movrs_target_feature)]
 #![feature(nvptx_target_feature)]
 #![feature(powerpc_target_feature)]
 #![feature(riscv_target_feature)]
@@ -205,7 +207,7 @@ use prelude::rust_2024::*;
 #[macro_use]
 mod macros;
 
-#[unstable(feature = "assert_matches", issue = "82775")]
+#[stable(feature = "assert_matches", since = "1.96.0")]
 pub use crate::macros::{assert_matches, debug_assert_matches};
 
 #[unstable(feature = "derive_from", issue = "144889")]
@@ -215,9 +217,17 @@ pub mod from {
     pub use crate::macros::builtin::From;
 }
 
+mod sealed {
+    /// This trait being unreachable from outside the crate
+    /// prevents outside implementations of our extension traits.
+    /// This allows adding more trait methods in the future.
+    #[unstable(feature = "sealed", issue = "none")]
+    pub trait Sealed {}
+}
+
 // We don't export this through #[macro_export] for now, to avoid breakage.
 #[unstable(feature = "autodiff", issue = "124509")]
-/// Unstable module containing the unstable `autodiff` macro.
+#[doc = include_str!("../../core/src/autodiff.md")]
 pub mod autodiff {
     #[unstable(feature = "autodiff", issue = "124509")]
     pub use crate::macros::builtin::{autodiff_forward, autodiff_reverse};
@@ -226,6 +236,8 @@ pub mod autodiff {
 #[unstable(feature = "contracts", issue = "128044")]
 pub mod contracts;
 
+#[unstable(feature = "derive_macro_global_path", issue = "154645")]
+pub use crate::macros::builtin::derive;
 #[stable(feature = "cfg_select", since = "1.95.0")]
 pub use crate::macros::cfg_select;
 
@@ -274,6 +286,8 @@ pub mod cmp;
 pub mod convert;
 pub mod default;
 pub mod error;
+#[unstable(feature = "field_projections", issue = "145383")]
+pub mod field;
 pub mod index;
 pub mod marker;
 pub mod ops;

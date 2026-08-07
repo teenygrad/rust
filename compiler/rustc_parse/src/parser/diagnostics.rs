@@ -16,9 +16,8 @@ use rustc_errors::{
     pluralize,
 };
 use rustc_session::errors::ExprParenthesesNeeded;
-use rustc_span::source_map::Spanned;
 use rustc_span::symbol::used_keywords;
-use rustc_span::{BytePos, DUMMY_SP, Ident, Span, SpanSnippetError, Symbol, kw, sym};
+use rustc_span::{BytePos, DUMMY_SP, Ident, Span, SpanSnippetError, Spanned, Symbol, kw, sym};
 use thin_vec::{ThinVec, thin_vec};
 use tracing::{debug, trace};
 
@@ -647,7 +646,7 @@ impl<'a> Parser<'a> {
         // positive for a `cr#` that wasn't intended to start a c-string literal, but identifying
         // that in the parser requires unbounded lookahead, so we only add a hint to the existing
         // error rather than replacing it entirely.
-        if ((self.prev_token == TokenKind::Ident(sym::c, IdentIsRaw::No)
+        if ((self.prev_token == TokenKind::Ident(sym::character('c'), IdentIsRaw::No)
             && matches!(&self.token.kind, TokenKind::Literal(token::Lit { kind: token::Str, .. })))
             || (self.prev_token == TokenKind::Ident(sym::cr, IdentIsRaw::No)
                 && matches!(

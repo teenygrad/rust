@@ -209,7 +209,15 @@ where
                     try_visit!(tcx.type_of(impl_def_id).instantiate_identity().visit_with(self));
                 }
             }
-            ty::Alias(kind @ (ty::Inherent | ty::Free | ty::Projection), data) => {
+            ty::Alias(
+                data @ ty::AliasTy {
+                    kind:
+                        kind @ (ty::Inherent { def_id }
+                        | ty::Free { def_id }
+                        | ty::Projection { def_id }),
+                    ..
+                },
+            ) => {
                 if self.def_id_visitor.skip_assoc_tys() {
                     // Visitors searching for minimal visibility/reachability want to
                     // conservatively approximate associated types like `Type::Alias`
@@ -226,19 +234,19 @@ where
                 }
 
                 try_visit!(self.def_id_visitor.visit_def_id(
-                    data.def_id,
+                    def_id,
                     match kind {
-                        ty::Inherent | ty::Projection => "associated type",
-                        ty::Free => "type alias",
-                        ty::Opaque => unreachable!(),
+                        ty::Inherent { .. } | ty::Projection { .. } => "associated type",
+                        ty::Free { .. } => "type alias",
+                        ty::Opaque { .. } => unreachable!(),
                     },
-                    &LazyDefPathStr { def_id: data.def_id, tcx },
+                    &LazyDefPathStr { def_id, tcx },
                 ));
 
                 // This will also visit args if necessary, so we don't need to recurse.
                 return if V::SHALLOW {
                     V::Result::output()
-                } else if kind == ty::Projection {
+                } else if matches!(kind, ty::Projection { .. }) {
                     self.visit_projection_term(data.into())
                 } else {
                     V::Result::from_branch(
@@ -261,7 +269,7 @@ where
                     try_visit!(self.def_id_visitor.visit_def_id(def_id, "trait", &trait_ref));
                 }
             }
-            ty::Alias(ty::Opaque, ty::AliasTy { def_id, .. }) => {
+            ty::Alias(ty::AliasTy { kind: ty::Opaque { def_id }, .. }) => {
                 // Skip repeated `Opaque`s to avoid infinite recursion.
                 if self.visited_tys.insert(ty) {
                     // The intent is to treat `impl Trait1 + Trait2` identically to
@@ -574,7 +582,10 @@ impl<'tcx> EmbargoVisitor<'tcx> {
         self.update(def_id, macro_ev, Level::Reachable);
         match def_kind {
             // No type privacy, so can be directly marked as reachable.
-            DefKind::Const | DefKind::Static { .. } | DefKind::TraitAlias | DefKind::TyAlias => {
+            DefKind::Const { .. }
+            | DefKind::Static { .. }
+            | DefKind::TraitAlias
+            | DefKind::TyAlias => {
                 if vis.is_accessible_from(module, self.tcx) {
                     self.update(def_id, macro_ev, Level::Reachable);
                 }
@@ -621,7 +632,7 @@ impl<'tcx> EmbargoVisitor<'tcx> {
 
             // These have type privacy, so are not reachable unless they're
             // public, or are not namespaced at all.
-            DefKind::AssocConst
+            DefKind::AssocConst { .. }
             | DefKind::AssocTy
             | DefKind::ConstParam
             | DefKind::Ctor(_, _)
@@ -679,7 +690,7 @@ impl<'tcx> EmbargoVisitor<'tcx> {
                 }
             }
             DefKind::ForeignTy
-            | DefKind::Const
+            | DefKind::Const { .. }
             | DefKind::Static { .. }
             | DefKind::Fn
             | DefKind::TyAlias => {
@@ -801,7 +812,7 @@ impl<'tcx> EmbargoVisitor<'tcx> {
             | DefKind::Variant
             | DefKind::AssocFn
             | DefKind::AssocTy
-            | DefKind::AssocConst
+            | DefKind::AssocConst { .. }
             | DefKind::TyParam
             | DefKind::AnonConst
             | DefKind::InlineConst
@@ -1097,7 +1108,7 @@ impl<'tcx> Visitor<'tcx> for NamePrivacyVisitor<'tcx> {
                         qpath.span(),
                     );
                 }
-                hir::StructTailExpr::None => {
+                hir::StructTailExpr::None | hir::StructTailExpr::NoneWithError(_) => {
                     let mut failed_fields = vec![];
                     for field in fields {
                         let (hir_id, use_ctxt) = (field.hir_id, field.ident.span);
@@ -1287,7 +1298,10 @@ impl<'tcx> Visitor<'tcx> for TypePrivacyVisitor<'tcx> {
         let def = def.filter(|(kind, _)| {
             matches!(
                 kind,
-                DefKind::AssocFn | DefKind::AssocConst | DefKind::AssocTy | DefKind::Static { .. }
+                DefKind::AssocFn
+                    | DefKind::AssocConst { .. }
+                    | DefKind::AssocTy
+                    | DefKind::Static { .. }
             )
         });
         if let Some((kind, def_id)) = def {
@@ -1589,13 +1603,14 @@ impl<'tcx> PrivateItemsInPublicInterfacesChecker<'_, 'tcx> {
         let mut check = self.check(item.def_id.expect_local(), vis, effective_vis);
 
         let is_assoc_ty = item.is_type();
-        check.hard_error = is_assoc_ty && !item.is_impl_trait_in_trait();
+        check.hard_error = is_assoc_ty;
         check.generics().predicates();
         if assoc_has_type_of(self.tcx, item) {
-            check.hard_error = check.hard_error && item.defaultness(self.tcx).has_value();
             check.ty();
         }
         if is_assoc_ty && item.container == AssocContainer::Trait {
+            // FIXME: too much breakage from reporting hard errors here, better wait for a fix
+            // from proper associated type normalization.
             check.hard_error = false;
             check.bounds();
         }
@@ -1613,7 +1628,7 @@ impl<'tcx> PrivateItemsInPublicInterfacesChecker<'_, 'tcx> {
         let def_kind = tcx.def_kind(def_id);
 
         match def_kind {
-            DefKind::Const | DefKind::Static { .. } | DefKind::Fn | DefKind::TyAlias => {
+            DefKind::Const { .. } | DefKind::Static { .. } | DefKind::Fn | DefKind::TyAlias => {
                 if let DefKind::TyAlias = def_kind {
                     self.check_unnameable(def_id, effective_vis);
                 }

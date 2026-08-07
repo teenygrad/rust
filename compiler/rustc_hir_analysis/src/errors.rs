@@ -88,6 +88,8 @@ pub(crate) enum AssocItemNotFoundLabel<'a> {
     NotFound {
         #[primary_span]
         span: Span,
+        assoc_ident: Ident,
+        assoc_kind: &'static str,
     },
     #[label(
         "there is {$identically_named ->
@@ -149,6 +151,7 @@ pub(crate) enum AssocItemNotFoundSugg<'a> {
         trait_ref: String,
         suggested_name: Symbol,
         identically_named: bool,
+        assoc_kind: &'static str,
         #[applicability]
         applicability: Applicability,
     },
@@ -311,6 +314,14 @@ pub(crate) struct ConstParamTyImplOnUnsized {
 pub(crate) struct ConstParamTyImplOnNonAdt {
     #[primary_span]
     #[label("type is not a structure or enumeration")]
+    pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[diag("the trait `ConstParamTy` may not be implemented for this struct")]
+pub(crate) struct ConstParamTyFieldVisMismatch {
+    #[primary_span]
+    #[label("struct fields are less visible than the struct")]
     pub span: Span,
 }
 
@@ -730,14 +741,6 @@ pub(crate) enum CannotCaptureLateBound {
         def_span: Span,
         what: &'static str,
     },
-}
-
-#[derive(Diagnostic)]
-#[diag("{$variances}")]
-pub(crate) struct VariancesOf {
-    #[primary_span]
-    pub span: Span,
-    pub variances: String,
 }
 
 #[derive(Diagnostic)]
@@ -1446,6 +1449,15 @@ pub struct NoVariantNamed<'tcx> {
     pub ty: Ty<'tcx>,
 }
 
+#[derive(Diagnostic)]
+#[diag("no field `{$field}` on type `{$ty}`", code = E0609)]
+pub struct NoFieldOnType<'tcx> {
+    #[primary_span]
+    pub span: Span,
+    pub ty: Ty<'tcx>,
+    pub field: Ident,
+}
+
 // FIXME(fmease): Deduplicate:
 
 #[derive(Diagnostic)]
@@ -1803,6 +1815,13 @@ pub(crate) struct CmseImplTrait {
 pub(crate) struct BadReturnTypeNotation {
     #[primary_span]
     pub span: Span,
+    #[suggestion(
+        "furthermore, argument types not allowed with return type notation",
+        applicability = "maybe-incorrect",
+        code = "(..)",
+        style = "verbose"
+    )]
+    pub suggestion: Option<Span>,
 }
 
 #[derive(Diagnostic)]

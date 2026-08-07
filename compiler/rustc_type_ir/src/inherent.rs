@@ -13,7 +13,9 @@ use crate::fold::{TypeFoldable, TypeSuperFoldable};
 use crate::relate::Relate;
 use crate::solve::{AdtDestructorKind, SizedTraitKind};
 use crate::visit::{Flags, TypeSuperVisitable, TypeVisitable};
-use crate::{self as ty, ClauseKind, CollectAndApply, Interner, PredicateKind, UpcastFrom};
+use crate::{
+    self as ty, ClauseKind, CollectAndApply, FieldInfo, Interner, PredicateKind, UpcastFrom,
+};
 
 pub trait Ty<I: Interner<Ty = Self>>:
     Copy
@@ -50,13 +52,12 @@ pub trait Ty<I: Interner<Ty = Self>>:
 
     fn new_canonical_bound(interner: I, var: ty::BoundVar) -> Self;
 
-    fn new_alias(interner: I, kind: ty::AliasTyKind, alias_ty: ty::AliasTy<I>) -> Self;
+    fn new_alias(interner: I, alias_ty: ty::AliasTy<I>) -> Self;
 
     fn new_projection_from_args(interner: I, def_id: I::DefId, args: I::GenericArgs) -> Self {
-        Ty::new_alias(
+        Self::new_alias(
             interner,
-            ty::AliasTyKind::Projection,
-            ty::AliasTy::new_from_args(interner, def_id, args),
+            ty::AliasTy::new_from_args(interner, ty::AliasTyKind::Projection { def_id }, args),
         )
     }
 
@@ -65,10 +66,9 @@ pub trait Ty<I: Interner<Ty = Self>>:
         def_id: I::DefId,
         args: impl IntoIterator<Item: Into<I::GenericArg>>,
     ) -> Self {
-        Ty::new_alias(
+        Self::new_alias(
             interner,
-            ty::AliasTyKind::Projection,
-            ty::AliasTy::new(interner, def_id, args),
+            ty::AliasTy::new(interner, ty::AliasTyKind::Projection { def_id }, args),
         )
     }
 
@@ -185,7 +185,7 @@ pub trait Ty<I: Interner<Ty = Self>>:
             | ty::CoroutineWitness(_, _)
             | ty::Never
             | ty::Tuple(_)
-            | ty::Alias(_, _)
+            | ty::Alias(_)
             | ty::Param(_)
             | ty::Bound(_, _)
             | ty::Placeholder(_)
@@ -292,12 +292,6 @@ pub trait ValueConst<I: Interner<ValueConst = Self>>: Copy + Debug + Hash + Eq {
     fn valtree(self) -> I::ValTree;
 }
 
-// FIXME(mgca): This trait can be removed once we're not using a `Box` in `Branch`
-pub trait ValTree<I: Interner<ValTree = Self>>: Copy + Debug + Hash + Eq {
-    // This isnt' `IntoKind` because then we can't return a reference
-    fn kind(&self) -> &ty::ValTreeKind<I>;
-}
-
 pub trait ExprConst<I: Interner<ExprConst = Self>>: Copy + Debug + Hash + Eq + Relate<I> {
     fn args(self) -> I::GenericArgs;
 }
@@ -396,7 +390,7 @@ pub trait Term<I: Interner<Term = Self>>:
     fn to_alias_term(self) -> Option<ty::AliasTerm<I>> {
         match self.kind() {
             ty::TermKind::Ty(ty) => match ty.kind() {
-                ty::Alias(_kind, alias_ty) => Some(alias_ty.into()),
+                ty::Alias(alias_ty) => Some(alias_ty.into()),
                 _ => None,
             },
             ty::TermKind::Const(ct) => match ct.kind() {
@@ -577,6 +571,8 @@ pub trait AdtDef<I: Interner>: Copy + Debug + Hash + Eq {
 
     fn is_struct(self) -> bool;
 
+    fn is_packed(self) -> bool;
+
     /// Returns the type of the struct tail.
     ///
     /// Expects the `AdtDef` to be a struct. If it is not, then this will panic.
@@ -585,6 +581,12 @@ pub trait AdtDef<I: Interner>: Copy + Debug + Hash + Eq {
     fn is_phantom_data(self) -> bool;
 
     fn is_manually_drop(self) -> bool;
+
+    fn field_representing_type_info(
+        self,
+        interner: I,
+        args: I::GenericArgs,
+    ) -> Option<FieldInfo<I>>;
 
     // FIXME: perhaps use `all_fields` and expose `FieldDef`.
     fn all_field_tys(self, interner: I) -> ty::EarlyBinder<I, impl IntoIterator<Item = I::Ty>>;

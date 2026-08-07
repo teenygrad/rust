@@ -1,5 +1,6 @@
 use core::ops::ControlFlow;
 use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::iter;
 
 use hir::def_id::{DefId, DefIdMap, LocalDefId};
@@ -18,7 +19,7 @@ use rustc_middle::ty::{
     Upcast,
 };
 use rustc_middle::{bug, span_bug};
-use rustc_span::{DUMMY_SP, Span};
+use rustc_span::{BytePos, DUMMY_SP, Span};
 use rustc_trait_selection::error_reporting::InferCtxtErrorExt;
 use rustc_trait_selection::infer::InferCtxtExt;
 use rustc_trait_selection::regions::InferCtxtRegionExt;
@@ -819,10 +820,10 @@ where
     }
 
     fn fold_ty(&mut self, ty: Ty<'tcx>) -> Ty<'tcx> {
-        if let ty::Alias(ty::Projection, proj) = ty.kind()
-            && self.cx().is_impl_trait_in_trait(proj.def_id)
+        if let &ty::Alias(proj @ ty::AliasTy { kind: ty::Projection { def_id }, .. }) = ty.kind()
+            && self.cx().is_impl_trait_in_trait(def_id)
         {
-            if let Some((ty, _)) = self.types.get(&proj.def_id) {
+            if let Some((ty, _)) = self.types.get(&def_id) {
                 return *ty;
             }
             //FIXME(RPITIT): Deny nested RPITIT in args too
@@ -831,11 +832,11 @@ where
             }
             // Replace with infer var
             let infer_ty = self.ocx.infcx.next_ty_var(self.span);
-            self.types.insert(proj.def_id, (infer_ty, proj.args));
+            self.types.insert(def_id, (infer_ty, proj.args));
             // Recurse into bounds
             for (pred, pred_span) in self
                 .cx()
-                .explicit_item_bounds(proj.def_id)
+                .explicit_item_bounds(def_id)
                 .iter_instantiated_copied(self.cx(), proj.args)
             {
                 let pred = pred.fold_with(self);
@@ -850,7 +851,7 @@ where
                     ObligationCause::new(
                         self.span,
                         self.body_id,
-                        ObligationCauseCode::WhereClause(proj.def_id, pred_span),
+                        ObligationCauseCode::WhereClause(def_id, pred_span),
                     ),
                     self.param_env,
                     pred,
@@ -921,8 +922,12 @@ impl<'tcx> ty::FallibleTypeFolder<TyCtxt<'tcx>> for RemapHiddenTyRegions<'tcx> {
         } else {
             let guar = match region.opt_param_def_id(self.tcx, self.impl_m_def_id) {
                 Some(def_id) => {
-                    let return_span = if let ty::Alias(ty::Opaque, opaque_ty) = self.ty.kind() {
-                        self.tcx.def_span(opaque_ty.def_id)
+                    let return_span = if let &ty::Alias(ty::AliasTy {
+                        kind: ty::Opaque { def_id: opaque_ty_def_id },
+                        ..
+                    }) = self.ty.kind()
+                    {
+                        self.tcx.def_span(opaque_ty_def_id)
                     } else {
                         self.return_span
                     };
@@ -1795,6 +1800,105 @@ fn compare_number_of_method_arguments<'tcx>(
             ),
         );
 
+        // Only emit verbose suggestions when the trait span isn’t local (e.g., cross-crate).
+        if !trait_m.def_id.is_local() {
+            let trait_sig = tcx.fn_sig(trait_m.def_id);
+            let trait_arg_idents = tcx.fn_arg_idents(trait_m.def_id);
+            let sm = tcx.sess.source_map();
+            // Find the span of the space between the parentheses in a method.
+            // fn foo(...) {}
+            //        ^^^
+            let impl_inputs_span = if let (Some(first), Some(last)) =
+                (impl_m_sig.decl.inputs.first(), impl_m_sig.decl.inputs.last())
+            {
+                // We have inputs; construct the span from those.
+                // fn foo( a: i32, b: u32 ) {}
+                //        ^^^^^^^^^^^^^^^^
+                let arg_idents = tcx.fn_arg_idents(impl_m.def_id);
+                let first_lo = arg_idents
+                    .get(0)
+                    .and_then(|id| id.map(|id| id.span.lo()))
+                    .unwrap_or(first.span.lo());
+                Some(impl_m_sig.span.with_lo(first_lo).with_hi(last.span.hi()))
+            } else {
+                // We have no inputs; construct the span to the left of the last parenthesis
+                // fn foo( ) {}
+                //        ^
+                // FIXME: Keep spans for function parentheses around to make this more robust.
+                sm.span_to_snippet(impl_m_sig.span).ok().and_then(|s| {
+                    let right_paren = s.as_bytes().iter().rposition(|&b| b == b')')?;
+                    let pos = impl_m_sig.span.lo() + BytePos(right_paren as u32);
+                    Some(impl_m_sig.span.with_lo(pos).with_hi(pos))
+                })
+            };
+            let suggestion = match trait_number_args.cmp(&impl_number_args) {
+                Ordering::Greater => {
+                    // Span is right before the end parenthesis:
+                    // fn foo(a: i32 ) {}
+                    //              ^
+                    let trait_inputs = trait_sig.skip_binder().inputs().skip_binder();
+                    let missing = trait_inputs
+                        .iter()
+                        .enumerate()
+                        .skip(impl_number_args)
+                        .map(|(idx, ty)| {
+                            let name = trait_arg_idents
+                                .get(idx)
+                                .and_then(|ident| *ident)
+                                .map(|ident| ident.to_string())
+                                .unwrap_or_else(|| "_".to_string());
+                            format!("{name}: {ty}")
+                        })
+                        .collect::<Vec<_>>();
+
+                    if missing.is_empty() {
+                        None
+                    } else {
+                        impl_inputs_span.map(|s| {
+                            let span = s.shrink_to_hi();
+                            let prefix = if impl_number_args == 0 { "" } else { ", " };
+                            let replacement = format!("{prefix}{}", missing.join(", "));
+                            (
+                                span,
+                                format!(
+                                    "add the missing parameter{} from the trait",
+                                    pluralize!(trait_number_args - impl_number_args)
+                                ),
+                                replacement,
+                            )
+                        })
+                    }
+                }
+                Ordering::Less => impl_inputs_span.and_then(|full| {
+                    // Span of the arguments that there are too many of:
+                    // fn foo(a: i32, b: u32) {}
+                    //              ^^^^^^^^
+                    let lo = if trait_number_args == 0 {
+                        full.lo()
+                    } else {
+                        impl_m_sig
+                            .decl
+                            .inputs
+                            .get(trait_number_args - 1)
+                            .map(|arg| arg.span.hi())?
+                    };
+                    let span = full.with_lo(lo);
+                    Some((
+                        span,
+                        format!(
+                            "remove the extra parameter{} to match the trait",
+                            pluralize!(impl_number_args - trait_number_args)
+                        ),
+                        String::new(),
+                    ))
+                }),
+                Ordering::Equal => unreachable!(),
+            };
+            if let Some((span, msg, replacement)) = suggestion {
+                err.span_suggestion_verbose(span, msg, replacement, Applicability::MaybeIncorrect);
+            }
+        }
+
         return Err(err.emit_unless_delay(delay));
     }
 
@@ -2358,7 +2462,7 @@ pub(super) fn check_type_bounds<'tcx>(
 ) -> Result<(), ErrorGuaranteed> {
     // Avoid bogus "type annotations needed `Foo: Bar`" errors on `impl Bar for Foo` in case
     // other `Foo` impls are incoherent.
-    tcx.ensure_ok().coherent_trait(impl_trait_ref.def_id)?;
+    tcx.ensure_result().coherent_trait(impl_trait_ref.def_id)?;
 
     let param_env = tcx.param_env(impl_ty.def_id);
     debug!(?param_env);
@@ -2603,8 +2707,8 @@ fn param_env_with_gat_bounds<'tcx>(
         let bound_vars = tcx.mk_bound_variable_kinds(&bound_vars);
 
         match normalize_impl_ty.kind() {
-            ty::Alias(ty::Projection, proj)
-                if proj.def_id == trait_ty.def_id && proj.args == rebased_args =>
+            &ty::Alias(proj @ ty::AliasTy { kind: ty::Projection { def_id }, .. })
+                if def_id == trait_ty.def_id && proj.args == rebased_args =>
             {
                 // Don't include this predicate if the projected type is
                 // exactly the same as the projection. This can occur in
@@ -2646,7 +2750,7 @@ fn try_report_async_mismatch<'tcx>(
         return Ok(());
     }
 
-    let ty::Alias(ty::Projection, ty::AliasTy { def_id: async_future_def_id, .. }) =
+    let ty::Alias(ty::AliasTy { kind: ty::Projection { def_id: async_future_def_id }, .. }) =
         *tcx.fn_sig(trait_m.def_id).skip_binder().skip_binder().output().kind()
     else {
         bug!("expected `async fn` to return an RPITIT");

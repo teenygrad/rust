@@ -106,6 +106,7 @@ mod target_modifier_consistency_check {
             | SanitizerSet::SHADOWCALLSTACK
             | SanitizerSet::KCFI
             | SanitizerSet::KERNELADDRESS
+            | SanitizerSet::KERNELHWADDRESS
             | SanitizerSet::SAFESTACK
             | SanitizerSet::DATAFLOW;
 
@@ -418,10 +419,9 @@ top_level_options!(
         /// If `Some`, enable incremental compilation, using the given
         /// directory to store intermediate results.
         incremental: Option<PathBuf> [UNTRACKED],
-        assert_incr_state: Option<IncrementalStateAssertion> [UNTRACKED],
-        /// Set by the `Config::hash_untracked_state` callback for custom
-        /// drivers to invalidate the incremental cache
-        #[rustc_lint_opt_deny_field_access("should only be used via `Config::hash_untracked_state`")]
+        /// Set based on the result of the `Config::track_state` callback
+        /// for custom drivers to invalidate the incremental cache.
+        #[rustc_lint_opt_deny_field_access("should only be used via `Config::track_state`")]
         untracked_state_hash: Hash64 [TRACKED_NO_CRATE_HASH],
 
         unstable_opts: UnstableOptions [SUBSTRUCT UnstableOptionsTargetModifiers UnstableOptions],
@@ -613,7 +613,7 @@ macro_rules! options {
         $parse:ident,
         [$dep_tracking_marker:ident $( $tmod:ident )?],
         $desc:expr
-        $(, is_deprecated_and_do_nothing: $dnn:literal )?)
+        $(, removed: $removed:ident )?)
      ),* ,) =>
 (
     #[derive(Clone)]
@@ -669,7 +669,7 @@ macro_rules! options {
 
     pub const $stat: OptionDescrs<$struct_name> =
         &[ $( OptionDesc{ name: stringify!($opt), setter: $optmod::$opt,
-            type_desc: desc::$parse, desc: $desc, is_deprecated_and_do_nothing: false $( || $dnn )?,
+            type_desc: desc::$parse, desc: $desc, removed: None $( .or(Some(RemovedOption::$removed)) )?,
             tmod: tmod_enum_opt!($struct_name, $tmod_enum_name, $opt, $($tmod),*) } ),* ];
 
     mod $optmod {
@@ -707,6 +707,12 @@ macro_rules! redirect_field {
 type OptionSetter<O> = fn(&mut O, v: Option<&str>) -> bool;
 type OptionDescrs<O> = &'static [OptionDesc<O>];
 
+/// Indicates whether a removed option should warn or error.
+enum RemovedOption {
+    Warn,
+    Err,
+}
+
 pub struct OptionDesc<O> {
     name: &'static str,
     setter: OptionSetter<O>,
@@ -714,7 +720,7 @@ pub struct OptionDesc<O> {
     type_desc: &'static str,
     // description for option from options table
     desc: &'static str,
-    is_deprecated_and_do_nothing: bool,
+    removed: Option<RemovedOption>,
     tmod: Option<OptionsTargetModifiers>,
 }
 
@@ -745,18 +751,18 @@ fn build_options<O: Default>(
 
         let option_to_lookup = key.replace('-', "_");
         match descrs.iter().find(|opt_desc| opt_desc.name == option_to_lookup) {
-            Some(OptionDesc {
-                name: _,
-                setter,
-                type_desc,
-                desc,
-                is_deprecated_and_do_nothing,
-                tmod,
-            }) => {
-                if *is_deprecated_and_do_nothing {
+            Some(OptionDesc { name: _, setter, type_desc, desc, removed, tmod }) => {
+                if let Some(removed) = removed {
                     // deprecation works for prefixed options only
                     assert!(!prefix.is_empty());
-                    early_dcx.early_warn(format!("`-{prefix} {key}`: {desc}"));
+                    match removed {
+                        RemovedOption::Warn => {
+                            early_dcx.early_warn(format!("`-{prefix} {key}`: {desc}"))
+                        }
+                        RemovedOption::Err => {
+                            early_dcx.early_fatal(format!("`-{prefix} {key}`: {desc}"))
+                        }
+                    }
                 }
                 if !setter(&mut op, value) {
                     match value {
@@ -785,6 +791,7 @@ fn build_options<O: Default>(
 
 #[allow(non_upper_case_globals)]
 mod desc {
+    pub(crate) const parse_ignore: &str = "<ignored>"; // should not be user-visible
     pub(crate) const parse_no_value: &str = "no value";
     pub(crate) const parse_bool: &str =
         "one of: `y`, `yes`, `on`, `true`, `n`, `no`, `off` or `false`";
@@ -812,7 +819,7 @@ mod desc {
     pub(crate) const parse_patchable_function_entry: &str = "either two comma separated integers (total_nops,prefix_nops), with prefix_nops <= total_nops, or one integer (total_nops)";
     pub(crate) const parse_opt_panic_strategy: &str = parse_panic_strategy;
     pub(crate) const parse_relro_level: &str = "one of: `full`, `partial`, or `off`";
-    pub(crate) const parse_sanitizers: &str = "comma separated list of sanitizers: `address`, `cfi`, `dataflow`, `hwaddress`, `kcfi`, `kernel-address`, `leak`, `memory`, `memtag`, `safestack`, `shadow-call-stack`, `thread`, or 'realtime'";
+    pub(crate) const parse_sanitizers: &str = "comma separated list of sanitizers: `address`, `cfi`, `dataflow`, `hwaddress`, `kcfi`, `kernel-address`, `kernel-hwaddress`, `leak`, `memory`, `memtag`, `safestack`, `shadow-call-stack`, `thread`, or 'realtime'";
     pub(crate) const parse_sanitizer_memory_track_origins: &str = "0, 1, or 2";
     pub(crate) const parse_cfguard: &str =
         "either a boolean (`yes`, `no`, `on`, `off`, etc), `checks`, or `nochecks`";
@@ -883,6 +890,7 @@ mod desc {
     pub(crate) const parse_mir_include_spans: &str =
         "either a boolean (`yes`, `no`, `on`, `off`, etc), or `nll` (default: `nll`)";
     pub(crate) const parse_align: &str = "a number that is a power of 2 between 1 and 2^29";
+    pub(crate) const parse_assert_incr_state: &str = "one of: `loaded`, `not-loaded`";
 }
 
 pub mod parse {
@@ -890,6 +898,12 @@ pub mod parse {
 
     pub(crate) use super::*;
     pub(crate) const MAX_THREADS_CAP: usize = 256;
+
+    /// Ignore the value. Used for removed options where we don't actually want to store
+    /// anything in the session.
+    pub(crate) fn parse_ignore(_slot: &mut (), _v: Option<&str>) -> bool {
+        true
+    }
 
     /// This is for boolean options that don't take a value, and are true simply
     /// by existing on the command-line.
@@ -1254,6 +1268,7 @@ pub mod parse {
                     "dataflow" => SanitizerSet::DATAFLOW,
                     "kcfi" => SanitizerSet::KCFI,
                     "kernel-address" => SanitizerSet::KERNELADDRESS,
+                    "kernel-hwaddress" => SanitizerSet::KERNELHWADDRESS,
                     "leak" => SanitizerSet::LEAK,
                     "memory" => SanitizerSet::MEMORY,
                     "memtag" => SanitizerSet::MEMTAG,
@@ -2048,6 +2063,18 @@ pub mod parse {
 
         true
     }
+
+    pub(crate) fn parse_assert_incr_state(
+        slot: &mut Option<IncrementalStateAssertion>,
+        v: Option<&str>,
+    ) -> bool {
+        *slot = match v {
+            Some("loaded") => Some(IncrementalStateAssertion::Loaded),
+            Some("not-loaded") => Some(IncrementalStateAssertion::NotLoaded),
+            _ => return false,
+        };
+        true
+    }
 }
 
 options! {
@@ -2061,7 +2088,7 @@ options! {
     #[rustc_lint_opt_deny_field_access("documented to do nothing")]
     ar: String = (String::new(), parse_string, [UNTRACKED],
         "this option is deprecated and does nothing",
-        is_deprecated_and_do_nothing: true),
+        removed: Warn),
     #[rustc_lint_opt_deny_field_access("use `Session::code_model` instead of this field")]
     code_model: Option<CodeModel> = (None, parse_code_model, [TRACKED],
         "choose the code model to use (`rustc --print code-models` for details)"),
@@ -2100,7 +2127,7 @@ options! {
     inline_threshold: Option<u32> = (None, parse_opt_number, [UNTRACKED],
         "this option is deprecated and does nothing \
         (consider using `-Cllvm-args=--inline-threshold=...`)",
-        is_deprecated_and_do_nothing: true),
+        removed: Warn),
     #[rustc_lint_opt_deny_field_access("use `Session::instrument_coverage` instead of this field")]
     instrument_coverage: InstrumentCoverage = (InstrumentCoverage::No, parse_instrument_coverage, [TRACKED],
         "instrument the generated code to support LLVM source-based code coverage reports \
@@ -2141,7 +2168,7 @@ options! {
     #[rustc_lint_opt_deny_field_access("documented to do nothing")]
     no_stack_check: bool = (false, parse_no_value, [UNTRACKED],
         "this option is deprecated and does nothing",
-        is_deprecated_and_do_nothing: true),
+        removed: Warn),
     no_vectorize_loops: bool = (false, parse_no_value, [TRACKED],
         "disable loop vectorization optimization passes"),
     no_vectorize_slp: bool = (false, parse_no_value, [TRACKED],
@@ -2175,8 +2202,11 @@ options! {
         "set rpath values in libs/exes (default: no)"),
     save_temps: bool = (false, parse_bool, [UNTRACKED],
         "save all temporary output files during compilation (default: no)"),
-    soft_float: bool = (false, parse_bool, [TRACKED],
-        "deprecated option: use soft float ABI (*eabihf targets only) (default: no)"),
+    #[rustc_lint_opt_deny_field_access("documented to do nothing")]
+    soft_float: () = ((), parse_ignore, [UNTRACKED],
+        "this option has been removed \
+        (use a corresponding *eabi target instead)",
+        removed: Err),
     #[rustc_lint_opt_deny_field_access("use `Session::split_debuginfo` instead of this field")]
     split_debuginfo: Option<SplitDebuginfo> = (None, parse_split_debuginfo, [TRACKED],
         "how to handle split-debuginfo, a platform-specific option"),
@@ -2214,7 +2244,7 @@ options! {
     annotate_moves: AnnotateMoves = (AnnotateMoves::Disabled, parse_annotate_moves, [TRACKED],
         "emit debug info for compiler-generated move and copy operations \
         to make them visible in profilers. Can be a boolean or a size limit in bytes (default: disabled)"),
-    assert_incr_state: Option<String> = (None, parse_opt_string, [UNTRACKED],
+    assert_incr_state: Option<IncrementalStateAssertion> = (None, parse_assert_incr_state, [UNTRACKED],
         "assert that the incremental cache is in given state: \
          either `loaded` or `not-loaded`."),
     assume_incomplete_release: bool = (false, parse_bool, [TRACKED],
@@ -2242,7 +2272,7 @@ options! {
         (default: no)"),
     box_noalias: bool = (true, parse_bool, [TRACKED],
         "emit noalias metadata for box (default: yes)"),
-    branch_protection: Option<BranchProtection> = (None, parse_branch_protection, [TRACKED],
+    branch_protection: Option<BranchProtection> = (None, parse_branch_protection, [TRACKED TARGET_MODIFIER],
         "set options for branch target identification and pointer authentication on AArch64"),
     build_sdylib_interface: bool = (false, parse_bool, [UNTRACKED],
         "whether the stable interface is being built"),
@@ -2458,6 +2488,8 @@ options! {
         "the directory metrics emitted by rustc are dumped into (implicitly enables default set of metrics)"),
     min_function_alignment: Option<Align> = (None, parse_align, [TRACKED],
         "align all functions to at least this many bytes. Must be a power of 2"),
+    min_recursion_limit: Option<usize> = (None, parse_opt_number, [TRACKED],
+        "set a minimum recursion limit (final limit = max(this, recursion_limit_from_crate))"),
     mir_emit_retag: bool = (false, parse_bool, [TRACKED],
         "emit Retagging MIR statements, interpreted e.g., by miri; implies -Zmir-opt-level=0 \
         (default: no)"),
@@ -2527,6 +2559,8 @@ options! {
         "pass `-install_name @rpath/...` to the macOS linker (default: no)"),
     packed_bundled_libs: bool = (false, parse_bool, [TRACKED],
         "change rlib format to store native libraries as archives"),
+    packed_stack: bool = (false, parse_bool, [TRACKED],
+        "use packed stack frames (s390x only) (default: no)"),
     panic_abort_tests: bool = (false, parse_bool, [TRACKED],
         "support compiling tests with panic=abort (default: no)"),
     panic_in_drop: PanicStrategy = (PanicStrategy::Unwind, parse_panic_strategy, [TRACKED],

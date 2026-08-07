@@ -48,10 +48,10 @@ pub struct CrateDepMultiple {
 }
 
 #[derive(Subdiagnostic)]
-#[note("`{$crate_name}` was unavailable as a static crate, preventing fully static linking")]
+#[note("`{$sub_crate_name}` was unavailable as a static crate, preventing fully static linking")]
 pub struct NonStaticCrateDep {
     /// It's different from `crate_name` in main Diagnostic.
-    pub crate_name_: Symbol,
+    pub sub_crate_name: Symbol,
 }
 
 #[derive(Diagnostic)]
@@ -687,4 +687,12 @@ pub struct AsyncDropTypesInDependency {
 pub struct RawDylibMalformed {
     #[primary_span]
     pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[diag("extern crate `{$extern_crate}` is unused in crate `{$local_crate}`")]
+#[help("remove the dependency or add `use {$extern_crate} as _;` to the crate root")]
+pub(crate) struct UnusedCrateDependency {
+    pub extern_crate: Symbol,
+    pub local_crate: Symbol,
 }

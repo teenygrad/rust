@@ -144,8 +144,8 @@ macro_rules! language_item_table {
     }
 }
 
-impl<CTX> HashStable<CTX> for LangItem {
-    fn hash_stable(&self, _: &mut CTX, hasher: &mut StableHasher) {
+impl<Hcx> HashStable<Hcx> for LangItem {
+    fn hash_stable(&self, _: &mut Hcx, hasher: &mut StableHasher) {
         ::std::hash::Hash::hash(self, hasher);
     }
 }
@@ -341,7 +341,8 @@ language_item_table! {
 
     PhantomData,             sym::phantom_data,        phantom_data,               Target::Struct,         GenericRequirement::Exact(1);
 
-    ManuallyDrop,            sym::manually_drop,       manually_drop,              Target::Struct,         GenericRequirement::None;
+    ManuallyDrop,            sym::manually_drop,       manually_drop,              Target::Struct,         GenericRequirement::Exact(1);
+    MaybeDangling,           sym::maybe_dangling,      maybe_dangling,             Target::Struct,         GenericRequirement::Exact(1);
     BikeshedGuaranteedNoDrop, sym::bikeshed_guaranteed_no_drop, bikeshed_guaranteed_no_drop, Target::Trait, GenericRequirement::Exact(0);
 
     MaybeUninit,             sym::maybe_uninit,        maybe_uninit,               Target::Union,          GenericRequirement::None;
@@ -435,6 +436,13 @@ language_item_table! {
     // Reborrowing related lang-items
     Reborrow,                sym::reborrow,            reborrow,                   Target::Trait,          GenericRequirement::Exact(0);
     CoerceShared,            sym::coerce_shared,       coerce_shared,              Target::Trait,          GenericRequirement::Exact(0);
+
+    // Field representing types.
+    FieldRepresentingType,   sym::field_representing_type, field_representing_type,    Target::Struct,         GenericRequirement::Exact(3);
+    Field,                   sym::field,                   field,                      Target::Trait,          GenericRequirement::Exact(0);
+    FieldBase,               sym::field_base,              field_base,                 Target::AssocTy,        GenericRequirement::Exact(0);
+    FieldType,               sym::field_type,              field_type,                 Target::AssocTy,        GenericRequirement::Exact(0);
+    FieldOffset,             sym::field_offset,            field_offset,               Target::AssocConst,     GenericRequirement::Exact(0);
 }
 
 /// The requirement imposed on the generics of a lang item

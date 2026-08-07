@@ -1,10 +1,9 @@
 //! Inlining pass for MIR functions.
 
-use std::iter;
 use std::ops::{Range, RangeFrom};
+use std::{debug_assert_matches, iter};
 
 use rustc_abi::{ExternAbi, FieldIdx};
-use rustc_data_structures::debug_assert_matches;
 use rustc_hir::attrs::{InlineAttr, OptimizeAttr};
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::DefId;
@@ -16,7 +15,7 @@ use rustc_middle::mir::visit::*;
 use rustc_middle::mir::*;
 use rustc_middle::ty::{self, Instance, InstanceKind, Ty, TyCtxt, TypeFlags, TypeVisitableExt};
 use rustc_session::config::{DebugInfo, OptLevel};
-use rustc_span::source_map::Spanned;
+use rustc_span::Spanned;
 use tracing::{debug, instrument, trace, trace_span};
 
 use crate::cost_checker::{CostChecker, is_call_like};
@@ -251,15 +250,17 @@ impl<'tcx> Inliner<'tcx> for ForceInliner<'tcx> {
         };
 
         let call_span = callsite.source_info.span;
+        let callee = tcx.def_path_str(callsite.callee.def_id());
         tcx.dcx().emit_err(crate::errors::ForceInlineFailure {
             call_span,
             attr_span,
             caller_span: tcx.def_span(self.def_id),
             caller: tcx.def_path_str(self.def_id),
             callee_span: tcx.def_span(callsite.callee.def_id()),
-            callee: tcx.def_path_str(callsite.callee.def_id()),
+            callee: callee.clone(),
             reason,
-            justification: justification.map(|sym| crate::errors::ForceInlineJustification { sym }),
+            justification: justification
+                .map(|sym| crate::errors::ForceInlineJustification { sym, callee }),
         });
     }
 }

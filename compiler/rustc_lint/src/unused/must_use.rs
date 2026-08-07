@@ -108,13 +108,6 @@ impl IsTyMustUse {
             _ => self,
         }
     }
-
-    fn yes(self) -> Option<MustUsePath> {
-        match self {
-            Self::Yes(must_use_path) => Some(must_use_path),
-            _ => None,
-        }
-    }
 }
 
 /// A path through a type to a `must_use` source. Contains useful info for the lint.
@@ -211,7 +204,10 @@ pub fn is_ty_must_use<'tcx>(
         ty::Adt(def, _) => {
             is_def_must_use(cx, def.did(), expr.span).map_or(IsTyMustUse::No, IsTyMustUse::Yes)
         }
-        ty::Alias(ty::Opaque | ty::Projection, ty::AliasTy { def_id: def, .. }) => {
+        ty::Alias(ty::AliasTy {
+            kind: ty::Opaque { def_id: def } | ty::Projection { def_id: def },
+            ..
+        }) => {
             elaborate(cx.tcx, cx.tcx.explicit_item_self_bounds(def).iter_identity_copied())
                 // We only care about self bounds for the impl-trait
                 .filter_only_self()
@@ -254,16 +250,23 @@ pub fn is_ty_must_use<'tcx>(
             // Default to `expr`.
             let elem_exprs = elem_exprs.iter().chain(iter::repeat(expr));
 
-            let nested_must_use = tys
-                .iter()
-                .zip(elem_exprs)
-                .enumerate()
-                .filter_map(|(i, (ty, expr))| {
-                    is_ty_must_use(cx, ty, expr, simplify_uninhabited).yes().map(|path| (i, path))
-                })
-                .collect::<Vec<_>>();
+            let mut all_trivial = true;
+            let mut nested_must_use = Vec::new();
 
-            if !nested_must_use.is_empty() {
+            tys.iter().zip(elem_exprs).enumerate().for_each(|(i, (ty, expr))| {
+                let must_use = is_ty_must_use(cx, ty, expr, simplify_uninhabited);
+
+                all_trivial &= matches!(must_use, IsTyMustUse::Trivial);
+                if let IsTyMustUse::Yes(path) = must_use {
+                    nested_must_use.push((i, path));
+                }
+            });
+
+            if all_trivial {
+                // If all tuple elements are trivial, mark the whole tuple as such.
+                // i.e. don't emit `unused_results` for types such as `((), ())`
+                IsTyMustUse::Trivial
+            } else if !nested_must_use.is_empty() {
                 IsTyMustUse::Yes(MustUsePath::TupleElement(nested_must_use))
             } else {
                 IsTyMustUse::No
@@ -316,7 +319,7 @@ impl<'tcx> LateLintPass<'tcx> for UnusedResults {
 
         if let hir::ExprKind::Match(await_expr, _arms, hir::MatchSource::AwaitDesugar) = expr.kind
             && let ty = cx.typeck_results().expr_ty(await_expr)
-            && let ty::Alias(ty::Opaque, ty::AliasTy { def_id: future_def_id, .. }) = ty.kind()
+            && let ty::Alias(ty::AliasTy { kind: ty::Opaque { def_id: future_def_id }, .. }) = ty.kind()
             && cx.tcx.ty_is_opaque_future(ty)
             && let async_fn_def_id = cx.tcx.parent(*future_def_id)
             && matches!(cx.tcx.def_kind(async_fn_def_id), DefKind::Fn | DefKind::AssocFn)

@@ -23,8 +23,7 @@ use rustc_middle::ty::{
     suggest_constraining_type_params,
 };
 use rustc_session::errors::ExprParenthesesNeeded;
-use rustc_span::source_map::Spanned;
-use rustc_span::{ExpnKind, Ident, MacroKind, Span, Symbol, sym};
+use rustc_span::{ExpnKind, Ident, MacroKind, Span, Spanned, Symbol, sym};
 use rustc_trait_selection::error_reporting::InferCtxtErrorExt;
 use rustc_trait_selection::error_reporting::traits::DefIdOrName;
 use rustc_trait_selection::infer::InferCtxtExt;
@@ -1834,7 +1833,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             }
             _ => return false,
         };
-        if item.def_id == old_def_id || self.tcx.def_kind(item.def_id) != DefKind::AssocConst {
+        if item.def_id == old_def_id
+            || !matches!(self.tcx.def_kind(item.def_id), DefKind::AssocConst { .. })
+        {
             // Same item
             return false;
         }
@@ -2379,7 +2380,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 && match expr.kind {
                     ExprKind::Path(QPath::Resolved(
                         None,
-                        Path { res: Res::Def(DefKind::Const, _), .. },
+                        Path { res: Res::Def(DefKind::Const { .. }, _), .. },
                     )) => true,
                     ExprKind::Call(
                         Expr {
