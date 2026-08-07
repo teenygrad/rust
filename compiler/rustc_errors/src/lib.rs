@@ -48,7 +48,7 @@ pub use emitter::ColorConfig;
 use emitter::{DynEmitter, Emitter};
 use rustc_data_structures::AtomicRef;
 use rustc_data_structures::fx::{FxHashSet, FxIndexMap, FxIndexSet};
-use rustc_data_structures::stable_hasher::StableHasher;
+use rustc_data_structures::stable_hash::StableHasher;
 use rustc_data_structures::sync::{DynSend, Lock};
 pub use rustc_error_messages::{
     DiagArg, DiagArgFromDisplay, DiagArgMap, DiagArgName, DiagArgValue, DiagMessage, IntoDiagArg,
@@ -78,6 +78,7 @@ mod diagnostic_impls;
 pub mod emitter;
 pub mod formatting;
 pub mod json;
+pub mod lints;
 mod lock;
 pub mod markdown;
 pub mod timings;

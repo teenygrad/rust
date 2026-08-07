@@ -50,9 +50,10 @@ omitted. This lets a channel's *version resolution* stay accurate (e.g. `stable`
 cargo +nightly run --release -p build-manifest build/dist build/manifest 1970-01-01 http://example.com stable stable-teenyc
 ```
 
-After that, generate a SHA256 stamp for the manifest file:
+After that, generate a SHA256 stamp for the manifest file, and create a symlink to point to the right directory:
 ```sh
 sha256sum build/dist/channel-rust-nightly.toml > build/dist/channel-rust-nightly.toml.sha256
+ln -s ${PWD}/build/dist build/1970-01-01
 ```
 
 And start a HTTP server from the `build` directory:

@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::{env, thread};
 
+use rand::{RngCore, rng};
 use rustc_ast as ast;
 use rustc_attr_parsing::ShouldEmit;
 use rustc_codegen_ssa::back::archive::{ArArchiveBuilderBuilder, ArchiveBuilderBuilder};
@@ -12,6 +13,7 @@ use rustc_codegen_ssa::back::link::link_binary;
 use rustc_codegen_ssa::target_features::cfg_target_feature;
 use rustc_codegen_ssa::traits::CodegenBackend;
 use rustc_codegen_ssa::{CompiledModules, CrateInfo, TargetConfig};
+use rustc_data_structures::base_n::{CASE_INSENSITIVE, ToBaseN};
 use rustc_data_structures::fx::FxIndexMap;
 use rustc_data_structures::jobserver::Proxy;
 use rustc_data_structures::sync;
@@ -408,7 +410,7 @@ impl CodegenBackend for DummyCodegenBackend {
         String::new()
     }
 
-    fn codegen_crate<'tcx>(&self, _tcx: TyCtxt<'tcx>, _crate_info: &CrateInfo) -> Box<dyn Any> {
+    fn codegen_crate<'tcx>(&self, _tcx: TyCtxt<'tcx>) -> Box<dyn Any> {
         Box::new(CompiledModules { modules: vec![], allocator_module: None })
     }
 
@@ -417,6 +419,7 @@ impl CodegenBackend for DummyCodegenBackend {
         ongoing_codegen: Box<dyn Any>,
         _sess: &Session,
         _outputs: &OutputFilenames,
+        _crate_info: &CrateInfo,
     ) -> (CompiledModules, FxIndexMap<WorkProductId, WorkProduct>) {
         (*ongoing_codegen.downcast().unwrap(), FxIndexMap::default())
     }
@@ -617,6 +620,12 @@ pub fn build_output_filenames(attrs: &[ast::Attribute], sess: &Session) -> Outpu
             parse_crate_name(sess, attrs, ShouldEmit::Nothing).map(|i| i.0.to_string())
         });
 
+    let invocation_temp = sess
+        .opts
+        .incremental
+        .as_ref()
+        .map(|_| rng().next_u32().to_base_fixed_len(CASE_INSENSITIVE).to_string());
+
     match sess.io.output_file {
         None => {
             // "-" as input file will cause the parser to read from stdin so we
@@ -633,6 +642,7 @@ pub fn build_output_filenames(attrs: &[ast::Attribute], sess: &Session) -> Outpu
                 stem,
                 None,
                 sess.io.temps_dir.clone(),
+                invocation_temp,
                 sess.opts.unstable_opts.split_dwarf_out_dir.clone(),
                 sess.opts.cg.extra_filename.clone(),
                 sess.opts.output_types.clone(),
@@ -663,6 +673,7 @@ pub fn build_output_filenames(attrs: &[ast::Attribute], sess: &Session) -> Outpu
                 out_filestem,
                 ofile,
                 sess.io.temps_dir.clone(),
+                invocation_temp,
                 sess.opts.unstable_opts.split_dwarf_out_dir.clone(),
                 sess.opts.cg.extra_filename.clone(),
                 sess.opts.output_types.clone(),

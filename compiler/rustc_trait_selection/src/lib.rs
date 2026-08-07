@@ -13,8 +13,8 @@
 // tidy-alphabetical-start
 #![cfg_attr(bootstrap, feature(assert_matches))]
 #![feature(associated_type_defaults)]
-#![feature(box_patterns)]
 #![feature(default_field_values)]
+#![feature(deref_patterns)]
 #![feature(hash_set_entry)]
 #![feature(iter_intersperse)]
 #![feature(iterator_try_reduce)]
