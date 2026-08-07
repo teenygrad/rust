@@ -25,6 +25,7 @@
 [submodule "src/llvm-project"]
 	path = src/llvm-project
 	url = git@github.com:teenygrad/llvm-project.git
+	shallow = true
 [submodule "src/triton"]
 	path = src/triton
 	url = git@github.com:teenygrad/triton.git

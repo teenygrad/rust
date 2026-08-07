@@ -18,18 +18,18 @@ use rustc_macros::Diagnostic;
 
 #[derive(Diagnostic, Debug)]
 pub enum MlirError {
-    #[diag(codegen_llvm_mlir_codegen_failed)]
+    #[diag("mlir codegen failed: {$err}")]
     CodegenFailed { err: String },
 
-    #[diag(codegen_llvm_mlir_create_operation_failed)]
+    #[diag("mlir create operation failed: {$err}")]
     CreateOperation { err: rustc_mlir::errors::Error },
 
-    #[diag(codegen_llvm_mlir_invalid_scalar_operand)]
+    #[diag("invalid scalar operand: {$node}")]
     InvalidScalar { node: String },
 
-    #[diag(codegen_llvm_mlir_invalid_type)]
+    #[diag("invalid type: {$msg}")]
     InvalidType { msg: String },
 
-    #[diag(codegen_llvm_mlir_incompatible_types)]
+    #[diag("incomaptibale types: {$msg}")]
     IncompatibleTypes { msg: String },
 }
