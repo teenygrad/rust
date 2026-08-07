@@ -1524,18 +1524,6 @@ pub enum EntryFnType {
 
 pub use rustc_hir::attrs::CrateType;
 
-impl CrateType {
-    pub fn has_metadata(self) -> bool {
-        match self {
-            CrateType::Rlib | CrateType::Dylib | CrateType::ProcMacro => true,
-            CrateType::Executable
-            | CrateType::Cdylib
-            | CrateType::Staticlib
-            | CrateType::Sdylib => false,
-        }
-    }
-}
-
 #[derive(Copy, PartialEq, PartialOrd, Clone, Ord, Eq, Hash, Debug, Encodable, Decodable)]
 #[derive(HashStable_Generic)]
 pub enum Frontend {
