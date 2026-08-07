@@ -1032,7 +1032,8 @@ pub fn build_session(
     }
 
     let host_triple = TargetTuple::from_tuple(config::host_tuple());
-    let (host, target_warnings) = Target::search(&host_triple, sopts.sysroot.path())
+    let (host, target_warnings) =
+        Target::search(&host_triple, sopts.sysroot.path(), sopts.unstable_opts.unstable_options)
         .unwrap_or_else(|e| dcx.handle().fatal(format!("Error loading host specification: {e}")));
     for warning in target_warnings.warning_messages() {
         dcx.handle().warn(warning)
