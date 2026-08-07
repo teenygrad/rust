@@ -245,6 +245,14 @@ fn build_triton(llvm_config: &Path, workspace_root: &Path) -> PathBuf {
         .define("CMAKE_BUILD_TYPE", build_type)
         .define("CMAKE_INCLUDE_PATH", triton_src.join("third_party"))
         .out_dir(&triton_build_out)
+        // `cmake::Config::build()` defaults to `--target install`, but this
+        // build of Triton (amd;nvidia backends, no python module install
+        // rules exercised the same way) doesn't define a working top-level
+        // `install` target -- `ninja` reports "unknown target 'install'".
+        // We only need the raw build output (libtriton.a etc., read directly
+        // from <out_dir>/build/ below), so just build the default `all`
+        // target instead of installing.
+        .build_target("all")
         .build();
 
     // The cmake crate places build artifacts in <out_dir>/build/
