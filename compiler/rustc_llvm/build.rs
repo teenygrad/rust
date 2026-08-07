@@ -227,6 +227,12 @@ fn build_triton(llvm_config: &Path, workspace_root: &Path) -> PathBuf {
         // and, once a clone attempt fails partway, leaves a corrupted checkout
         // that breaks every subsequent cmake configure until manually removed.
         .define("TRITON_BUILD_UT", "OFF")
+        // examples/plugins/DialectPlugins is a demo of MLIR's plugin-loading
+        // API, unrelated to anything teenygrad needs -- its add_mlir_dialect_library
+        // install rule hits a "file INSTALL cannot duplicate symlink" CMake error
+        // (upstream LLVM/MLIR install-rule quirk for SHARED plugin libraries, not
+        // fixable from here). Skip building it entirely.
+        .define("TRITON_BUILD_EXAMPLES", "OFF")
         // ccache has been producing intermittently corrupted object files/archive
         // members in this environment (ar/ranlib failures: "file truncated",
         // "invalid size field in group section header"), recurring across
