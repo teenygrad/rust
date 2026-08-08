@@ -129,6 +129,7 @@ pub struct CudaCompileOptions {
     pub instrumentation: bool,
     pub disable_line_info: bool,
     pub enable_reflect_ftz: bool,
+    pub dump_ir_extract_di_local_variables: bool,
 }
 
 impl Default for CudaCompileOptions {
@@ -176,6 +177,7 @@ impl Default for CudaCompileOptions {
             instrumentation: false,
             disable_line_info: false,
             enable_reflect_ftz: false,
+            dump_ir_extract_di_local_variables: false,
         }
     }
 }

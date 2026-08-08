@@ -73,9 +73,9 @@ pub(crate) struct MlirFullCx<'ll, 'tcx> {
 
 impl<'ll, 'tcx> MlirCodegenCx<'ll, 'tcx> {
     pub(crate) fn new(
-        tcx: TyCtxt<'tcx>,
-        codegen_unit: &'tcx CodegenUnit<'tcx>,
-        llvm_module: &'ll MlirModule<'_>,
+        _tcx: TyCtxt<'tcx>,
+        _codegen_unit: &'tcx CodegenUnit<'tcx>,
+        _llvm_module: &'ll MlirModule<'_>,
     ) -> Self {
         todo!()
         // let (llcx, llmod) = (&*llvm_module.llcx, llvm_module.llmod());

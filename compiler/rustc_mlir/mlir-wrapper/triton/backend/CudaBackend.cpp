@@ -448,7 +448,7 @@ LogicalResult CudaBackend::gluonToTTGIR(MLIRContext &context, ModuleOp module) {
   addPass(pm, MlirPass::gluon_infer_coalesced_encodings);
   addPass(pm, MlirPass::gluon_resolve_auto_encodings);
   addCudaPass(pm, CudaPass::ttnvgpuir_tma_lowering);
-  addPass(pm, MlirPass::canonicalizer);
+  addPass(pm, MlirPass::gluon_canonicalizer);
   addPass(pm, MlirPass::sccp);
   addPass(pm, MlirPass::ttir_loop_aware_cse);
   addPass(pm, MlirPass::gluon_canonicalizer);
@@ -498,7 +498,7 @@ LogicalResult CudaBackend::makeLLIR(MLIRContext &context, ModuleOp module) {
   addPass(pm, MlirPass::cse);
   addPass(pm, MlirPass::symbol_dce);
   addPass(pm, MlirPass::nvvm_to_llvm);
-  if (!m_options.disable_line_info) {
+  if (!m_options.disable_line_info && !m_options.dump_ir_extract_di_local_variables) {
     addPass(pm, MlirPass::llvmir_di_scope);
   }
 
@@ -508,6 +508,31 @@ LogicalResult CudaBackend::makeLLIR(MLIRContext &context, ModuleOp module) {
   }
 
   auto result = pm.run(op);
+
+  if (succeeded(result) && m_options.dump_ir_extract_di_local_variables) {
+    if (!m_options.disable_line_info) {
+      PassManager diScopePm(&context);
+      if (m_options.debug) {
+        diScopePm.enableIRPrinting();
+      }
+      addPass(diScopePm, MlirPass::llvmir_di_scope);
+      result = diScopePm.run(op);
+    }
+
+    if (succeeded(result)) {
+      // Insert dbg intrinsics with several DI attributes (source var name,
+      // type info). This pass and llvmir_di_scope must run in separate
+      // PassManagers -- combining them into the main pipeline triggers a
+      // segfault without any error message, possibly an MLIR/pybind11 bug.
+      PassManager diLocalVarPm(&context);
+      if (m_options.debug) {
+        diLocalVarPm.enableIRPrinting();
+      }
+      addPass(diLocalVarPm, MlirPass::llvmir_di_local_variable);
+      result = diLocalVarPm.run(op);
+    }
+  }
+
   if (succeeded(result)) {
     // Read resource metadata written by the allocation passes as MLIR module
     // attributes. These are later appended to the PTX as comments so Rust can

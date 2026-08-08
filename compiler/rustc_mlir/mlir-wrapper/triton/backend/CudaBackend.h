@@ -137,6 +137,7 @@ struct CudaCompileOptions {
   bool instrumentation;
   bool disable_line_info;
   bool enable_reflect_ftz;
+  bool dump_ir_extract_di_local_variables;
 };
 
 enum Capability {

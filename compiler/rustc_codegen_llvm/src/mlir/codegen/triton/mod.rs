@@ -2159,8 +2159,7 @@ impl<'a> TritonCodegen<'a> {
             | StatementKind::PlaceMention(_)
             | StatementKind::AscribeUserType(..)
             | StatementKind::Coverage(_)
-            | StatementKind::BackwardIncompatibleDropHint { .. }
-            | StatementKind::Retag(..) => Ok(()),
+            | StatementKind::BackwardIncompatibleDropHint { .. } => Ok(()),
         }?;
 
         //println!("[DEBUG] TritonCodegen::codegen_statement: ssa_values: {:?}", state.ssa_values);
@@ -3563,7 +3562,7 @@ impl<'a> TritonCodegen<'a> {
     fn codegen_scalar_const_value<'tcx>(
         &self,
         tcx: TyCtxt<'tcx>,
-        instance: &Instance<'tcx>,
+        _instance: &Instance<'tcx>,
         ty: Ty<'tcx>,
         scalar: Scalar,
         location: Location<'a>,
