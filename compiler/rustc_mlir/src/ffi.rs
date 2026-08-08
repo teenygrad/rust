@@ -72,7 +72,6 @@ pub struct Dim3 {
 pub enum TargetBackend {
     Cuda = 0,
     Rocm = 1,
-    Spirv = 2,
 }
 
 // ---------------------------------------------------------------------------
@@ -197,7 +196,6 @@ impl Default for CudaCompileOptions {
 pub union CompileOptionsData {
     pub cuda: CudaCompileOptions,
     // pub rocm:  RocmCompileOptions,  // reserved for future use
-    // pub spirv: SpirvCompileOptions, // reserved for future use
 }
 
 /// Complete compile options passed to `mlirTritonCompilerCreate`.

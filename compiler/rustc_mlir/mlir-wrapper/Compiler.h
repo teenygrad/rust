@@ -41,7 +41,6 @@ namespace triton {
 enum TargetBackend : uint32_t {
   TargetBackend_Cuda = 0,
   TargetBackend_Rocm = 1,
-  TargetBackend_Spirv = 2,
 };
 
 // ---------------------------------------------------------------------------
@@ -61,7 +60,6 @@ enum TargetBackend : uint32_t {
 union CompileOptionsData {
   CudaCompileOptions cuda;
   // RocmCompileOptions  rocm;   // reserved for future use
-  // SpirvCompileOptions spirv;  // reserved for future use
 };
 
 /// Complete compile options passed across the C/Rust FFI boundary.

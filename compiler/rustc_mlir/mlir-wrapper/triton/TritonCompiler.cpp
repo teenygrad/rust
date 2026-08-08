@@ -20,7 +20,6 @@
 
 #include "TritonCompiler.h"
 #include "backend/CudaBackend.h"
-#include "backend/SpirVBackend.h"
 
 using namespace std;
 
@@ -31,9 +30,6 @@ TritonCompiler::TritonCompiler(MLIRContext *context, std::string target,
                                CompileOptions options)
     : Compiler(context, target, options) {
   switch (options.backend) {
-  case TargetBackend_Spirv:
-    backend = new SpirVBackend(target, SpirVOptions());
-    break;
   case TargetBackend_Cuda:
   default:
     backend = new CudaBackend(target, options.data.cuda);
