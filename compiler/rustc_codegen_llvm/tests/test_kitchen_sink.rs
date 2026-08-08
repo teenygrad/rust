@@ -21,8 +21,6 @@ use std::path::{Path, PathBuf};
 
 use rustc_driver::{Callbacks, run_compiler};
 use rustc_interface::interface;
-use rustc_session::config;
-use rustc_target::spec::Target as RustcTarget;
 use tracing::{debug, info};
 
 /// Custom callbacks that register the MLIR codegen backend programmatically
@@ -33,12 +31,11 @@ impl Callbacks for MlirBackendCallbacks {
         debug!("MlirBackendCallbacks::config called - registering backend");
         // Register the MLIR codegen backend programmatically
         // This closure will be called when rustc needs to create the codegen backend
-        config.make_codegen_backend =
-            Some(Box::new(|_opts: &config::Options, _target: &RustcTarget| {
-                debug!("make_codegen_backend closure called - creating MlirCodegenBackend");
-                // Create and return the MLIR codegen backend
-                rustc_codegen_llvm::mlir::MlirCodegenBackend::new()
-            }));
+        config.make_codegen_backend = Some(Box::new(|_sess: &rustc_session::Session| {
+            debug!("make_codegen_backend closure called - creating MlirCodegenBackend");
+            // Create and return the MLIR codegen backend
+            rustc_codegen_llvm::mlir::MlirCodegenBackend::new()
+        }));
     }
 }
 
@@ -50,13 +47,23 @@ impl LlvmCompiler {
         Self {}
     }
 
-    pub fn compile(&self, filename: &Path, target: &str) -> Result<(), Box<dyn std::error::Error>> {
+    /// Compiles `filename`, writing PTX to `/tmp/kernel-{output_name}.asm` and
+    /// returning that path. `output_name` should be unique per call site (e.g.
+    /// the test name) so that concurrently-running tests don't clobber each
+    /// other's output.
+    pub fn compile(
+        &self,
+        filename: &Path,
+        target: &str,
+        output_name: &str,
+    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
         let working_dir = PathBuf::from("/tmp");
 
         // Use custom callbacks that register the MLIR backend
         let mut callbacks = MlirBackendCallbacks;
         let exe_name = "/home/arshadm/.cargo/bin/rustc".to_string(); // AXM FIXME: remove this once API changes
-        let output = format!("-o{}", working_dir.join("kernel.asm").display());
+        let output_path = working_dir.join(format!("kernel-{output_name}.asm"));
+        let output = format!("-o{}", output_path.display());
         let build_type = "-Copt-level=3".to_string(); // Use opt-level=3 for release build
         let panic_abort = "-Cpanic=abort".to_string();
         let target = format!("--target={}", target);
@@ -101,7 +108,7 @@ impl LlvmCompiler {
 
         run_compiler(&args, &mut callbacks);
 
-        Ok(())
+        Ok(output_path)
     }
 }
 
@@ -124,13 +131,12 @@ mod tests {
         let tensor_add = env::current_dir().unwrap().join("tests/data/triton_kitchen_sink.rs");
         let target = "nvptx64-nvidia-cuda";
         println!("Compiling tensor add with target: {}", tensor_add.display());
-        let result = compiler.compile(&tensor_add, target);
+        let result = compiler.compile(&tensor_add, target, "test_triton_kitchen_sink");
         assert!(result.is_ok());
 
         // Verify no unresolved __nv_* externs remain in the PTX — they indicate
         // that libdevice was not linked and the PTX JIT will fail at runtime.
-        let ptx = std::fs::read_to_string("/tmp/kernel.asm")
-            .expect("kernel.asm not written");
+        let ptx = std::fs::read_to_string(result.unwrap()).expect("kernel.asm not written");
         let unresolved: Vec<&str> = ptx
             .lines()
             .filter(|l| l.contains(".extern .func") && l.contains("__nv_"))
@@ -157,7 +163,7 @@ mod tests {
 
         let compiler = LlvmCompiler::new();
         let file = env::current_dir().unwrap().join("tests/data/phi_bug_early_return.rs");
-        let result = compiler.compile(&file, "nvptx64-nvidia-cuda");
+        let result = compiler.compile(&file, "nvptx64-nvidia-cuda", "test_phi_bug_early_return");
         assert!(result.is_ok(), "phi_bug_early_return compile failed: {:?}", result.err());
     }
 
@@ -176,7 +182,7 @@ mod tests {
 
         let compiler = LlvmCompiler::new();
         let file = env::current_dir().unwrap().join("tests/data/phi_bug_loop_continue.rs");
-        let result = compiler.compile(&file, "nvptx64-nvidia-cuda");
+        let result = compiler.compile(&file, "nvptx64-nvidia-cuda", "test_phi_bug_loop_continue");
         assert!(result.is_ok(), "phi_bug_loop_continue compile failed: {:?}", result.err());
     }
 
@@ -200,7 +206,8 @@ mod tests {
 
         let compiler = LlvmCompiler::new();
         let file = env::current_dir().unwrap().join("tests/data/float_to_float_scalar_cast.rs");
-        let result = compiler.compile(&file, "nvptx64-nvidia-cuda");
+        let result =
+            compiler.compile(&file, "nvptx64-nvidia-cuda", "test_float_to_float_scalar_cast");
         assert!(result.is_ok(), "float_to_float_scalar_cast compile failed: {:?}", result.err());
 
         // With the bug, compilation *succeeds* — the whole danger was that
@@ -216,7 +223,7 @@ mod tests {
         // loaded into is the same register passed to the final store. With the bug, that
         // register is never referenced again — the stored value comes from an unrelated
         // poison-allocated register instead.
-        let ptx = std::fs::read_to_string("/tmp/kernel.asm").expect("kernel.asm not written");
+        let ptx = std::fs::read_to_string(result.unwrap()).expect("kernel.asm not written");
         let param_line = ptx
             .lines()
             .find(|l| l.contains("ld.param.b32") && l.contains("entry_point_param_0"))

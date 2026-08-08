@@ -21,8 +21,6 @@ use std::path::{Path, PathBuf};
 
 use rustc_driver::{Callbacks, run_compiler};
 use rustc_interface::interface;
-use rustc_session::config;
-use rustc_target::spec::Target as RustcTarget;
 use tracing::{debug, info};
 
 /// Custom callbacks that register the MLIR codegen backend programmatically
@@ -33,12 +31,11 @@ impl Callbacks for MlirBackendCallbacks {
         debug!("MlirBackendCallbacks::config called - registering backend");
         // Register the MLIR codegen backend programmatically
         // This closure will be called when rustc needs to create the codegen backend
-        config.make_codegen_backend =
-            Some(Box::new(|_opts: &config::Options, _target: &RustcTarget| {
-                debug!("make_codegen_backend closure called - creating MlirCodegenBackend");
-                // Create and return the MLIR codegen backend
-                rustc_codegen_llvm::mlir::MlirCodegenBackend::new()
-            }));
+        config.make_codegen_backend = Some(Box::new(|_sess: &rustc_session::Session| {
+            debug!("make_codegen_backend closure called - creating MlirCodegenBackend");
+            // Create and return the MLIR codegen backend
+            rustc_codegen_llvm::mlir::MlirCodegenBackend::new()
+        }));
     }
 }
 
@@ -50,13 +47,23 @@ impl LlvmCompiler {
         Self {}
     }
 
-    pub fn compile(&self, filename: &Path, target: &str) -> Result<(), Box<dyn std::error::Error>> {
+    /// Compiles `filename`, writing PTX to `/tmp/kernel-{output_name}.asm` and
+    /// returning that path. `output_name` should be unique per call site (e.g.
+    /// the test name) so that concurrently-running tests don't clobber each
+    /// other's output.
+    pub fn compile(
+        &self,
+        filename: &Path,
+        target: &str,
+        output_name: &str,
+    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
         let working_dir = PathBuf::from("/tmp");
 
         // Use custom callbacks that register the MLIR backend
         let mut callbacks = MlirBackendCallbacks;
         let exe_name = "/home/arshadm/.cargo/bin/rustc".to_string(); // AXM FIXME: remove this once API changes
-        let output = format!("-o{}", working_dir.join("kernel.asm").display());
+        let output_path = working_dir.join(format!("kernel-{output_name}.asm"));
+        let output = format!("-o{}", output_path.display());
         let build_type = "-Copt-level=3".to_string(); // Use opt-level=3 for release build
         let panic_abort = "-Cpanic=abort".to_string();
         let target = format!("--target={}", target);
@@ -101,7 +108,7 @@ impl LlvmCompiler {
 
         run_compiler(&args, &mut callbacks);
 
-        Ok(())
+        Ok(output_path)
     }
 }
 
@@ -125,7 +132,7 @@ mod tests {
         let target = "nvptx64-nvidia-cuda";
 
         println!("Compiling tensor add with target: {}", tensor_add.display());
-        let result = compiler.compile(&tensor_add, target)?;
+        compiler.compile(&tensor_add, target, "test_triton_relu")?;
 
         Ok(())
     }
