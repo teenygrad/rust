@@ -485,11 +485,18 @@ pub fn rustc_path<'a>(sysroot: &Sysroot) -> Option<&'a Path> {
 
     RUSTC_PATH
         .get_or_init(|| {
-            let candidate = sysroot
-                .default
-                .join(env!("RUSTC_INSTALL_BINDIR"))
-                .join(if cfg!(target_os = "windows") { "rustc.exe" } else { "rustc" });
-            candidate.exists().then_some(candidate)
+            let bindir = sysroot.default.join(env!("RUSTC_INSTALL_BINDIR"));
+            // This fork's compiler binary is rebranded from `rustc` to `teenyc`
+            // (see src/bootstrap/src/core/build_steps/dist.rs and
+            // src/bootstrap/src/core/builder/mod.rs), so look for that name first
+            // and fall back to `rustc` for compatibility with an unrebranded sysroot.
+            [
+                if cfg!(target_os = "windows") { "teenyc.exe" } else { "teenyc" },
+                if cfg!(target_os = "windows") { "rustc.exe" } else { "rustc" },
+            ]
+            .into_iter()
+            .map(|name| bindir.join(name))
+            .find(|candidate| candidate.exists())
         })
         .as_deref()
 }
