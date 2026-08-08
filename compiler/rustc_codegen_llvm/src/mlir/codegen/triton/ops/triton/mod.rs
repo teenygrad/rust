@@ -29,7 +29,7 @@ impl<'a> TritonCodegen<'a> {
         &self,
         location: Location<'a>,
         _terminator: &Terminator<'tcx>,
-        mlir_block: &BlockRef,
+        mlir_block: &BlockRef<'_, '_>,
         state: &mut CodegenState<'a, 'a>,
     ) -> Result<(), MlirError> {
         println!("[DEBUG] TritonCodegen::codegen_return: ssa_values: {:?}", state.ssa_values);

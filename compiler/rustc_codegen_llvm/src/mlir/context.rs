@@ -75,7 +75,7 @@ impl<'ll, 'tcx> MlirCodegenCx<'ll, 'tcx> {
     pub(crate) fn new(
         tcx: TyCtxt<'tcx>,
         codegen_unit: &'tcx CodegenUnit<'tcx>,
-        llvm_module: &'ll MlirModule,
+        llvm_module: &'ll MlirModule<'_>,
     ) -> Self {
         todo!()
         // let (llcx, llmod) = (&*llvm_module.llcx, llvm_module.llmod());
@@ -92,7 +92,7 @@ impl<'ll, 'tcx> MlirCodegenCx<'ll, 'tcx> {
 }
 
 impl<'ll> MlirSimpleCx<'ll> {
-    pub(crate) fn new(llmod: &'ll ModuleOp, llcx: &'ll MLIRContext, pointer_size: Size) -> Self {
+    pub(crate) fn new(llmod: &'ll ModuleOp, llcx: &'ll MLIRContext, _pointer_size: Size) -> Self {
         // Create a dummy SCx for compatibility with GenericCx
         // Since MLIR types can't be converted to LLVM types, we use unsafe code
         // to create an uninitialized SCx. The SCx should not be accessed.

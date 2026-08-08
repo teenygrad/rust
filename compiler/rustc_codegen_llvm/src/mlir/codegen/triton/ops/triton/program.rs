@@ -20,7 +20,7 @@ use rustc_middle::mir::{BasicBlock, Body, CallSource, Operand, Place, UnwindActi
 use rustc_middle::ty::{Instance, TyCtxt};
 use rustc_mlir::triton::program::{ProgramAxis, create_get_program_id};
 use rustc_span::Span;
-use rustc_span::source_map::Spanned;
+use rustc_span::Spanned;
 
 use crate::mlir::codegen::triton::{CodegenState, TritonCodegen};
 use crate::mlir::errors::MlirError;
@@ -31,16 +31,16 @@ impl<'a> TritonCodegen<'a> {
         tcx: TyCtxt<'tcx>,
         instance: &Instance<'tcx>,
         _mir: &Body<'tcx>,
-        func: &Operand<'tcx>,
+        _func: &Operand<'tcx>,
         _func_name: &str,
         args: &[Spanned<Operand<'tcx>>],
-        destination: &Place<'tcx>,
-        target: &Option<BasicBlock>,
-        unwind: &UnwindAction,
-        call_source: &CallSource,
-        fn_span: &Span,
+        _destination: &Place<'tcx>,
+        _target: &Option<BasicBlock>,
+        _unwind: &UnwindAction,
+        _call_source: &CallSource,
+        _fn_span: &Span,
         location: Location<'a>,
-        mlir_block: &BlockRef,
+        mlir_block: &BlockRef<'_, '_>,
         _state: &mut CodegenState<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         debug_assert!(args.len() == 1, "TritonCodegen::codegen_program_id: args length must be 1");

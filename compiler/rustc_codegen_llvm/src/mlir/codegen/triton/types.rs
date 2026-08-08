@@ -125,7 +125,7 @@ impl TypeMapper {
         &self,
         context: &'c Context,
         tcx: &TyCtxt<'tcx>,
-        def: &AdtDef,
+        def: &AdtDef<'_>,
         args: &[GenericArg<'tcx>],
     ) -> Type<'c> {
         let name = with_no_trimmed_paths!(tcx.def_path_str(def.did()));
@@ -158,7 +158,7 @@ impl TypeMapper {
         context: &'c Context,
         tcx: &TyCtxt<'tcx>,
         ty: &Ty<'tcx>,
-        _alias_ty_kind: &AliasTyKind,
+        _alias_ty_kind: &AliasTyKind<'_>,
         alias_ty: &AliasTy<'tcx>,
     ) -> Type<'c> {
         let typing_env = TypingEnv::post_analysis(*tcx, alias_ty.def_id);

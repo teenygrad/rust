@@ -453,9 +453,9 @@ impl<'tcx> MirVisitor<'tcx> {
                 template,
                 operands,
                 options,
-                line_spans,
                 targets,
                 unwind,
+                ..
             } => {
                 this.log(&format!(
                     "InlineAsm: macro={:?}, options={:?}, targets={:?}, unwind={:?}",

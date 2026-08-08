@@ -1525,7 +1525,7 @@ pub enum EntryFnType {
 pub use rustc_hir::attrs::CrateType;
 
 #[derive(Copy, PartialEq, PartialOrd, Clone, Ord, Eq, Hash, Debug, Encodable, Decodable)]
-#[derive(HashStable_Generic)]
+// #[derive(HashStable_Generic)]
 pub enum Frontend {
     Triton,
 }

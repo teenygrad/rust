@@ -20,10 +20,8 @@ use melior::Context;
 use melior::ir::{Location, Module};
 use rustc_codegen_ssa::back::write::CodegenContext;
 use rustc_errors::DiagCtxtHandle;
-use rustc_mlir::ffi::{CompileOptions, MlirTritonCompiler, OptionalI32};
+use rustc_mlir::ffi::{CompileOptions, OptionalI32};
 use rustc_mlir::triton::TritonCompiler;
-
-use crate::mlir::backend::MlirCodegenBackend;
 
 /// Resource metadata for a compiled GPU kernel, recovered by parsing the
 /// structured `// meta:key=value` comments appended to the PTX by CudaBackend.
@@ -44,20 +42,25 @@ impl KernelMetadata {
     /// Parse `// meta:key=value` lines from PTX output.
     /// Lines that don't match the pattern are silently ignored.
     pub fn parse(ptx: &str) -> Self {
-        let mut meta = KernelMetadata { num_ctas: 1, global_scratch_align: 1, profile_scratch_align: 1, ..Default::default() };
+        let mut meta = KernelMetadata {
+            num_ctas: 1,
+            global_scratch_align: 1,
+            profile_scratch_align: 1,
+            ..Default::default()
+        };
         for line in ptx.lines() {
             let Some(rest) = line.trim().strip_prefix("// meta:") else { continue };
             let Some((key, val)) = rest.split_once('=') else { continue };
             match key {
-                "name"                  => meta.name = val.to_owned(),
-                "num_warps"             => meta.num_warps            = val.parse().unwrap_or(0),
-                "num_ctas"              => meta.num_ctas             = val.parse().unwrap_or(1),
-                "shared"               => meta.shared               = val.parse().unwrap_or(0),
-                "tmem_size"             => meta.tmem_size            = val.parse().unwrap_or(0),
-                "global_scratch_size"   => meta.global_scratch_size  = val.parse().unwrap_or(0),
-                "global_scratch_align"  => meta.global_scratch_align = val.parse().unwrap_or(1),
-                "profile_scratch_size"  => meta.profile_scratch_size = val.parse().unwrap_or(0),
-                "profile_scratch_align" => meta.profile_scratch_align= val.parse().unwrap_or(1),
+                "name" => meta.name = val.to_owned(),
+                "num_warps" => meta.num_warps = val.parse().unwrap_or(0),
+                "num_ctas" => meta.num_ctas = val.parse().unwrap_or(1),
+                "shared" => meta.shared = val.parse().unwrap_or(0),
+                "tmem_size" => meta.tmem_size = val.parse().unwrap_or(0),
+                "global_scratch_size" => meta.global_scratch_size = val.parse().unwrap_or(0),
+                "global_scratch_align" => meta.global_scratch_align = val.parse().unwrap_or(1),
+                "profile_scratch_size" => meta.profile_scratch_size = val.parse().unwrap_or(0),
+                "profile_scratch_align" => meta.profile_scratch_align = val.parse().unwrap_or(1),
                 _ => {}
             }
         }
@@ -181,20 +184,26 @@ impl<'c> MlirModule<'c> {
 
         let mut options = CompileOptions::default_cuda();
         // Safety: CompileOptionsData is a union; default_cuda() sets the cuda variant.
-        unsafe {
-            options.data.cuda.capability = capability;
-            options.data.cuda.ptx_version = OptionalI32::some(resolve_ptx_version(capability));
-            // `debug` gates the C++ backend's per-pass IR printing (see
-            // CudaBackend::makeTTIR/makeTTGIR/makeLLIR) — only worth paying for
-            // when a subscriber is actually listening at trace level for this
-            // backend's log target.
-            options.data.cuda.debug =
-                tracing::enabled!(target: crate::mlir::LOG_TARGET, tracing::Level::TRACE);
-        }
+        options.data.cuda.capability = capability;
+        options.data.cuda.ptx_version = OptionalI32::some(resolve_ptx_version(capability));
+        // `debug` gates the C++ backend's per-pass IR printing (see
+        // CudaBackend::makeTTIR/makeTTGIR/makeLLIR) — only worth paying for
+        // when a subscriber is actually listening at trace level for this
+        // backend's log target.
+        options.data.cuda.debug =
+            tracing::enabled!(target: crate::mlir::LOG_TARGET, tracing::Level::TRACE);
         let compiler = TritonCompiler::new(context.to_raw(), "cuda", &options)
             .expect("Failed to create Triton compiler");
 
-        Self { name: mod_name.to_string(), mlir: module, compiler, context, ptx_asm: None, mlir_source: None, kernel_metadata: None }
+        Self {
+            name: mod_name.to_string(),
+            mlir: module,
+            compiler,
+            context,
+            ptx_asm: None,
+            mlir_source: None,
+            kernel_metadata: None,
+        }
     }
 
     pub fn context(&self) -> &Context {
@@ -202,7 +211,7 @@ impl<'c> MlirModule<'c> {
     }
 
     pub fn parse(
-        _cgcx: &CodegenContext<MlirCodegenBackend>,
+        _cgcx: &CodegenContext,
         name: &CStr,
         _buffer: &[u8],
         _dcx: DiagCtxtHandle<'_>,

@@ -16,17 +16,15 @@
 
 use std::collections::{HashMap, HashSet};
 
-use melior::dialect::scf;
 use melior::ir::attribute::{FloatAttribute, IntegerAttribute};
 use melior::ir::operation::{OperationBuilder, OperationLike};
 use melior::ir::r#type::IntegerType;
 use melior::ir::{
-    Attribute, Block, BlockLike, BlockRef, Location, Operation, Region, RegionLike, TypeLike,
-    Value, ValueLike,
+    Block, BlockLike, BlockRef, Location, Operation, Region, RegionLike, TypeLike, Value, ValueLike,
 };
 use melior::utility::register_all_llvm_translations;
 use rustc_abi::{FieldIdx, FieldsShape, Size as AbiSize};
-use rustc_ast::{FloatTy, IntTy, MutTy, UintTy};
+use rustc_ast::{FloatTy, IntTy, UintTy};
 use rustc_index::IndexVec;
 use rustc_middle::mir::interpret::{CtfeProvenance, GlobalAlloc, Scalar, alloc_range};
 use rustc_middle::mir::mono::MonoItem;
@@ -41,12 +39,14 @@ use rustc_middle::ty::{
     TyKind, TypingEnv, adjustment::PointerCoercion,
 };
 use rustc_mlir::load_all_dialects;
-use rustc_mlir::shared::arith::{Int, Predicate, create_constant, create_int_constant, create_negf, create_subi};
+use rustc_mlir::shared::arith::{
+    Int, Predicate, create_constant, create_int_constant, create_negf, create_subi,
+};
 use rustc_mlir::shared::attr::create_scalar_attr;
 use rustc_mlir::shared::builtin::{tensor_type, tensor_type_like};
 use rustc_mlir::shared::ub::create_ub_poison;
 use rustc_mlir::triton::tensor::splat;
-use rustc_mlir::triton::{create_func, int_to_ptr, load_triton_dialect, pointer_type};
+use rustc_mlir::triton::{create_func, int_to_ptr, load_triton_dialect};
 use rustc_span::DUMMY_SP;
 
 use crate::mlir::MlirModule;
@@ -251,9 +251,7 @@ fn compute_const_disc_locals<'tcx>(
             EarlyBinder::bind(c.const_),
         );
         match instantiated {
-            Const::Val(ConstValue::Scalar(Scalar::Int(s)), _) => {
-                Some(s.to_bits_unchecked() as u64)
-            }
+            Const::Val(ConstValue::Scalar(Scalar::Int(s)), _) => Some(s.to_bits_unchecked() as u64),
             Const::Ty(_, ref ck) => {
                 if let ConstKind::Value(cv) = ck.kind() {
                     cv.valtree.try_to_leaf().map(|s| s.to_bits_unchecked() as u64)
@@ -391,7 +389,9 @@ fn compute_reachable_blocks<'tcx>(
             }
             TerminatorKind::SwitchInt { discr, targets } => {
                 // Constant-fold when the discriminant is statically known.
-                if let Some(const_val) = extract_switch_const(tcx, instance, discr, const_disc_locals) {
+                if let Some(const_val) =
+                    extract_switch_const(tcx, instance, discr, const_disc_locals)
+                {
                     let target = targets
                         .iter()
                         .find(|(val, _)| *val == const_val as u128)
@@ -471,7 +471,10 @@ fn compute_phi_join_locals<'tcx>(
     // When stopping at a multi-predecessor block (inner join), `known_phis[current]`
     // is included: these are phi locals that the inner join already merges, so they
     // "flow through" to the outer join without a new `Assign` statement.
-    let collect_chain_locals = |start: BasicBlock, join_preds: &HashSet<BasicBlock>, known_phis: &HashMap<BasicBlock, Vec<Local>>| -> HashSet<Local> {
+    let collect_chain_locals = |start: BasicBlock,
+                                join_preds: &HashSet<BasicBlock>,
+                                known_phis: &HashMap<BasicBlock, Vec<Local>>|
+     -> HashSet<Local> {
         let mut locals: HashSet<Local> = HashSet::new();
         let mut current = start;
         let mut visited: HashSet<BasicBlock> = HashSet::new();
@@ -508,8 +511,7 @@ fn compute_phi_join_locals<'tcx>(
                         .map(|ps| {
                             ps.iter()
                                 .filter(|&&b| {
-                                    reachable_bbs.contains(&b)
-                                        && !loop_region_blocks.contains(&b)
+                                    reachable_bbs.contains(&b) && !loop_region_blocks.contains(&b)
                                 })
                                 .copied()
                                 .collect()
@@ -641,7 +643,9 @@ fn detect_range_loop<'tcx>(instance: Instance<'tcx>, mir: &Body<'tcx>) -> Vec<Ra
                 // Back edge: bb → target (target is the loop header)
                 let header_bb = *target;
                 let back_edge_bb = bb;
-                if let Some(info) = try_build_range_loop_info(instance, mir, header_bb, back_edge_bb) {
+                if let Some(info) =
+                    try_build_range_loop_info(instance, mir, header_bb, back_edge_bb)
+                {
                     loops.push(info);
                 }
             }
@@ -673,11 +677,15 @@ fn detect_while_loop<'tcx>(
                 let back_edge_bb = bb;
 
                 // Skip blocks already claimed by a Range-based for-loop.
-                if range_loop_blocks.contains(&header_bb) || range_loop_blocks.contains(&back_edge_bb) {
+                if range_loop_blocks.contains(&header_bb)
+                    || range_loop_blocks.contains(&back_edge_bb)
+                {
                     continue;
                 }
 
-                if let Some(info) = try_build_while_loop_info(mir, header_bb, back_edge_bb, range_loop_blocks) {
+                if let Some(info) =
+                    try_build_while_loop_info(mir, header_bb, back_edge_bb, range_loop_blocks)
+                {
                     loops.push(info);
                 }
             }
@@ -790,7 +798,9 @@ fn try_build_range_loop_info<'tcx>(
             if let TerminatorKind::SwitchInt { targets, .. } = &switch_data.terminator().kind {
                 let cases: Vec<(u128, BasicBlock)> = targets.iter().collect();
                 // Discriminant 0 = None (exit), discriminant 1 = Some (body)
-                if cases.len() == 2 && cases[0].0 == 0 && cases[1].0 == 1
+                if cases.len() == 2
+                    && cases[0].0 == 0
+                    && cases[1].0 == 1
                     && destination.projection.is_empty()
                 {
                     let exit_bb = cases[0].1;
@@ -875,9 +885,7 @@ fn find_range_bound<'tcx>(
                                     return Some((Some(v), None));
                                 }
                             }
-                            Operand::Copy(p) | Operand::Move(p)
-                                if p.projection.is_empty() =>
-                            {
+                            Operand::Copy(p) | Operand::Move(p) if p.projection.is_empty() => {
                                 return Some((None, Some(p.local)));
                             }
                             _ => {}
@@ -914,8 +922,8 @@ fn find_lt_locals_in_stmts<'tcx>(
                         Operand::Move(p) | Operand::Copy(p) if p.projection.is_empty() => p.local,
                         _ => return None,
                     };
-                    let counter_local = find_copy_source_in_stmts(stmts, counter_copy)
-                        .unwrap_or(counter_copy);
+                    let counter_local =
+                        find_copy_source_in_stmts(stmts, counter_copy).unwrap_or(counter_copy);
                     match rhs {
                         Operand::Move(p) | Operand::Copy(p) if p.projection.is_empty() => {
                             return Some((counter_local, Some(p.local), None));
@@ -933,7 +941,11 @@ fn find_lt_locals_in_stmts<'tcx>(
                                         let subst = instance.args.const_at(param.index as usize);
                                         let cv = subst.to_value();
                                         if let Some(si) = cv.try_to_leaf() {
-                                            return Some((counter_local, None, Some(si.to_bits_unchecked() as i64)));
+                                            return Some((
+                                                counter_local,
+                                                None,
+                                                Some(si.to_bits_unchecked() as i64),
+                                            ));
                                         }
                                     }
                                 }
@@ -1011,10 +1023,7 @@ fn collect_body_blocks_ordered<'tcx>(
 }
 
 /// Find the induction local: a local assigned via a downcast+field projection on an Option local.
-fn find_induction_local_in_bbs<'tcx>(
-    mir: &Body<'tcx>,
-    body_bbs: &[BasicBlock],
-) -> Option<Local> {
+fn find_induction_local_in_bbs<'tcx>(mir: &Body<'tcx>, body_bbs: &[BasicBlock]) -> Option<Local> {
     for &bb in body_bbs {
         for stmt in &mir.basic_blocks[bb].statements {
             if let StatementKind::Assign(assign) = &stmt.kind {
@@ -1022,9 +1031,10 @@ fn find_induction_local_in_bbs<'tcx>(
                 if dest.projection.is_empty() {
                     if let Rvalue::Use(Operand::Copy(src) | Operand::Move(src)) = rvalue {
                         // Downcast+field projection = Option::Some unwrap
-                        let has_downcast = src.projection.iter().any(|p| {
-                            matches!(p, ProjectionElem::Downcast(_, _))
-                        });
+                        let has_downcast = src
+                            .projection
+                            .iter()
+                            .any(|p| matches!(p, ProjectionElem::Downcast(_, _)));
                         if has_downcast {
                             return Some(dest.local);
                         }
@@ -1264,7 +1274,7 @@ impl<'a> TritonCodegen<'a> {
                                 BinOp::Shl => Some(l.wrapping_shl(r as u32)),
                                 BinOp::Shr => Some(l.wrapping_shr(r as u32)),
                                 BinOp::BitAnd => Some(l & r),
-                                BinOp::BitOr  => Some(l | r),
+                                BinOp::BitOr => Some(l | r),
                                 BinOp::BitXor => Some(l ^ r),
                                 _ => None,
                             }
@@ -1450,15 +1460,21 @@ impl<'a> TritonCodegen<'a> {
         let i32_ty: melior::ir::Type<'_> = IntegerType::new(ctx, 32).into();
 
         // Emit lb = 0 and step = 1
-        let lb_op: Operation<'a> =
-            melior::dialect::arith::constant(ctx, IntegerAttribute::new(i32_ty, 0).into(), location)
-                .into();
+        let lb_op: Operation<'a> = melior::dialect::arith::constant(
+            ctx,
+            IntegerAttribute::new(i32_ty, 0).into(),
+            location,
+        )
+        .into();
         let lb: Value<'a, 'a> = lb_op.result(0).unwrap().into();
         init_mlir_block.append_operation(lb_op);
 
-        let step_op: Operation<'a> =
-            melior::dialect::arith::constant(ctx, IntegerAttribute::new(i32_ty, 1).into(), location)
-                .into();
+        let step_op: Operation<'a> = melior::dialect::arith::constant(
+            ctx,
+            IntegerAttribute::new(i32_ty, 1).into(),
+            location,
+        )
+        .into();
         let step: Value<'a, 'a> = step_op.result(0).unwrap().into();
         init_mlir_block.append_operation(step_op);
 
@@ -1508,8 +1524,7 @@ impl<'a> TritonCodegen<'a> {
         let body_region = for_op.region(0).expect("scf.for must have a body region");
 
         // Build a combined block map: outer + loop body blocks.
-        let mut combined_blocks: HashMap<BasicBlock, BlockRef<'a, 'a>> =
-            outer_basic_blocks.clone();
+        let mut combined_blocks: HashMap<BasicBlock, BlockRef<'a, 'a>> = outer_basic_blocks.clone();
 
         // The entry block gets: (induction_var: i32, iter_arg_0: T0, ...)
         let mut entry_block_args: Vec<(melior::ir::Type<'a>, Location<'a>)> =
@@ -1714,8 +1729,7 @@ impl<'a> TritonCodegen<'a> {
         }
 
         // Build a combined block map for body codegen (all body blocks → after_block).
-        let mut combined_blocks: HashMap<BasicBlock, BlockRef<'a, 'a>> =
-            outer_basic_blocks.clone();
+        let mut combined_blocks: HashMap<BasicBlock, BlockRef<'a, 'a>> = outer_basic_blocks.clone();
         for &body_bb in &loop_info.body_bbs {
             combined_blocks.insert(body_bb, after_block_ref);
         }
@@ -1778,7 +1792,7 @@ impl<'a> TritonCodegen<'a> {
         instance: &Instance<'tcx>,
     ) -> Result<(), MlirError> {
         let mut state = CodegenState::new();
-        let mut basic_blocks: HashMap<BasicBlock, BlockRef> = HashMap::new();
+        let mut basic_blocks: HashMap<BasicBlock, BlockRef<'_, '_>> = HashMap::new();
 
         // Downcast to a FnSig
         let fn_sig = fn_ty.fn_sig(tcx);
@@ -1791,13 +1805,12 @@ impl<'a> TritonCodegen<'a> {
         // Since in rustc we don't always bring in the rustc-demangle crate, but
         // the symbol_name should generally be readable for non-generic items.
         // Otherwise, fallback to `def_path_str` (should give a crate-relative path).
-        let friendly_name = if func_name.starts_with("_R") {
+        let _friendly_name = if func_name.starts_with("_R") {
             // Looks like a Rust-mangled symbol. Try to show a better name.
             tcx.def_path_str(instance.def_id())
         } else {
             func_name.to_string()
         };
-
 
         // Skip Triton intrinsic function bodies — calls to these are intercepted at call-sites
         // by the codegen dispatch table, so the actual body is never compiled for GPU execution.
@@ -1846,7 +1859,7 @@ impl<'a> TritonCodegen<'a> {
 
         let func_loc =
             span_to_location(self.module.context(), tcx, tcx.def_span(instance.def_id()));
-        let func_op: Operation = create_func(
+        let func_op: Operation<'_> = create_func(
             self.module.context(),
             func_loc,
             func_name,
@@ -1995,14 +2008,7 @@ impl<'a> TritonCodegen<'a> {
                 // Process init-block statements only, then build the scf.for in-place.
                 let init_mlir_block = *basic_blocks.get(&bb).expect("init block");
                 for stmt in &bb_data.statements {
-                    self.codegen_statement(
-                        tcx,
-                        instance,
-                        mir,
-                        stmt,
-                        &init_mlir_block,
-                        &mut state,
-                    )?;
+                    self.codegen_statement(tcx, instance, mir, stmt, &init_mlir_block, &mut state)?;
                 }
                 self.codegen_scf_for_loop(
                     tcx,
@@ -2022,14 +2028,7 @@ impl<'a> TritonCodegen<'a> {
                 // Process init-block statements only, then build the scf.while in-place.
                 let init_mlir_block = *basic_blocks.get(&bb).expect("while init block");
                 for stmt in &bb_data.statements {
-                    self.codegen_statement(
-                        tcx,
-                        instance,
-                        mir,
-                        stmt,
-                        &init_mlir_block,
-                        &mut state,
-                    )?;
+                    self.codegen_statement(tcx, instance, mir, stmt, &init_mlir_block, &mut state)?;
                 }
                 self.codegen_scf_while_loop(
                     tcx,
@@ -2069,7 +2068,7 @@ impl<'a> TritonCodegen<'a> {
         mir: &Body<'tcx>,
         bb: BasicBlock,
         bb_data: &BasicBlockData<'tcx>,
-        _func_op: &Operation,
+        _func_op: &Operation<'_>,
         state: &mut CodegenState<'a, 'a>,
         basic_blocks: &HashMap<BasicBlock, BlockRef<'a, 'a>>,
     ) -> Result<(), MlirError> {
@@ -2265,7 +2264,9 @@ impl<'a> TritonCodegen<'a> {
                 // can propagate the shape when this local is later coerced to &[T].
                 if let Operand::Constant(c) = operand {
                     let const_ty = instance.instantiate_mir_and_normalize_erasing_regions(
-                        tcx, TypingEnv::fully_monomorphized(), EarlyBinder::bind(c.const_.ty()),
+                        tcx,
+                        TypingEnv::fully_monomorphized(),
+                        EarlyBinder::bind(c.const_.ty()),
                     );
                     if let Some(shape) =
                         self.try_read_array_ref_const(tcx, *instance, const_ty, &c.const_)
@@ -2353,11 +2354,9 @@ impl<'a> TritonCodegen<'a> {
                     tcx, instance, cast_kind, operand, ty, location, mlir_block, state,
                 )?;
 
-
                 state.ssa_values.insert(place.local, result);
             }
             Rvalue::Aggregate(aggregate_kind, index_vec) => {
-
                 // Route Option<T> aggregates (Some/None) into the option_table.
                 if let AggregateKind::Adt(def_id, variant_index, _, _, _) = aggregate_kind.as_ref()
                 {
@@ -2425,7 +2424,8 @@ impl<'a> TritonCodegen<'a> {
                             // computed locals (e.g. `HEAD_DIM / 2` where HEAD_DIM is a
                             // const generic — the division is not folded by rustc before
                             // being used as an array-size argument like `&[HEAD_DIM / 2]`).
-                            self.to_scalar_int(tcx, instance, op).ok()
+                            self.to_scalar_int(tcx, instance, op)
+                                .ok()
                                 .map(|s| match s.size().bytes() {
                                     1 => s.to_u8() as i64,
                                     2 => s.to_i16() as i64,
@@ -2433,8 +2433,10 @@ impl<'a> TritonCodegen<'a> {
                                     8 => s.to_i64(),
                                     n => todo!("ScalarInt size {} bytes", n),
                                 })
-                                .or_else(|| Self::fold_operand_as_i32(tcx, instance, mir, op)
-                                    .map(|v| v as i64))
+                                .or_else(|| {
+                                    Self::fold_operand_as_i32(tcx, instance, mir, op)
+                                        .map(|v| v as i64)
+                                })
                         })
                         .collect();
                     if let Some(elems) = elems {
@@ -2475,12 +2477,10 @@ impl<'a> TritonCodegen<'a> {
                         let fields: Result<Vec<Value<'_, '_>>, MlirError> = index_vec
                             .iter()
                             .map(|op| match op {
-                                Operand::Copy(p) | Operand::Move(p) => {
-                                    self.codegen_copy(p, state)
-                                }
+                                Operand::Copy(p) | Operand::Move(p) => self.codegen_copy(p, state),
                                 Operand::Constant(_) | Operand::RuntimeChecks(_) => {
-                                    let ty =
-                                        instance.instantiate_mir_and_normalize_erasing_regions(
+                                    let ty = instance
+                                        .instantiate_mir_and_normalize_erasing_regions(
                                             tcx,
                                             TypingEnv::fully_monomorphized(),
                                             EarlyBinder::bind(op.ty(mir, tcx)),
@@ -2567,7 +2567,7 @@ impl<'a> TritonCodegen<'a> {
                         let false_op: Operation<'a> =
                             melior::dialect::arith::constant(ctx, false_attr.into(), location)
                                 .into();
-                        let false_val: Value = false_op.result(0).unwrap().into();
+                        let false_val: Value<'_, '_> = false_op.result(0).unwrap().into();
                         mlir_block.append_operation(false_op);
                         state.tuple_fields.insert(place.local, vec![result_val, false_val]);
                     }
@@ -2586,8 +2586,8 @@ impl<'a> TritonCodegen<'a> {
                     TypingEnv::fully_monomorphized(),
                     EarlyBinder::bind(operand.ty(mir, tcx)),
                 );
-                let val =
-                    self.codegen_operand(tcx, instance, operand, op_ty, location, mlir_block, state)?;
+                let val = self
+                    .codegen_operand(tcx, instance, operand, op_ty, location, mlir_block, state)?;
                 let result = match un_op {
                     UnOp::Neg => {
                         let val_ty = val.r#type();
@@ -2676,9 +2676,8 @@ impl<'a> TritonCodegen<'a> {
         mlir_block: &BlockRef<'a, 'a>,
         state: &mut CodegenState<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
-
         match aggregate_kind {
-            AggregateKind::Adt(def_id, _, raw_list, _, _) => {
+            AggregateKind::Adt(def_id, _, _raw_list, _, _) => {
                 // Get the ADT definition and a human-readable name for debugging.
                 let adt_def = tcx.adt_def(*def_id);
                 let adt_name = format!("{:?}", adt_def);
@@ -2809,7 +2808,7 @@ impl<'a> TritonCodegen<'a> {
         tcx: TyCtxt<'tcx>,
         instance: &Instance<'tcx>,
         mir: &Body<'tcx>,
-        place: &Place<'tcx>,
+        _place: &Place<'tcx>,
         bin_op: &BinOp,
         operands: &(Operand<'tcx>, Operand<'tcx>),
         location: Location<'a>,
@@ -2997,22 +2996,46 @@ impl<'a> TritonCodegen<'a> {
                 // For Copy/Move operands, codegen_operand ignores the type and returns the SSA
                 // value directly, so passing the destination type as a hint is safe.
                 let normalized_ty = instance.instantiate_mir_and_normalize_erasing_regions(
-                    tcx, TypingEnv::fully_monomorphized(), EarlyBinder::bind(*ty),
+                    tcx,
+                    TypingEnv::fully_monomorphized(),
+                    EarlyBinder::bind(*ty),
                 );
-                let src_val = self.codegen_operand(tcx, instance, operand, normalized_ty, location, mlir_block, state)?;
-                let dest_ty = self.type_mapper.map_type(self.module.context(), &tcx, &normalized_ty);
-                let op: Operation<'a> = melior::dialect::arith::sitofp(src_val, dest_ty, location).into();
+                let src_val = self.codegen_operand(
+                    tcx,
+                    instance,
+                    operand,
+                    normalized_ty,
+                    location,
+                    mlir_block,
+                    state,
+                )?;
+                let dest_ty =
+                    self.type_mapper.map_type(self.module.context(), &tcx, &normalized_ty);
+                let op: Operation<'a> =
+                    melior::dialect::arith::sitofp(src_val, dest_ty, location).into();
                 let result = op.result(0).expect("sitofp result").into();
                 mlir_block.append_operation(op);
                 Ok(result)
             }
             CastKind::FloatToInt => {
                 let normalized_ty = instance.instantiate_mir_and_normalize_erasing_regions(
-                    tcx, TypingEnv::fully_monomorphized(), EarlyBinder::bind(*ty),
+                    tcx,
+                    TypingEnv::fully_monomorphized(),
+                    EarlyBinder::bind(*ty),
                 );
-                let src_val = self.codegen_operand(tcx, instance, operand, normalized_ty, location, mlir_block, state)?;
-                let dest_ty = self.type_mapper.map_type(self.module.context(), &tcx, &normalized_ty);
-                let op: Operation<'a> = melior::dialect::arith::fptosi(src_val, dest_ty, location).into();
+                let src_val = self.codegen_operand(
+                    tcx,
+                    instance,
+                    operand,
+                    normalized_ty,
+                    location,
+                    mlir_block,
+                    state,
+                )?;
+                let dest_ty =
+                    self.type_mapper.map_type(self.module.context(), &tcx, &normalized_ty);
+                let op: Operation<'a> =
+                    melior::dialect::arith::fptosi(src_val, dest_ty, location).into();
                 let result = op.result(0).expect("fptosi result").into();
                 mlir_block.append_operation(op);
                 Ok(result)
@@ -3027,10 +3050,21 @@ impl<'a> TritonCodegen<'a> {
                 // corrupting kernel constants without any compile error. See the regression test
                 // `float_to_float_scalar_cast` in test_kitchen_sink.rs.
                 let normalized_ty = instance.instantiate_mir_and_normalize_erasing_regions(
-                    tcx, TypingEnv::fully_monomorphized(), EarlyBinder::bind(*ty),
+                    tcx,
+                    TypingEnv::fully_monomorphized(),
+                    EarlyBinder::bind(*ty),
                 );
-                let src_val = self.codegen_operand(tcx, instance, operand, normalized_ty, location, mlir_block, state)?;
-                let dest_ty = self.type_mapper.map_type(self.module.context(), &tcx, &normalized_ty);
+                let src_val = self.codegen_operand(
+                    tcx,
+                    instance,
+                    operand,
+                    normalized_ty,
+                    location,
+                    mlir_block,
+                    state,
+                )?;
+                let dest_ty =
+                    self.type_mapper.map_type(self.module.context(), &tcx, &normalized_ty);
 
                 if src_val.r#type() == dest_ty {
                     return Ok(src_val);
@@ -3038,8 +3072,15 @@ impl<'a> TritonCodegen<'a> {
 
                 let float_bits = |ty: melior::ir::Type<'a>| -> u32 {
                     let s = ty.to_string();
-                    if s.contains("f16") { 16 } else if s.contains("f32") { 32 }
-                    else if s.contains("f64") { 64 } else { 128 }
+                    if s.contains("f16") {
+                        16
+                    } else if s.contains("f32") {
+                        32
+                    } else if s.contains("f64") {
+                        64
+                    } else {
+                        128
+                    }
                 };
 
                 let op: Operation<'a> = if float_bits(dest_ty) < float_bits(src_val.r#type()) {
@@ -3125,7 +3166,6 @@ impl<'a> TritonCodegen<'a> {
             typing_env,
             EarlyBinder::bind(*ty),
         );
-
 
         self.codegen_operand(tcx, instance, operand, normalized_ty, location, mlir_block, state)
     }
@@ -3301,17 +3341,13 @@ impl<'a> TritonCodegen<'a> {
         place: &Place<'tcx>,
         state: &mut CodegenState<'a, 'a>,
     ) -> Result<Value<'a, 'a>, MlirError> {
-
         // Handle Option downcast+field projection: `(_opt as Some).0` — extract the inner value.
         if let [ProjectionElem::Downcast(_, _), ProjectionElem::Field(_, _)]
         | [ProjectionElem::Field(_, _)] = place.projection.as_slice()
         {
             if let Some(opt_val) = state.option_table.get(&place.local) {
                 return Ok(opt_val.unwrap_or_else(|| {
-                    panic!(
-                        "Accessing field of None Option local {:?}",
-                        place.local
-                    )
+                    panic!("Accessing field of None Option local {:?}", place.local)
                 }));
             }
         }
@@ -3348,7 +3384,6 @@ impl<'a> TritonCodegen<'a> {
         location: Location<'a>,
         mlir_block: &BlockRef<'a, 'a>,
     ) -> Result<Value<'a, 'a>, MlirError> {
-
         match const_operand.const_ {
             Const::Val(const_val, ty) => {
                 let value =
@@ -3363,7 +3398,7 @@ impl<'a> TritonCodegen<'a> {
                         );
                         let ptr_ty =
                             self.type_mapper.map_type(self.module.context(), &tcx, &normalized_ty);
-                        let cast_op: Operation =
+                        let cast_op: Operation<'_> =
                             int_to_ptr(self.module.context(), location, value.into(), ptr_ty)
                                 .map_err(|e| MlirError::CreateOperation { err: e })?
                                 .into();
@@ -3432,7 +3467,7 @@ impl<'a> TritonCodegen<'a> {
 
     fn codegen_param_value<'tcx>(
         &self,
-        tcx: TyCtxt<'tcx>,
+        _tcx: TyCtxt<'tcx>,
         value: ty::Value<'tcx>,
         location: Location<'a>,
         mlir_block: &BlockRef<'a, 'a>,
@@ -3462,7 +3497,7 @@ impl<'a> TritonCodegen<'a> {
                     create_constant(self.module.context(), location, scalar_attr.0, scalar_attr.1)
                         .map_err(|e| MlirError::CreateOperation { err: e })?;
 
-                let op: Operation = op.into();
+                let op: Operation<'_> = op.into();
                 let result = op.result(0).expect("Constant operation result not found");
                 mlir_block.append_operation(op);
                 Ok(result.into())
@@ -3551,7 +3586,6 @@ impl<'a> TritonCodegen<'a> {
                     Ok(result.into())
                 }
                 TyKind::Adt(adt_def, args) => {
-
                     let scalar_int = match scalar {
                         Scalar::Int(s) => s,
                         Scalar::Ptr(pointer, _) => todo!("Scalar::Ptr: {:?}", pointer),

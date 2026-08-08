@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-use itertools::Itertools;
 use melior::ir::attribute::FloatAttribute;
 use melior::ir::operation::OperationLike;
 use melior::ir::r#type::{IntegerType, RankedTensorType};
@@ -25,14 +24,13 @@ use rustc_middle::mir::{BasicBlock, Body, CallSource, Operand, Place, UnwindActi
 use rustc_middle::ty::{Instance, TyCtxt};
 use rustc_mlir::shared::arith::{
     FpPredicate, Predicate, create_addf, create_addi, create_andi, create_cmpf, create_cmpi,
-    create_divf, create_divsi, create_extsi, create_mulf, create_muli, create_muli_tensor,
-    create_ori, create_remsi, create_shrsi, create_shrui, create_shli, create_subf, create_subi,
-    create_xori,
+    create_divf, create_divsi, create_mulf, create_muli, create_muli_tensor, create_ori,
+    create_remsi, create_shli, create_shrsi, create_shrui, create_subf, create_subi, create_xori,
 };
 use rustc_mlir::shared::builtin::{tensor_type, tensor_type_like};
-use rustc_mlir::triton::tensor::{add_ptr, broadcast};
+use rustc_mlir::triton::tensor::broadcast;
 use rustc_span::Span;
-use rustc_span::source_map::Spanned;
+use rustc_span::Spanned;
 
 use crate::mlir::codegen::triton::{CodegenState, TritonCodegen};
 use crate::mlir::errors::MlirError;
@@ -59,7 +57,6 @@ impl<'a> TritonCodegen<'a> {
 
         let arg0 = &args[0].node;
         let arg1 = &args[1].node;
-
 
         let arg0_value = self.codegen_operand(
             tcx,
@@ -104,7 +101,6 @@ impl<'a> TritonCodegen<'a> {
 
         let arg0 = &args[0].node;
         let arg1 = &args[1].node;
-
 
         let lhs = self.codegen_operand(
             tcx,
@@ -190,8 +186,24 @@ impl<'a> TritonCodegen<'a> {
         state: &mut CodegenState<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         debug_assert!(args.len() == 2, "TritonCodegen::codegen_and_call: args length must be 2");
-        let lhs = self.codegen_operand(tcx, instance, &args[0].node, args[0].node.ty(mir, tcx), location, mlir_block, state)?;
-        let rhs = self.codegen_operand(tcx, instance, &args[1].node, args[1].node.ty(mir, tcx), location, mlir_block, state)?;
+        let lhs = self.codegen_operand(
+            tcx,
+            instance,
+            &args[0].node,
+            args[0].node.ty(mir, tcx),
+            location,
+            mlir_block,
+            state,
+        )?;
+        let rhs = self.codegen_operand(
+            tcx,
+            instance,
+            &args[1].node,
+            args[1].node.ty(mir, tcx),
+            location,
+            mlir_block,
+            state,
+        )?;
         self.codegen_and(tcx, location, lhs, rhs, mlir_block)
     }
 
@@ -213,8 +225,24 @@ impl<'a> TritonCodegen<'a> {
         state: &mut CodegenState<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         debug_assert!(args.len() == 2, "TritonCodegen::codegen_or_call: args length must be 2");
-        let lhs = self.codegen_operand(tcx, instance, &args[0].node, args[0].node.ty(mir, tcx), location, mlir_block, state)?;
-        let rhs = self.codegen_operand(tcx, instance, &args[1].node, args[1].node.ty(mir, tcx), location, mlir_block, state)?;
+        let lhs = self.codegen_operand(
+            tcx,
+            instance,
+            &args[0].node,
+            args[0].node.ty(mir, tcx),
+            location,
+            mlir_block,
+            state,
+        )?;
+        let rhs = self.codegen_operand(
+            tcx,
+            instance,
+            &args[1].node,
+            args[1].node.ty(mir, tcx),
+            location,
+            mlir_block,
+            state,
+        )?;
         self.codegen_or(tcx, location, lhs, rhs, mlir_block)
     }
 
@@ -281,7 +309,13 @@ impl<'a> TritonCodegen<'a> {
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
         debug_assert!(args.len() == 1, "TritonCodegen::codegen_neg_call: args length must be 1");
         let x = self.codegen_operand(
-            tcx, instance, &args[0].node, args[0].node.ty(mir, tcx), location, mlir_block, state,
+            tcx,
+            instance,
+            &args[0].node,
+            args[0].node.ty(mir, tcx),
+            location,
+            mlir_block,
+            state,
         )?;
         // Determine element type (unwrap tensor wrapper if needed).
         let x_ty = x.r#type();
@@ -455,8 +489,24 @@ impl<'a> TritonCodegen<'a> {
         debug_assert!(args.len() == 2, "comparison requires 2 args");
         let arg0 = &args[0].node;
         let arg1 = &args[1].node;
-        let lhs = self.codegen_operand(tcx, instance, arg0, arg0.ty(mir, tcx), location, mlir_block, state)?;
-        let rhs = self.codegen_operand(tcx, instance, arg1, arg1.ty(mir, tcx), location, mlir_block, state)?;
+        let lhs = self.codegen_operand(
+            tcx,
+            instance,
+            arg0,
+            arg0.ty(mir, tcx),
+            location,
+            mlir_block,
+            state,
+        )?;
+        let rhs = self.codegen_operand(
+            tcx,
+            instance,
+            arg1,
+            arg1.ty(mir, tcx),
+            location,
+            mlir_block,
+            state,
+        )?;
 
         // Determine element type (unwrap tensor if needed).
         let lhs_ty = lhs.r#type();
@@ -492,7 +542,17 @@ impl<'a> TritonCodegen<'a> {
         mlir_block: &BlockRef<'a, 'a>,
         state: &mut CodegenState<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
-        self.codegen_binary_cmp(tcx, instance, mir, args, FpPredicate::OGT, Predicate::SGT, location, mlir_block, state)
+        self.codegen_binary_cmp(
+            tcx,
+            instance,
+            mir,
+            args,
+            FpPredicate::OGT,
+            Predicate::SGT,
+            location,
+            mlir_block,
+            state,
+        )
     }
 
     pub fn codegen_ge_call<'tcx>(
@@ -512,7 +572,17 @@ impl<'a> TritonCodegen<'a> {
         mlir_block: &BlockRef<'a, 'a>,
         state: &mut CodegenState<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
-        self.codegen_binary_cmp(tcx, instance, mir, args, FpPredicate::OGE, Predicate::SGE, location, mlir_block, state)
+        self.codegen_binary_cmp(
+            tcx,
+            instance,
+            mir,
+            args,
+            FpPredicate::OGE,
+            Predicate::SGE,
+            location,
+            mlir_block,
+            state,
+        )
     }
 
     pub fn codegen_triton_lt_call<'tcx>(
@@ -532,7 +602,17 @@ impl<'a> TritonCodegen<'a> {
         mlir_block: &BlockRef<'a, 'a>,
         state: &mut CodegenState<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
-        self.codegen_binary_cmp(tcx, instance, mir, args, FpPredicate::OLT, Predicate::SLT, location, mlir_block, state)
+        self.codegen_binary_cmp(
+            tcx,
+            instance,
+            mir,
+            args,
+            FpPredicate::OLT,
+            Predicate::SLT,
+            location,
+            mlir_block,
+            state,
+        )
     }
 
     pub fn codegen_le_call<'tcx>(
@@ -552,7 +632,17 @@ impl<'a> TritonCodegen<'a> {
         mlir_block: &BlockRef<'a, 'a>,
         state: &mut CodegenState<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
-        self.codegen_binary_cmp(tcx, instance, mir, args, FpPredicate::OLE, Predicate::SLE, location, mlir_block, state)
+        self.codegen_binary_cmp(
+            tcx,
+            instance,
+            mir,
+            args,
+            FpPredicate::OLE,
+            Predicate::SLE,
+            location,
+            mlir_block,
+            state,
+        )
     }
 
     pub fn codegen_eq_call<'tcx>(
@@ -572,7 +662,17 @@ impl<'a> TritonCodegen<'a> {
         mlir_block: &BlockRef<'a, 'a>,
         state: &mut CodegenState<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
-        self.codegen_binary_cmp(tcx, instance, mir, args, FpPredicate::OEQ, Predicate::EQ, location, mlir_block, state)
+        self.codegen_binary_cmp(
+            tcx,
+            instance,
+            mir,
+            args,
+            FpPredicate::OEQ,
+            Predicate::EQ,
+            location,
+            mlir_block,
+            state,
+        )
     }
 
     pub fn codegen_ne_call<'tcx>(
@@ -592,7 +692,17 @@ impl<'a> TritonCodegen<'a> {
         mlir_block: &BlockRef<'a, 'a>,
         state: &mut CodegenState<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
-        self.codegen_binary_cmp(tcx, instance, mir, args, FpPredicate::ONE, Predicate::NE, location, mlir_block, state)
+        self.codegen_binary_cmp(
+            tcx,
+            instance,
+            mir,
+            args,
+            FpPredicate::ONE,
+            Predicate::NE,
+            location,
+            mlir_block,
+            state,
+        )
     }
 
     // Scalar comparison handlers — (tensor, scalar) args; broadcasting handled by codegen_binary_cmp.
@@ -613,7 +723,17 @@ impl<'a> TritonCodegen<'a> {
         mlir_block: &BlockRef<'a, 'a>,
         state: &mut CodegenState<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
-        self.codegen_binary_cmp(tcx, instance, mir, args, FpPredicate::OLT, Predicate::SLT, location, mlir_block, state)
+        self.codegen_binary_cmp(
+            tcx,
+            instance,
+            mir,
+            args,
+            FpPredicate::OLT,
+            Predicate::SLT,
+            location,
+            mlir_block,
+            state,
+        )
     }
 
     pub fn codegen_le_scalar_call<'tcx>(
@@ -633,7 +753,17 @@ impl<'a> TritonCodegen<'a> {
         mlir_block: &BlockRef<'a, 'a>,
         state: &mut CodegenState<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
-        self.codegen_binary_cmp(tcx, instance, mir, args, FpPredicate::OLE, Predicate::SLE, location, mlir_block, state)
+        self.codegen_binary_cmp(
+            tcx,
+            instance,
+            mir,
+            args,
+            FpPredicate::OLE,
+            Predicate::SLE,
+            location,
+            mlir_block,
+            state,
+        )
     }
 
     pub fn codegen_gt_scalar_call<'tcx>(
@@ -653,7 +783,17 @@ impl<'a> TritonCodegen<'a> {
         mlir_block: &BlockRef<'a, 'a>,
         state: &mut CodegenState<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
-        self.codegen_binary_cmp(tcx, instance, mir, args, FpPredicate::OGT, Predicate::SGT, location, mlir_block, state)
+        self.codegen_binary_cmp(
+            tcx,
+            instance,
+            mir,
+            args,
+            FpPredicate::OGT,
+            Predicate::SGT,
+            location,
+            mlir_block,
+            state,
+        )
     }
 
     pub fn codegen_ge_scalar_call<'tcx>(
@@ -673,7 +813,17 @@ impl<'a> TritonCodegen<'a> {
         mlir_block: &BlockRef<'a, 'a>,
         state: &mut CodegenState<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
-        self.codegen_binary_cmp(tcx, instance, mir, args, FpPredicate::OGE, Predicate::SGE, location, mlir_block, state)
+        self.codegen_binary_cmp(
+            tcx,
+            instance,
+            mir,
+            args,
+            FpPredicate::OGE,
+            Predicate::SGE,
+            location,
+            mlir_block,
+            state,
+        )
     }
 
     pub fn codegen_eq_scalar_call<'tcx>(
@@ -693,7 +843,17 @@ impl<'a> TritonCodegen<'a> {
         mlir_block: &BlockRef<'a, 'a>,
         state: &mut CodegenState<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
-        self.codegen_binary_cmp(tcx, instance, mir, args, FpPredicate::OEQ, Predicate::EQ, location, mlir_block, state)
+        self.codegen_binary_cmp(
+            tcx,
+            instance,
+            mir,
+            args,
+            FpPredicate::OEQ,
+            Predicate::EQ,
+            location,
+            mlir_block,
+            state,
+        )
     }
 
     pub fn codegen_ne_scalar_call<'tcx>(
@@ -713,7 +873,17 @@ impl<'a> TritonCodegen<'a> {
         mlir_block: &BlockRef<'a, 'a>,
         state: &mut CodegenState<'a, 'a>,
     ) -> Result<Option<Value<'a, 'a>>, MlirError> {
-        self.codegen_binary_cmp(tcx, instance, mir, args, FpPredicate::ONE, Predicate::NE, location, mlir_block, state)
+        self.codegen_binary_cmp(
+            tcx,
+            instance,
+            mir,
+            args,
+            FpPredicate::ONE,
+            Predicate::NE,
+            location,
+            mlir_block,
+            state,
+        )
     }
 
     /// When both operands are ranked tensors with differing shapes, broadcast
@@ -742,8 +912,18 @@ impl<'a> TritonCodegen<'a> {
             return Ok((lhs, rhs));
         }
 
-        let bd: Vec<i64> = ld.iter().zip(rd.iter())
-            .map(|(&l, &r)| if l == r || r < 0 { l } else if l < 0 { r } else { l.max(r) })
+        let bd: Vec<i64> = ld
+            .iter()
+            .zip(rd.iter())
+            .map(|(&l, &r)| {
+                if l == r || r < 0 {
+                    l
+                } else if l < 0 {
+                    r
+                } else {
+                    l.max(r)
+                }
+            })
             .collect();
 
         // Both sides must satisfy the broadcast rule.
@@ -791,7 +971,7 @@ impl<'a> TritonCodegen<'a> {
             (false, true) => (self.like_tensor(tcx, location, rhs, lhs, mlir_block)?, rhs),
             (false, false) => {
                 if lhs_ty.is_integer() {
-                    let mul_op: Operation =
+                    let mul_op: Operation<'_> =
                         create_muli(self.module.context(), location, lhs, rhs)
                             .map_err(|e| MlirError::CreateOperation { err: e })?
                             .into();
@@ -799,9 +979,8 @@ impl<'a> TritonCodegen<'a> {
                     mlir_block.append_operation(mul_op);
                     return Ok(Some(result.into()));
                 }
-                let mul_op: Operation =
-                    create_mulf(self.module.context(), location, lhs, rhs)
-                        .map_err(|e| MlirError::CreateOperation { err: e })?;
+                let mul_op: Operation<'_> = create_mulf(self.module.context(), location, lhs, rhs)
+                    .map_err(|e| MlirError::CreateOperation { err: e })?;
                 let result = mul_op.result(0).expect("MulF operation result not found");
                 mlir_block.append_operation(mul_op);
                 return Ok(Some(result.into()));
@@ -859,9 +1038,8 @@ impl<'a> TritonCodegen<'a> {
                     mlir_block.append_operation(sub_op);
                     return Ok(Some(result.into()));
                 }
-                let sub_op: Operation<'a> =
-                    create_subf(self.module.context(), location, lhs, rhs)
-                        .map_err(|e| MlirError::CreateOperation { err: e })?;
+                let sub_op: Operation<'a> = create_subf(self.module.context(), location, lhs, rhs)
+                    .map_err(|e| MlirError::CreateOperation { err: e })?;
                 let result = sub_op.result(0).expect("SubF operation result not found");
                 mlir_block.append_operation(sub_op);
                 return Ok(Some(result.into()));
@@ -920,10 +1098,9 @@ impl<'a> TritonCodegen<'a> {
                     mlir_block.append_operation(add_op);
                     return Ok(Some(result.into()));
                 }
-                let add_op: Operation<'a> =
-                    create_addf(self.module.context(), location, lhs, rhs)
-                        .map_err(|e| MlirError::CreateOperation { err: e })?
-                        .into();
+                let add_op: Operation<'a> = create_addf(self.module.context(), location, lhs, rhs)
+                    .map_err(|e| MlirError::CreateOperation { err: e })?
+                    .into();
                 let result = add_op.result(0).expect("AddF operation result not found");
                 mlir_block.append_operation(add_op);
                 return Ok(Some(result.into()));
@@ -1029,9 +1206,8 @@ impl<'a> TritonCodegen<'a> {
             todo!("TritonCodegen::codegen_rem tensor not yet supported")
         }
         if lhs_ty.is_integer() {
-            let rem_op: Operation<'a> =
-                create_remsi(self.module.context(), location, lhs, rhs)
-                    .map_err(|e| MlirError::CreateOperation { err: e })?;
+            let rem_op: Operation<'a> = create_remsi(self.module.context(), location, lhs, rhs)
+                .map_err(|e| MlirError::CreateOperation { err: e })?;
             let result = rem_op.result(0).expect("Rem operation result not found");
             mlir_block.append_operation(rem_op);
             return Ok(Some(result.into()));
@@ -1052,9 +1228,8 @@ impl<'a> TritonCodegen<'a> {
             todo!("TritonCodegen::codegen_shl tensor not yet supported")
         }
         if lhs_ty.is_integer() {
-            let op: Operation<'a> =
-                create_shli(self.module.context(), location, lhs, rhs)
-                    .map_err(|e| MlirError::CreateOperation { err: e })?;
+            let op: Operation<'a> = create_shli(self.module.context(), location, lhs, rhs)
+                .map_err(|e| MlirError::CreateOperation { err: e })?;
             let result = op.result(0).expect("Shl operation result not found");
             mlir_block.append_operation(op);
             return Ok(Some(result.into()));
@@ -1117,9 +1292,8 @@ impl<'a> TritonCodegen<'a> {
             lhs_ty.is_integer()
         };
         if is_int {
-            let op: Operation<'a> =
-                create_andi(self.module.context(), location, lhs, rhs)
-                    .map_err(|e| MlirError::CreateOperation { err: e })?;
+            let op: Operation<'a> = create_andi(self.module.context(), location, lhs, rhs)
+                .map_err(|e| MlirError::CreateOperation { err: e })?;
             let result = op.result(0).expect("And operation result not found");
             mlir_block.append_operation(op);
             return Ok(Some(result.into()));
@@ -1153,9 +1327,8 @@ impl<'a> TritonCodegen<'a> {
             lhs_ty.is_integer()
         };
         if is_int {
-            let op: Operation<'a> =
-                create_ori(self.module.context(), location, lhs, rhs)
-                    .map_err(|e| MlirError::CreateOperation { err: e })?;
+            let op: Operation<'a> = create_ori(self.module.context(), location, lhs, rhs)
+                .map_err(|e| MlirError::CreateOperation { err: e })?;
             let result = op.result(0).expect("Or operation result not found");
             mlir_block.append_operation(op);
             return Ok(Some(result.into()));
@@ -1176,9 +1349,8 @@ impl<'a> TritonCodegen<'a> {
             todo!("TritonCodegen::codegen_xor tensor not yet supported")
         }
         if lhs_ty.is_integer() {
-            let op: Operation<'a> =
-                create_xori(self.module.context(), location, lhs, rhs)
-                    .map_err(|e| MlirError::CreateOperation { err: e })?;
+            let op: Operation<'a> = create_xori(self.module.context(), location, lhs, rhs)
+                .map_err(|e| MlirError::CreateOperation { err: e })?;
             let result = op.result(0).expect("Xor operation result not found");
             mlir_block.append_operation(op);
             return Ok(Some(result.into()));
