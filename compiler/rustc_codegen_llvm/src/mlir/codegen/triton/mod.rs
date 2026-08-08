@@ -207,6 +207,12 @@ struct RangeLoopInfo {
     switch_bb: Option<BasicBlock>,
     /// For Call-header pattern: the destination local of the Range::next call (Option<i32>).
     next_result_local: Option<Local>,
+    /// For the convergent-Option-unwrap sub-pattern (inlined `Iterator::next`, see
+    /// `try_detect_convergent_option_switch`): the raw Lt-header's true/false-branch blocks that
+    /// construct `Some`/`None` before both converging on `switch_bb`. These carry no real body
+    /// work (scf.for's own induction var supersedes them) but must still be excluded from the
+    /// outer function's flat block map, since nothing outside the loop ever branches into them.
+    extra_loop_region_bbs: Vec<BasicBlock>,
 }
 
 /// Information about a detected `while cond { body }` loop in the MIR.
@@ -378,11 +384,21 @@ fn compute_reachable_blocks<'tcx>(
     let mut queue: Vec<BasicBlock> = vec![BasicBlock::from_u32(0)];
 
     while let Some(bb) = queue.pop() {
-        if !reachable.insert(bb) {
+        if reachable.contains(&bb) {
             continue;
         }
-        ordered.push(bb);
         let bb_data = &mir.basic_blocks[bb];
+        // A block whose own terminator is `unreachable` is formal-only (typically the
+        // exhaustiveness-only `otherwise` arm of a `SwitchInt` over an already-fully-covered
+        // discriminant, e.g. `codegen_switch_binary`'s two-explicit-cases pattern). Nothing can
+        // execute it, so it's excluded from both the reachable set and codegen order entirely --
+        // no MLIR block is created or emitted for it -- rather than trying to lower a body that
+        // will never run.
+        if matches!(bb_data.terminator().kind, TerminatorKind::Unreachable) {
+            continue;
+        }
+        reachable.insert(bb);
+        ordered.push(bb);
         match &bb_data.terminator().kind {
             TerminatorKind::Goto { target } => {
                 queue.push(*target);
@@ -742,6 +758,61 @@ fn try_build_while_loop_info<'tcx>(
     })
 }
 
+/// When a Lt-based loop header's two branches (`raw_exit_bb` / `raw_body_entry_bb`) each
+/// construct an `Option` value and then unconditionally `goto` a *shared* block that unwraps it
+/// via a discriminant `SwitchInt`, that shared block -- not the raw branches -- is the loop's
+/// real exit/body-entry decision point. This is what an inlined `Iterator::next` followed by the
+/// caller's own `match` on the result looks like in MIR (the `-O3`/target-specific inlining that
+/// produces this shape didn't happen before the 1.97.1 bump). Detect that shape and return
+/// `(switch_bb, real_exit_bb, real_body_entry_bb, next_result_local)`.
+fn try_detect_convergent_option_switch<'tcx>(
+    mir: &Body<'tcx>,
+    raw_exit_bb: BasicBlock,
+    raw_body_entry_bb: BasicBlock,
+) -> Option<(BasicBlock, BasicBlock, BasicBlock, Local)> {
+    use rustc_middle::mir::TerminatorKind;
+
+    let goto_target = |bb: BasicBlock| -> Option<BasicBlock> {
+        match &mir.basic_blocks[bb].terminator().kind {
+            TerminatorKind::Goto { target } => Some(*target),
+            _ => None,
+        }
+    };
+    let switch_bb = goto_target(raw_exit_bb)?;
+    if goto_target(raw_body_entry_bb)? != switch_bb {
+        return None;
+    }
+
+    let switch_data = &mir.basic_blocks[switch_bb];
+    let TerminatorKind::SwitchInt { discr, targets } = &switch_data.terminator().kind else {
+        return None;
+    };
+    let cases: Vec<(u128, BasicBlock)> = targets.iter().collect();
+    if cases.len() != 2 || cases[0].0 != 0 || cases[1].0 != 1 {
+        return None;
+    }
+    let discr_local = match discr {
+        Operand::Move(p) | Operand::Copy(p) if p.projection.is_empty() => p.local,
+        _ => return None,
+    };
+    // The switched-on local must be `discriminant(next_result_local)`, computed in switch_bb.
+    let next_result_local = switch_data.statements.iter().find_map(|stmt| {
+        if let StatementKind::Assign(assign) = &stmt.kind {
+            let (dest, rvalue) = assign.as_ref();
+            if dest.projection.is_empty() && dest.local == discr_local {
+                if let Rvalue::Discriminant(src) = rvalue {
+                    if src.projection.is_empty() {
+                        return Some(src.local);
+                    }
+                }
+            }
+        }
+        None
+    })?;
+
+    Some((switch_bb, cases[0].1, cases[1].1, next_result_local))
+}
+
 fn try_build_range_loop_info<'tcx>(
     instance: Instance<'tcx>,
     mir: &Body<'tcx>,
@@ -760,6 +831,7 @@ fn try_build_range_loop_info<'tcx>(
         bound_const: Option<i64>,
         switch_bb: Option<BasicBlock>,
         next_result_local: Option<Local>,
+        extra_loop_region_bbs: Vec<BasicBlock>,
     }
 
     let hinfo: HeaderInfo = 'detect: {
@@ -767,22 +839,43 @@ fn try_build_range_loop_info<'tcx>(
         if let TerminatorKind::SwitchInt { discr, targets } = &header_data.terminator().kind {
             let cases: Vec<(u128, BasicBlock)> = targets.iter().collect();
             if cases.len() == 1 && cases[0].0 == 0 {
-                let exit_bb = cases[0].1;
-                let body_entry_bb = targets.otherwise();
+                let raw_exit_bb = cases[0].1;
+                let raw_body_entry_bb = targets.otherwise();
                 if let Operand::Move(p) | Operand::Copy(p) = discr {
                     if p.projection.is_empty() {
                         let discr_local = p.local;
                         if let Some((counter_local, bl, bc)) =
                             find_lt_locals_in_stmts(&header_data.statements, discr_local, instance)
                         {
+                            // Sub-pattern 1b: the two branches converge on a shared
+                            // discriminant-switch block (inlined `Iterator::next`).
+                            if let Some((switch_bb, exit_bb, body_entry_bb, next_result_local)) =
+                                try_detect_convergent_option_switch(
+                                    mir,
+                                    raw_exit_bb,
+                                    raw_body_entry_bb,
+                                )
+                            {
+                                break 'detect HeaderInfo {
+                                    body_entry_bb,
+                                    exit_bb,
+                                    counter_local_hint: Some(counter_local),
+                                    bound_local: bl,
+                                    bound_const: bc,
+                                    switch_bb: Some(switch_bb),
+                                    next_result_local: Some(next_result_local),
+                                    extra_loop_region_bbs: vec![raw_exit_bb, raw_body_entry_bb],
+                                };
+                            }
                             break 'detect HeaderInfo {
-                                body_entry_bb,
-                                exit_bb,
+                                body_entry_bb: raw_body_entry_bb,
+                                exit_bb: raw_exit_bb,
                                 counter_local_hint: Some(counter_local),
                                 bound_local: bl,
                                 bound_const: bc,
                                 switch_bb: None,
                                 next_result_local: None,
+                                extra_loop_region_bbs: vec![],
                             };
                         }
                     }
@@ -815,6 +908,7 @@ fn try_build_range_loop_info<'tcx>(
                             bound_const: bc,
                             switch_bb: Some(*switch_bb_cand),
                             next_result_local: Some(next_result_local),
+                            extra_loop_region_bbs: vec![],
                         };
                     }
                 }
@@ -857,6 +951,7 @@ fn try_build_range_loop_info<'tcx>(
         iter_carry_locals,
         switch_bb: hinfo.switch_bb,
         next_result_local: hinfo.next_result_local,
+        extra_loop_region_bbs: hinfo.extra_loop_region_bbs,
     })
 }
 
@@ -993,6 +1088,12 @@ fn collect_body_blocks_ordered<'tcx>(
     while let Some(bb) = queue.first().copied() {
         queue.remove(0);
         if visited.contains(&bb) || bb == header_bb {
+            continue;
+        }
+        // A block whose own terminator is `unreachable` is formal-only (see the matching
+        // comment in `compute_reachable_blocks`) -- exclude it from the loop body entirely
+        // rather than queuing it for codegen.
+        if matches!(mir.basic_blocks[bb].terminator().kind, TerminatorKind::Unreachable) {
             continue;
         }
         visited.insert(bb);
@@ -1901,6 +2002,9 @@ impl<'a> TritonCodegen<'a> {
             loop_region_blocks.insert(l.header_bb);
             if let Some(switch_bb) = l.switch_bb {
                 loop_region_blocks.insert(switch_bb);
+            }
+            for &b in &l.extra_loop_region_bbs {
+                loop_region_blocks.insert(b);
             }
             for &b in &l.body_bbs {
                 loop_region_blocks.insert(b);

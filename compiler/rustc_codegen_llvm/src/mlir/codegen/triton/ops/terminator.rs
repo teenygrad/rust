@@ -756,129 +756,196 @@ impl<'a> TritonCodegen<'a> {
 
         match cases.as_slice() {
             [] => self.codegen_goto(location, &otherwise_bb, mlir_block, basic_blocks, state),
-            [(val, target_bb)] => {
-                // Emit: %const = arith.constant *val : T
-                //        %cmp  = arith.cmpi eq, %discr, %const : T
-                //        cf.cond_br %cmp, ^target_bb, ^otherwise_bb
-                let discr_mlir_ty = discr_value.r#type();
-                let val_attr = IntegerAttribute::new(discr_mlir_ty, *val as i64);
-                let const_op: Operation<'a> =
-                    melior::dialect::arith::constant(ctx, val_attr.into(), location).into();
-                let val_const: Value<'a, 'a> = const_op.result(0).expect("switch const").into();
-                mlir_block.append_operation(const_op);
-
-                let i1_ty = IntegerType::new(ctx, 1).into();
-                let cmp_op: Operation<'a> =
-                    create_cmpi(ctx, location, Predicate::EQ, discr_value, val_const, i1_ty)
-                        .map_err(|e| MlirError::CreateOperation { err: e })?
-                        .into();
-                let cmp_result: Value<'a, 'a> = cmp_op.result(0).expect("cmpi result").into();
-                mlir_block.append_operation(cmp_op);
-
-                // If both branch targets are inside the active scf.for body, a plain
-                // cf.cond_br would point two arms at the same MLIR block (invalid).
-                // Emit scf.if instead, processing each arm's MIR blocks inline.
-                if let Some(header_bb) = state.loop_header_bb {
-                    let true_in_loop =
-                        *target_bb == header_bb || state.loop_body_bbs.contains(target_bb);
-                    let false_in_loop =
-                        otherwise_bb == header_bb || state.loop_body_bbs.contains(&otherwise_bb);
-                    if true_in_loop && false_in_loop {
-                        return self.codegen_loop_body_switch_as_scf_if(
-                            tcx,
-                            instance,
-                            mir,
-                            cmp_result,
-                            *target_bb,
-                            otherwise_bb,
-                            mlir_block,
-                            basic_blocks,
-                            state,
-                            location,
-                        );
-                    }
-                }
-
-                // Degenerate: both arms go to the same block (optimizer merged identical paths).
-                // Emit cf.br instead to avoid Triton's makeTTGIR crashing on a cond_br with
-                // two identical successors.
-                if target_bb == &otherwise_bb {
-                    return self.codegen_goto(location, target_bb, mlir_block, basic_blocks, state);
-                }
-
-                let true_block = *basic_blocks.get(target_bb).expect("switch target block");
-                let false_block = *basic_blocks.get(&otherwise_bb).expect("switch otherwise block");
-
-                // Collect phi args with lazy block-arg creation and stale-value detection.
-                // Mirrors codegen_goto: if the join block was already processed (DFS visited
-                // it before this predecessor), ssa_values may hold the join's own block arg
-                // (stale). Fall back to pre_join_ssa_values in that case.
-                let make_phi_args = |target: &BasicBlock,
-                                     target_block: BlockRef<'a, 'a>,
-                                     state: &mut CodegenState<'a, 'a>|
-                 -> Vec<Value<'a, 'a>> {
-                    if let Some(phi_locals) = state.phi_join_locals.get(target).cloned() {
-                        phi_locals
-                            .iter()
-                            .map(|local| {
-                                if let Some(&existing_arg) =
-                                    state.phi_block_args.get(&(*target, *local))
-                                {
-                                    let current = state.ssa_values.get(local).copied();
-                                    if current == Some(existing_arg) {
-                                        *state
-                                            .pre_join_ssa_values
-                                            .get(&(*target, *local))
-                                            .unwrap_or_else(|| {
-                                                panic!(
-                                                    "cond_br: stale phi local {:?} at {:?} but no pre-join save",
-                                                    local, target
-                                                )
-                                            })
-                                    } else {
-                                        current.unwrap_or_else(|| {
-                                            panic!(
-                                                "cond_br: phi local {:?} not in ssa_values at branch to {:?}",
-                                                local, target
-                                            )
-                                        })
-                                    }
-                                } else {
-                                    let ssa_val =
-                                        *state.ssa_values.get(local).unwrap_or_else(|| {
-                                            panic!(
-                                                "cond_br: phi local {:?} not in ssa_values",
-                                                local
-                                            )
-                                        });
-                                    let phi_val =
-                                        target_block.add_argument(ssa_val.r#type(), location);
-                                    state.phi_block_args.insert((*target, *local), phi_val);
-                                    ssa_val
-                                }
-                            })
-                            .collect()
-                    } else {
-                        vec![]
-                    }
-                };
-                let true_phi_args = make_phi_args(target_bb, true_block, state);
-                let false_phi_args = make_phi_args(&otherwise_bb, false_block, state);
-
-                let cond_br_op = melior::dialect::cf::cond_br(
-                    ctx,
-                    cmp_result,
-                    &*true_block,
-                    &*false_block,
-                    &true_phi_args,
-                    &false_phi_args,
+            [(val, target_bb)] => self.codegen_switch_binary(
+                tcx,
+                instance,
+                mir,
+                discr_value,
+                *val,
+                *target_bb,
+                otherwise_bb,
+                location,
+                mlir_block,
+                basic_blocks,
+                state,
+            ),
+            // Two explicit cases whose declared `otherwise` arm exists only for
+            // exhaustiveness, not because it's reachable. rustc emits this for a fully
+            // -covered 2-variant discriminant (e.g. `Option`'s `Iterator::next()` match)
+            // whenever it doesn't fold the match down to a single-case switch itself --
+            // observed as a real MIR-shape difference between rustc versions specifically
+            // for the nvptx64-nvidia-cuda target (the same source produces a single-case
+            // switch on other targets). Since `otherwise`'s block body is just
+            // `unreachable`, the switch is really binary: not-val0 implies val1. Reuse the
+            // single-case lowering with target1 standing in for "otherwise".
+            [(val0, target0), (_val1, target1)]
+                if self.is_unreachable_block(mir, otherwise_bb) =>
+            {
+                self.codegen_switch_binary(
+                    tcx,
+                    instance,
+                    mir,
+                    discr_value,
+                    *val0,
+                    *target0,
+                    *target1,
                     location,
-                );
-                mlir_block.append_operation(cond_br_op);
-                Ok(())
+                    mlir_block,
+                    basic_blocks,
+                    state,
+                )
             }
             _ => todo!("SwitchInt with {} cases: {:?}", cases.len(), targets),
         }
+    }
+
+    /// True if `bb`'s body is just `unreachable` -- i.e. rustc has already proven this
+    /// block can never execute (typically the formal `otherwise` arm of a `SwitchInt` over
+    /// a discriminant whose declared cases are already exhaustive).
+    fn is_unreachable_block(&self, mir: &Body<'_>, bb: BasicBlock) -> bool {
+        matches!(mir.basic_blocks[bb].terminator().kind, TerminatorKind::Unreachable)
+    }
+
+    /// Lowers a binary discriminant check (`discr == val ? target_bb : otherwise_bb`) to
+    /// `cf.cond_br` (or `scf.if`, inside an active loop body). Shared by the true
+    /// single-explicit-case `SwitchInt` and the two-explicit-cases-with-unreachable
+    /// -otherwise pattern, which differ only in how `otherwise_bb` was derived.
+    #[allow(clippy::too_many_arguments)]
+    fn codegen_switch_binary<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        mir: &Body<'tcx>,
+        discr_value: Value<'a, 'a>,
+        val: u128,
+        target_bb: BasicBlock,
+        otherwise_bb: BasicBlock,
+        location: Location<'a>,
+        mlir_block: &BlockRef<'a, 'a>,
+        basic_blocks: &HashMap<BasicBlock, BlockRef<'a, 'a>>,
+        state: &mut CodegenState<'a, 'a>,
+    ) -> Result<(), MlirError> {
+        let ctx = self.module.context();
+
+        // Emit: %const = arith.constant val : T
+        //        %cmp  = arith.cmpi eq, %discr, %const : T
+        //        cf.cond_br %cmp, ^target_bb, ^otherwise_bb
+        let discr_mlir_ty = discr_value.r#type();
+        let val_attr = IntegerAttribute::new(discr_mlir_ty, val as i64);
+        let const_op: Operation<'a> =
+            melior::dialect::arith::constant(ctx, val_attr.into(), location).into();
+        let val_const: Value<'a, 'a> = const_op.result(0).expect("switch const").into();
+        mlir_block.append_operation(const_op);
+
+        let i1_ty = IntegerType::new(ctx, 1).into();
+        let cmp_op: Operation<'a> =
+            create_cmpi(ctx, location, Predicate::EQ, discr_value, val_const, i1_ty)
+                .map_err(|e| MlirError::CreateOperation { err: e })?
+                .into();
+        let cmp_result: Value<'a, 'a> = cmp_op.result(0).expect("cmpi result").into();
+        mlir_block.append_operation(cmp_op);
+
+        // If both branch targets are inside the active scf.for body, a plain
+        // cf.cond_br would point two arms at the same MLIR block (invalid).
+        // Emit scf.if instead, processing each arm's MIR blocks inline.
+        if let Some(header_bb) = state.loop_header_bb {
+            let true_in_loop =
+                target_bb == header_bb || state.loop_body_bbs.contains(&target_bb);
+            let false_in_loop =
+                otherwise_bb == header_bb || state.loop_body_bbs.contains(&otherwise_bb);
+            if true_in_loop && false_in_loop {
+                return self.codegen_loop_body_switch_as_scf_if(
+                    tcx,
+                    instance,
+                    mir,
+                    cmp_result,
+                    target_bb,
+                    otherwise_bb,
+                    mlir_block,
+                    basic_blocks,
+                    state,
+                    location,
+                );
+            }
+        }
+
+        // Degenerate: both arms go to the same block (optimizer merged identical paths).
+        // Emit cf.br instead to avoid Triton's makeTTGIR crashing on a cond_br with
+        // two identical successors.
+        if target_bb == otherwise_bb {
+            return self.codegen_goto(location, &target_bb, mlir_block, basic_blocks, state);
+        }
+
+        let true_block = *basic_blocks.get(&target_bb).expect("switch target block");
+        let false_block = *basic_blocks.get(&otherwise_bb).expect("switch otherwise block");
+
+        // Collect phi args with lazy block-arg creation and stale-value detection.
+        // Mirrors codegen_goto: if the join block was already processed (DFS visited
+        // it before this predecessor), ssa_values may hold the join's own block arg
+        // (stale). Fall back to pre_join_ssa_values in that case.
+        let make_phi_args = |target: &BasicBlock,
+                             target_block: BlockRef<'a, 'a>,
+                             state: &mut CodegenState<'a, 'a>|
+         -> Vec<Value<'a, 'a>> {
+            if let Some(phi_locals) = state.phi_join_locals.get(target).cloned() {
+                phi_locals
+                    .iter()
+                    .map(|local| {
+                        if let Some(&existing_arg) =
+                            state.phi_block_args.get(&(*target, *local))
+                        {
+                            let current = state.ssa_values.get(local).copied();
+                            if current == Some(existing_arg) {
+                                *state
+                                    .pre_join_ssa_values
+                                    .get(&(*target, *local))
+                                    .unwrap_or_else(|| {
+                                        panic!(
+                                            "cond_br: stale phi local {:?} at {:?} but no pre-join save",
+                                            local, target
+                                        )
+                                    })
+                            } else {
+                                current.unwrap_or_else(|| {
+                                    panic!(
+                                        "cond_br: phi local {:?} not in ssa_values at branch to {:?}",
+                                        local, target
+                                    )
+                                })
+                            }
+                        } else {
+                            let ssa_val =
+                                *state.ssa_values.get(local).unwrap_or_else(|| {
+                                    panic!(
+                                        "cond_br: phi local {:?} not in ssa_values",
+                                        local
+                                    )
+                                });
+                            let phi_val =
+                                target_block.add_argument(ssa_val.r#type(), location);
+                            state.phi_block_args.insert((*target, *local), phi_val);
+                            ssa_val
+                        }
+                    })
+                    .collect()
+            } else {
+                vec![]
+            }
+        };
+        let true_phi_args = make_phi_args(&target_bb, true_block, state);
+        let false_phi_args = make_phi_args(&otherwise_bb, false_block, state);
+
+        let cond_br_op = melior::dialect::cf::cond_br(
+            ctx,
+            cmp_result,
+            &*true_block,
+            &*false_block,
+            &true_phi_args,
+            &false_phi_args,
+            location,
+        );
+        mlir_block.append_operation(cond_br_op);
+        Ok(())
     }
 
     pub(crate) fn codegen_goto(
@@ -911,7 +978,13 @@ impl<'a> TritonCodegen<'a> {
             }
         }
 
-        let target_block = *basic_blocks.get(target).unwrap();
+        let target_block = *basic_blocks.get(target).unwrap_or_else(|| {
+            panic!(
+                "codegen_goto: target {:?} not in basic_blocks (known: {:?})",
+                target,
+                basic_blocks.keys().collect::<Vec<_>>()
+            )
+        });
 
         // Collect phi values when branching to a join block.
         // Phi block args are created lazily here (first predecessor wins) so tensor locals
