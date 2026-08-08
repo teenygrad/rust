@@ -2385,12 +2385,17 @@ Please disable assertions with `rust.debug-assertions = false`.
                     .arg("--libdir")
                     .run_capture_stdout(builder)
                     .stdout();
+                let llvm_libdir = llvm_libdir.trim();
                 let link_llvm = if target.is_msvc() {
                     format!("-Clink-arg=-LIBPATH:{llvm_libdir}")
                 } else {
                     format!("-Clink-arg=-L{llvm_libdir}")
                 };
-                cmd.arg("--host-rustcflags").arg(link_llvm);
+                // --host-rustcflags only reaches auxiliary (proc-macro-style) crate
+                // builds; the primary test file is compiled with --target-rustcflags
+                // (see compiletest's runtest.rs), so both are needed here.
+                cmd.arg("--host-rustcflags").arg(&link_llvm);
+                cmd.arg("--target-rustcflags").arg(link_llvm);
             }
 
             if !builder.config.dry_run()
