@@ -27,7 +27,7 @@ use rustc_abi::{FieldIdx, FieldsShape, Size as AbiSize};
 use rustc_ast::{FloatTy, IntTy, UintTy};
 use rustc_index::IndexVec;
 use rustc_middle::mir::interpret::{CtfeProvenance, GlobalAlloc, Scalar, alloc_range};
-use rustc_middle::mir::mono::MonoItem;
+use rustc_middle::mono::MonoItem;
 use rustc_middle::mir::{
     AggregateKind, BasicBlock, BasicBlockData, BinOp, Body, CastKind, Const, ConstOperand,
     ConstValue, Local, NonDivergingIntrinsic, Operand, Place, ProjectionElem, Rvalue, Statement,
@@ -275,7 +275,7 @@ fn compute_const_disc_locals<'tcx>(
                 StatementKind::Assign(assign) => {
                     let (place, rvalue) = assign.as_ref();
                     if place.projection.is_empty() {
-                        if let Rvalue::Use(Operand::Constant(c)) = rvalue {
+                        if let Rvalue::Use(Operand::Constant(c), _) = rvalue {
                             if let Some(v) = extract_scalar_const(c) {
                                 result.insert(place.local, v);
                             }
@@ -298,7 +298,7 @@ fn compute_const_disc_locals<'tcx>(
                     if place.projection.is_empty() {
                         let known = match rvalue {
                             Rvalue::Discriminant(src) => result.get(&src.local).copied(),
-                            Rvalue::Use(Operand::Copy(p) | Operand::Move(p))
+                            Rvalue::Use(Operand::Copy(p) | Operand::Move(p), _)
                                 if p.projection.is_empty() =>
                             {
                                 result.get(&p.local).copied()
@@ -967,7 +967,7 @@ fn find_copy_source_in_stmts<'tcx>(stmts: &[Statement<'tcx>], local: Local) -> O
         if let StatementKind::Assign(assign) = &stmt.kind {
             let (dest, rvalue) = assign.as_ref();
             if dest.local == local && dest.projection.is_empty() {
-                if let Rvalue::Use(Operand::Copy(src) | Operand::Move(src)) = rvalue {
+                if let Rvalue::Use(Operand::Copy(src) | Operand::Move(src), _) = rvalue {
                     if src.projection.is_empty() {
                         return Some(src.local);
                     }
@@ -1029,7 +1029,7 @@ fn find_induction_local_in_bbs<'tcx>(mir: &Body<'tcx>, body_bbs: &[BasicBlock]) 
             if let StatementKind::Assign(assign) = &stmt.kind {
                 let (dest, rvalue) = assign.as_ref();
                 if dest.projection.is_empty() {
-                    if let Rvalue::Use(Operand::Copy(src) | Operand::Move(src)) = rvalue {
+                    if let Rvalue::Use(Operand::Copy(src) | Operand::Move(src), _) = rvalue {
                         // Downcast+field projection = Option::Some unwrap
                         let has_downcast = src
                             .projection
@@ -1134,7 +1134,7 @@ fn local_assigned_in_stmt(stmt: &Statement<'_>, local: Local) -> bool {
 
 fn rvalue_uses_local(rvalue: &Rvalue<'_>, local: Local) -> bool {
     match rvalue {
-        Rvalue::Use(op) | Rvalue::Repeat(op, _) => operand_uses_local(op, local),
+        Rvalue::Use(op, _) | Rvalue::Repeat(op, _) => operand_uses_local(op, local),
         Rvalue::Cast(_, op, _) => operand_uses_local(op, local),
         Rvalue::BinaryOp(_, operands) => {
             let (l, r) = operands.as_ref();
@@ -1260,7 +1260,7 @@ impl<'a> TritonCodegen<'a> {
                         continue;
                     }
                     return match rvalue {
-                        Rvalue::Use(op) => Self::fold_operand_as_i32(tcx, instance, mir, op),
+                        Rvalue::Use(op, _) => Self::fold_operand_as_i32(tcx, instance, mir, op),
                         Rvalue::BinaryOp(bin_op, operands) => {
                             let (lhs, rhs) = operands.as_ref();
                             let l = Self::fold_operand_as_i32(tcx, instance, mir, lhs)?;
@@ -1363,7 +1363,8 @@ impl<'a> TritonCodegen<'a> {
             Const::Val(cv, _) => *cv,
             Const::Unevaluated(uv, _) => {
                 // Substitute the function's generic params with the instance's concrete args.
-                let concrete_args = EarlyBinder::bind(uv.args).instantiate(tcx, instance.args);
+                let concrete_args =
+                    EarlyBinder::bind(uv.args).instantiate(tcx, instance.args).skip_norm_wip();
                 let concrete_uv =
                     MirUnevaluatedConst { def: uv.def, args: concrete_args, promoted: uv.promoted };
                 match tcx.const_eval_resolve(
@@ -2179,7 +2180,7 @@ impl<'a> TritonCodegen<'a> {
         state: &mut CodegenState<'a, 'a>,
     ) -> Result<(), MlirError> {
         match rvalue {
-            Rvalue::Use(operand) => {
+            Rvalue::Use(operand, _) => {
                 let ty = operand.ty(mir, tcx);
                 let typing_env = TypingEnv::fully_monomorphized();
                 let normalized_ty = instance.instantiate_mir_and_normalize_erasing_regions(
@@ -2654,10 +2655,12 @@ impl<'a> TritonCodegen<'a> {
                 }
                 todo!("Discriminant for non-Option: {:?}", src_place)
             }
-            Rvalue::ShallowInitBox(operand, ty) => todo!("ShallowInitBox: {:?} {:?}", operand, ty),
             Rvalue::CopyForDeref(place) => todo!("CopyForDeref: {:?}", place),
             Rvalue::WrapUnsafeBinder(operand, ty) => {
                 todo!("WrapUnsafeBinder: {:?} {:?}", operand, ty)
+            }
+            Rvalue::Reborrow(ty, mutability, place) => {
+                todo!("Reborrow: {:?} {:?} {:?}", ty, mutability, place)
             }
         }
 
@@ -3608,7 +3611,8 @@ impl<'a> TritonCodegen<'a> {
                         let variant = adt_def.non_enum_variant();
                         let inner_ty = tcx
                             .type_of(variant.fields[FieldIdx::from_usize(0)].did)
-                            .instantiate(tcx, args);
+                            .instantiate(tcx, args)
+                            .skip_norm_wip();
                         Int::from_scalar(inner_ty, scalar_int).map_err(|e| {
                             MlirError::InvalidScalar {
                                 node: format!(

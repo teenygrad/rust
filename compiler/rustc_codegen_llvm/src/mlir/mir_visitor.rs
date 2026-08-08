@@ -173,10 +173,6 @@ impl<'tcx> MirVisitor<'tcx> {
                 StatementKind::Coverage(coverage) => {
                     this.log(&format!("Coverage: {:?}", coverage));
                 }
-                StatementKind::Retag(retag_kind, place) => {
-                    this.log(&format!("Retag: {:?}", retag_kind));
-                    this.visit_place("Place", place);
-                }
                 StatementKind::FakeRead(fake_read) => {
                     let (cause, place) = fake_read.as_ref();
                     this.log(&format!("FakeRead: {:?}", cause));
@@ -263,7 +259,7 @@ impl<'tcx> MirVisitor<'tcx> {
         self.log(&format!("RHS: {:?}", rvalue));
 
         self.with_indent(|this| match rvalue {
-            Rvalue::Use(operand) => {
+            Rvalue::Use(operand, _) => {
                 this.log("Use:");
                 this.visit_operand(operand);
             }
@@ -310,10 +306,6 @@ impl<'tcx> MirVisitor<'tcx> {
                     }
                 });
             }
-            Rvalue::ShallowInitBox(operand, ty) => {
-                this.log(&format!("ShallowInitBox: type={:?}", ty));
-                this.visit_operand(operand);
-            }
             Rvalue::CopyForDeref(place) => {
                 this.log("CopyForDeref:");
                 this.visit_place("Place", place);
@@ -324,6 +316,10 @@ impl<'tcx> MirVisitor<'tcx> {
             Rvalue::WrapUnsafeBinder(operand, ty) => {
                 this.log(&format!("WrapUnsafeBinder: type={:?}", ty));
                 this.visit_operand(operand);
+            }
+            Rvalue::Reborrow(ty, mutability, place) => {
+                this.log(&format!("Reborrow: type={:?}, mutability={:?}", ty, mutability));
+                this.visit_place("Place", place);
             }
         });
     }

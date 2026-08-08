@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-use rustc_middle::mir::mono::MonoItem;
+use rustc_middle::mono::MonoItem;
 use rustc_middle::ty::TyCtxt;
 
 use crate::mlir::errors::MlirError;

@@ -20,7 +20,7 @@ use melior::ir::r#type::{IntegerType, TupleType};
 use rustc_ast::{FloatTy, IntTy, UintTy};
 use rustc_middle::ty::print::with_no_trimmed_paths;
 use rustc_middle::ty::{
-    AdtDef, AliasTy, AliasTyKind, GenericArg, ParamTy, Ty, TyCtxt, TyKind, TypingEnv,
+    AdtDef, AliasTy, GenericArg, ParamTy, Ty, TyCtxt, TyKind, TypingEnv, Unnormalized,
 };
 
 /// Returns true if `ty` is `core::option::Option<_>` or any custom `Option<_>` ADT
@@ -108,9 +108,7 @@ impl TypeMapper {
             }
             TyKind::Never => IntegerType::new(context, 64).into(),
             TyKind::Tuple(tys) => self.create_tuple_type(context, tcx, tys.as_slice()),
-            TyKind::Alias(alias_ty_kind, alias_ty) => {
-                self.map_alias_ty(context, tcx, ty, alias_ty_kind, alias_ty)
-            }
+            TyKind::Alias(alias_ty) => self.map_alias_ty(context, tcx, ty, alias_ty),
             TyKind::Param(_param_ty) => self.create_param_type(context, tcx, _param_ty),
             TyKind::Bound(bound_var_index_kind, _bound_ty) => {
                 todo!("Bound: {:?} {:?}", bound_var_index_kind, _bound_ty)
@@ -158,11 +156,10 @@ impl TypeMapper {
         context: &'c Context,
         tcx: &TyCtxt<'tcx>,
         ty: &Ty<'tcx>,
-        _alias_ty_kind: &AliasTyKind<'_>,
         alias_ty: &AliasTy<'tcx>,
     ) -> Type<'c> {
-        let typing_env = TypingEnv::post_analysis(*tcx, alias_ty.def_id);
-        let normalized = tcx.try_normalize_erasing_regions(typing_env, *ty);
+        let typing_env = TypingEnv::post_analysis(*tcx, alias_ty.kind.def_id());
+        let normalized = tcx.try_normalize_erasing_regions(typing_env, Unnormalized::new_wip(*ty));
         if let Ok(normalized) = normalized {
             self.map_type(context, tcx, &normalized)
         } else {

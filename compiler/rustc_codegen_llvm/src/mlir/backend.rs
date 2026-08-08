@@ -27,18 +27,19 @@ use melior::pass;
 use melior::pass::PassManager;
 use rustc_codegen_ssa::back::lto::ThinModule;
 use rustc_codegen_ssa::back::write::{
-    CodegenContext, FatLtoInput, ModuleConfig, TargetMachineFactoryFn,
+    CodegenContext, FatLtoInput, ModuleConfig, SharedEmitter, TargetMachineFactoryFn, ThinLtoInput,
 };
 use rustc_codegen_ssa::base::codegen_crate;
 use rustc_codegen_ssa::traits::*;
-use rustc_codegen_ssa::{CodegenResults, CompiledModule, ModuleCodegen, TargetConfig};
+use rustc_codegen_ssa::{CompiledModule, CompiledModules, CrateInfo, ModuleCodegen, TargetConfig};
 use rustc_data_structures::fx::FxIndexMap;
+use rustc_data_structures::profiling::SelfProfilerRef;
 use rustc_errors::DiagCtxtHandle;
 use rustc_middle::dep_graph;
 use rustc_middle::dep_graph::{WorkProduct, WorkProductId};
 use rustc_middle::ty::TyCtxt;
 use rustc_session::Session;
-use rustc_session::config::{OutputFilenames, PrintKind, PrintRequest};
+use rustc_session::config::{self, OutputFilenames, PrintKind, PrintRequest};
 use rustc_span::Symbol;
 use tracing::info;
 
@@ -80,8 +81,12 @@ impl ExtraBackendMethods for MlirCodegenBackend {
         let start_time = Instant::now();
 
         let dep_node = tcx.codegen_unit(cgu_name).codegen_dep_node(tcx);
-        let (module, _) =
-            tcx.dep_graph.with_task(dep_node, tcx, cgu_name, Some(dep_graph::hash_result));
+        let (module, _) = tcx.dep_graph.with_task(
+            dep_node,
+            tcx,
+            || compile_codegen_unit_impl(tcx, cgu_name),
+            Some(dep_graph::hash_result),
+        );
 
         let time_to_codegen = start_time.elapsed();
         let cost = time_to_codegen.as_nanos() as u64;
@@ -210,9 +215,9 @@ impl WriteBackendMethods for MlirCodegenBackend {
 
     fn target_machine_factory(
         &self,
-        sess: &Session,
-        opt_level: config::OptLevel,
-        target_features: &[String],
+        _sess: &Session,
+        _opt_level: config::OptLevel,
+        _target_features: &[String],
     ) -> TargetMachineFactoryFn<Self> {
         todo!("Not implemented");
     }
@@ -220,13 +225,13 @@ impl WriteBackendMethods for MlirCodegenBackend {
     /// Performs fat LTO by merging all modules into a single one, running autodiff
     /// if necessary and running any further optimizations
     fn optimize_and_codegen_fat_lto(
-        sess: &Session,
-        cgcx: &CodegenContext,
-        shared_emitter: &SharedEmitter,
-        tm_factory: TargetMachineFactoryFn<Self>,
-        exported_symbols_for_lto: &[String],
-        each_linked_rlib_for_lto: &[PathBuf],
-        modules: Vec<FatLtoInput<Self>>,
+        _sess: &Session,
+        _cgcx: &CodegenContext,
+        _shared_emitter: &SharedEmitter,
+        _tm_factory: TargetMachineFactoryFn<Self>,
+        _exported_symbols_for_lto: &[String],
+        _each_linked_rlib_for_lto: &[PathBuf],
+        _modules: Vec<FatLtoInput<Self>>,
     ) -> CompiledModule {
         todo!("Not implemented");
     }
@@ -235,42 +240,42 @@ impl WriteBackendMethods for MlirCodegenBackend {
     /// lists, one of the modules that need optimization and another for modules that
     /// can simply be copied over from the incr. comp. cache.
     fn run_thin_lto(
-        cgcx: &CodegenContext,
-        prof: &SelfProfilerRef,
-        dcx: DiagCtxtHandle<'_>,
-        exported_symbols_for_lto: &[String],
-        each_linked_rlib_for_lto: &[PathBuf],
-        modules: Vec<ThinLtoInput<Self>>,
+        _cgcx: &CodegenContext,
+        _prof: &SelfProfilerRef,
+        _dcx: DiagCtxtHandle<'_>,
+        _exported_symbols_for_lto: &[String],
+        _each_linked_rlib_for_lto: &[PathBuf],
+        _modules: Vec<ThinLtoInput<Self>>,
     ) -> (Vec<ThinModule<Self>>, Vec<WorkProduct>) {
         todo!("Not implemented");
     }
 
     fn optimize(
-        cgcx: &CodegenContext,
-        prof: &SelfProfilerRef,
-        shared_emitter: &SharedEmitter,
-        module: &mut ModuleCodegen<Self::Module>,
-        config: &ModuleConfig,
+        _cgcx: &CodegenContext,
+        _prof: &SelfProfilerRef,
+        _shared_emitter: &SharedEmitter,
+        _module: &mut ModuleCodegen<Self::Module>,
+        _config: &ModuleConfig,
     ) {
         todo!("Not implemented");
     }
 
     fn optimize_and_codegen_thin(
-        cgcx: &CodegenContext,
-        prof: &SelfProfilerRef,
-        shared_emitter: &SharedEmitter,
-        tm_factory: TargetMachineFactoryFn<Self>,
-        thin: ThinModule<Self>,
+        _cgcx: &CodegenContext,
+        _prof: &SelfProfilerRef,
+        _shared_emitter: &SharedEmitter,
+        _tm_factory: TargetMachineFactoryFn<Self>,
+        _thin: ThinModule<Self>,
     ) -> CompiledModule {
         todo!("Not implemented");
     }
 
     fn codegen(
-        cgcx: &CodegenContext,
-        prof: &SelfProfilerRef,
-        shared_emitter: &SharedEmitter,
-        module: ModuleCodegen<Self::Module>,
-        config: &ModuleConfig,
+        _cgcx: &CodegenContext,
+        _prof: &SelfProfilerRef,
+        _shared_emitter: &SharedEmitter,
+        _module: ModuleCodegen<Self::Module>,
+        _config: &ModuleConfig,
     ) -> CompiledModule {
         todo!("Not implemented");
     }
@@ -278,143 +283,6 @@ impl WriteBackendMethods for MlirCodegenBackend {
     fn serialize_module(_module: Self::Module, _is_thin: bool) -> Self::ModuleBuffer {
         todo!("Not implemented");
     }
-
-    // #[allow(unreachable_code)]
-    // fn run_and_optimize_fat_lto(
-    //     _cgcx: &CodegenContext,
-    //     _exported_symbols_for_lto: &[String],
-    //     _each_linked_rlib_for_lto: &[PathBuf],
-    //     mut modules: Vec<FatLtoInput<Self>>,
-    // ) -> ModuleCodegen<Self::Module> {
-    //     info!("MLIR: run_and_optimize_fat_lto");
-    //     info!("  Modules count: {}", modules.len());
-
-    //     // For now, just return the first module
-    //     if let Some(first) = modules.pop() {
-    //         match first {
-    //             FatLtoInput::InMemory(module) => module,
-    //             FatLtoInput::Serialized { .. } => {
-    //                 panic!("Serialized modules not yet supported in fat LTO")
-    //             }
-    //         }
-    //     } else {
-    //         panic!("No modules provided for fat LTO")
-    //     }
-    // }
-
-    // fn run_thin_lto(
-    //     _cgcx: &CodegenContext,
-    //     _exported_symbols_for_lto: &[String],
-    //     _each_linked_rlib_for_lto: &[PathBuf],
-    //     modules: Vec<(String, Self::ThinBuffer)>,
-    //     cached_modules: Vec<(SerializedModule<Self::ModuleBuffer>, WorkProduct)>,
-    // ) -> (Vec<ThinModule<Self>>, Vec<WorkProduct>) {
-    //     // No-op thin LTO: pass modules through unchanged. Each module is
-    //     // wrapped in a ThinModule so optimize_thin can handle it individually.
-    //     let (names, buffers): (Vec<_>, Vec<_>) = modules.into_iter().unzip();
-    //     let module_names =
-    //         names.iter().map(|n| CString::new(n.as_str()).unwrap()).collect::<Vec<_>>();
-    //     let num_modules = module_names.len();
-    //     let shared = Arc::new(ThinShared {
-    //         data: ThinData {},
-    //         thin_buffers: buffers,
-    //         serialized_modules: Vec::new(),
-    //         module_names,
-    //     });
-    //     let thin_modules =
-    //         (0..num_modules).map(|idx| ThinModule { shared: Arc::clone(&shared), idx }).collect();
-    //     let work_products = cached_modules.into_iter().map(|(_, wp)| wp).collect();
-    //     (thin_modules, work_products)
-    // }
-
-    // fn optimize(
-    //     _cgcx: &CodegenContext,
-    //     _dcx: DiagCtxtHandle<'_>,
-    //     module: &mut ModuleCodegen<Self::Module>,
-    //     _config: &ModuleConfig,
-    // ) {
-    //     info!("MLIR: optimize module '{}'", module.name);
-    //     let module = module.module_llvm.llmod();
-
-    //     info!("MLIR module: {:?}", module.as_operation().to_string());
-
-    //     // TODO: Implement MLIR optimization passes
-    // }
-
-    // fn optimize_thin(
-    //     _cgcx: &CodegenContext,
-    //     thin: ThinModule<Self>,
-    // ) -> ModuleCodegen<Self::Module> {
-    //     let name = thin.name().to_string();
-    //     info!("MLIR: optimize_thin '{}' (pass-through)", name);
-    //     // Recover the PTX that was serialized into the thin buffer by prepare_thin.
-    //     let ptx = String::from_utf8(thin.data().to_vec()).ok();
-    //     let mut m = MlirModule::new(&name);
-    //     m.ptx_asm = ptx;
-    //     ModuleCodegen::new_regular(name, m)
-    // }
-
-    // fn codegen(
-    //     cgcx: &CodegenContext,
-    //     module: ModuleCodegen<Self::Module>,
-    //     _config: &ModuleConfig,
-    // ) -> CompiledModule {
-    //     info!("=== MLIR codegen ===");
-    //     info!("Module name: {}", module.name);
-
-    //     // ptx_asm is populated either directly (no-LTO path) or via
-    //     // prepare_thin → optimize_thin (ThinLocal LTO path).
-    //     let ptx = module.module_llvm.ptx_asm.as_deref().unwrap_or_else(|| {
-    //         panic!(
-    //             "No PTX available for module '{}' — Triton compilation may not have run",
-    //             module.name
-    //         )
-    //     });
-
-    //     let out_path = cgcx.output_filenames.temp_path_for_cgu(
-    //         rustc_session::config::OutputType::Object,
-    //         &module.name,
-    //         cgcx.invocation_temp.as_deref(),
-    //     );
-    //     std::fs::write(&out_path, ptx.as_bytes())
-    //         .unwrap_or_else(|e| panic!("Failed to write PTX to {}: {}", out_path.display(), e));
-    //     info!("PTX written to {} ({} bytes)", out_path.display(), ptx.len());
-
-    //     if let Some(mlir_src) = module.module_llvm.mlir_source.as_deref() {
-    //         let mlir_path = cgcx
-    //             .output_filenames
-    //             .path(rustc_session::config::OutputType::Object)
-    //             .as_path()
-    //             .with_extension("mlir");
-    //         std::fs::write(&mlir_path, mlir_src.as_bytes()).unwrap_or_else(|e| {
-    //             panic!("Failed to write MLIR to {}: {}", mlir_path.display(), e)
-    //         });
-    //         info!("MLIR written to {} ({} bytes)", mlir_path.display(), mlir_src.len());
-    //     }
-
-    //     CompiledModule {
-    //         name: module.name,
-    //         kind: module.kind,
-    //         object: Some(out_path),
-    //         dwarf_object: None,
-    //         bytecode: None,
-    //         assembly: None,
-    //         llvm_ir: None,
-    //         links_from_incr_cache: Vec::new(),
-    //     }
-    // }
-
-    // fn prepare_thin(module: ModuleCodegen<Self::Module>) -> (String, Self::ThinBuffer) {
-    //     info!("MLIR: prepare_thin for '{}'", module.name);
-    //     // Serialize the PTX into the thin buffer so optimize_thin can recover it.
-    //     let ptx_bytes = module.module_llvm.ptx_asm.map(|s| s.into_bytes()).unwrap_or_default();
-    //     (module.name, ThinBuffer { data: ptx_bytes })
-    // }
-
-    // fn serialize_module(module: ModuleCodegen<Self::Module>) -> (String, Self::ModuleBuffer) {
-    //     info!("MLIR: serialize_module '{}'", module.name);
-    //     (module.name, ModuleBuffer::new())
-    // }
 }
 
 impl CodegenBackend for MlirCodegenBackend {
@@ -453,11 +321,11 @@ impl CodegenBackend for MlirCodegenBackend {
         ongoing_codegen: Box<dyn Any>,
         sess: &Session,
         _outputs: &OutputFilenames,
-    ) -> (CodegenResults, FxIndexMap<WorkProductId, WorkProduct>) {
+        crate_info: &CrateInfo,
+    ) -> (CompiledModules, FxIndexMap<WorkProductId, WorkProduct>) {
         info!("=== MLIR join_codegen ===");
 
-        let crate_info = todo!("Not implemented");
-        let (codegen_results, work_products) = ongoing_codegen
+        let (compiled_modules, work_products) = ongoing_codegen
             .downcast::<rustc_codegen_ssa::back::write::OngoingCodegen<MlirCodegenBackend>>()
             .expect("Expected OngoingCodegen<MlirCodegenBackend>")
             .join(sess, crate_info);
@@ -465,13 +333,14 @@ impl CodegenBackend for MlirCodegenBackend {
         info!("Codegen completed");
         info!("  Work products: {}", work_products.len());
 
-        (codegen_results, work_products)
+        (compiled_modules, work_products)
     }
 
     fn link(
         &self,
         sess: &Session,
-        codegen_results: rustc_codegen_ssa::CodegenResults,
+        compiled_modules: CompiledModules,
+        _crate_info: CrateInfo,
         _metadata: rustc_metadata::EncodedMetadata,
         outputs: &OutputFilenames,
     ) {
@@ -482,7 +351,7 @@ impl CodegenBackend for MlirCodegenBackend {
         // types listed in --emit. For PTX there is no linking step, so we
         // copy each module's object (PTX) directly to the -o destination.
         let out = outputs.path(OutputType::Object);
-        for module in &codegen_results.modules {
+        for module in &compiled_modules.modules {
             if let Some(obj) = &module.object {
                 if let Err(e) = std::fs::copy(obj, out.as_path()) {
                     sess.dcx().fatal(format!(
@@ -513,7 +382,7 @@ impl CodegenBackend for MlirCodegenBackend {
     }
 }
 
-// Placeholder types for ModuleBuffer and ThinBuffer
+// Placeholder type for ModuleBuffer
 
 pub struct ModuleBuffer {
     data: Vec<u8>,
@@ -530,22 +399,6 @@ impl rustc_codegen_ssa::traits::ModuleBufferMethods for ModuleBuffer {
         &self.data
     }
 }
-
-pub struct ThinBuffer {
-    data: Vec<u8>,
-}
-
-impl ThinBuffer {
-    pub fn new() -> Self {
-        Self { data: Vec::new() }
-    }
-}
-
-// impl rustc_codegen_ssa::traits::ThinBufferMethods for ThinBuffer {
-//     fn data(&self) -> &[u8] {
-//         &self.data
-//     }
-// }
 
 pub struct ThinData {
     // TODO: Add actual thin data fields

@@ -19,7 +19,7 @@ use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 
 use rustc_abi::Size;
-use rustc_middle::mir::mono::CodegenUnit;
+use rustc_middle::mono::CodegenUnit;
 use rustc_middle::ty::TyCtxt;
 
 use crate::context::{GenericCx, SCx};

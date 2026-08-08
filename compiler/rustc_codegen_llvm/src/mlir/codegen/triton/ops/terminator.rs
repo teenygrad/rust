@@ -204,7 +204,6 @@ impl<'a> TritonCodegen<'a> {
             "core::ops::BitOr::bitor" => {
                 TritonCodegen::codegen_or_call as LocalCallHandler<'a, 'tcx>
             }
-            "core::ops::Div::div" => TritonCodegen::codegen_fdiv_call as LocalCallHandler<'a, 'tcx>,
             "triton::Triton::program_id" => {
                 TritonCodegen::codegen_program_id as LocalCallHandler<'a, 'tcx>
             }
@@ -593,7 +592,7 @@ impl<'a> TritonCodegen<'a> {
         let ret_ty = match fn_ty.kind() {
             // Function definitions (e.g., closures and fn items).
             TyKind::FnDef(def_id, substs) => {
-                let sig = tcx.fn_sig(*def_id).instantiate(tcx, substs);
+                let sig = tcx.fn_sig(*def_id).instantiate(tcx, substs).skip_norm_wip();
                 sig.output().skip_binder()
             }
             // For function pointers, combine binder + header and get the output type.
