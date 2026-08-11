@@ -23,6 +23,22 @@ use rustc_errors::DiagCtxtHandle;
 use rustc_mlir::ffi::{CompileOptions, OptionalI32};
 use rustc_mlir::triton::TritonCompiler;
 
+/// Register/spill/constant-memory statistics parsed from `ptxas -v`'s
+/// stderr. Only present when the compile requested a binary (see
+/// `rustc_mlir::ffi::CudaCompileOptions::generate_bin` / the
+/// `TEENYC_GENERATE_BIN` env var) — `ptxas` is a real subprocess compile
+/// targeting a specific device architecture, so it isn't run by default, and
+/// these numbers don't exist until it has been.
+#[derive(Debug, Default, Clone)]
+pub struct PtxasStats {
+    pub num_regs: i32,
+    pub spill_stores: i32,
+    pub spill_loads: i32,
+    pub stack_frame: i32,
+    /// `(bank, bytes)` pairs, e.g. `(0, 384)` for `384 bytes cmem[0]`.
+    pub cmem_banks: Vec<(i32, i32)>,
+}
+
 /// Resource metadata for a compiled GPU kernel, recovered by parsing the
 /// structured `// meta:key=value` comments appended to the PTX by CudaBackend.
 #[derive(Debug, Default, Clone)]
@@ -36,6 +52,9 @@ pub struct KernelMetadata {
     pub global_scratch_align: i32,
     pub profile_scratch_size: i32,
     pub profile_scratch_align: i32,
+    /// `None` unless the compile requested a binary and `ptxas` produced
+    /// usable `-v` output; see [`PtxasStats`].
+    pub ptxas_stats: Option<PtxasStats>,
 }
 
 impl KernelMetadata {
@@ -48,6 +67,12 @@ impl KernelMetadata {
             profile_scratch_align: 1,
             ..Default::default()
         };
+        // Built up incrementally as num_regs/spill_stores/.../cmem lines are
+        // seen, then moved into `meta.ptxas_stats` at the end. Its presence
+        // is exactly the "was a bin requested and did ptxas run" signal —
+        // CudaBackend only ever emits these lines together, guarded by
+        // `has_ptxas_stats` on the C++ side.
+        let mut stats: Option<PtxasStats> = None;
         for line in ptx.lines() {
             let Some(rest) = line.trim().strip_prefix("// meta:") else { continue };
             let Some((key, val)) = rest.split_once('=') else { continue };
@@ -61,9 +86,30 @@ impl KernelMetadata {
                 "global_scratch_align" => meta.global_scratch_align = val.parse().unwrap_or(1),
                 "profile_scratch_size" => meta.profile_scratch_size = val.parse().unwrap_or(0),
                 "profile_scratch_align" => meta.profile_scratch_align = val.parse().unwrap_or(1),
+                "num_regs" => stats.get_or_insert_default().num_regs = val.parse().unwrap_or(0),
+                "spill_stores" => {
+                    stats.get_or_insert_default().spill_stores = val.parse().unwrap_or(0)
+                }
+                "spill_loads" => {
+                    stats.get_or_insert_default().spill_loads = val.parse().unwrap_or(0)
+                }
+                "stack_frame" => {
+                    stats.get_or_insert_default().stack_frame = val.parse().unwrap_or(0)
+                }
+                "cmem" => {
+                    let banks = val
+                        .split(',')
+                        .filter_map(|pair| {
+                            let (bank, bytes) = pair.split_once(':')?;
+                            Some((bank.parse().ok()?, bytes.parse().ok()?))
+                        })
+                        .collect();
+                    stats.get_or_insert_default().cmem_banks = banks;
+                }
                 _ => {}
             }
         }
+        meta.ptxas_stats = stats;
         meta
     }
 }
@@ -102,6 +148,20 @@ fn resolve_ptx_version(capability: i32) -> i32 {
         }
     }
     default_ptx_version_for_capability(capability)
+}
+
+/// Whether to actually invoke `ptxas` and produce a cubin (see
+/// `CudaCompileOptions::generate_bin`). Off by default: it's a real
+/// subprocess compile targeting a specific device architecture, not merely
+/// producing PTX, so callers opt in explicitly via `$TEENYC_GENERATE_BIN`
+/// (any of `1`/`true`/`yes`, case-insensitive) when they want the cubin and
+/// the register/spill stats `ptxas -v` reports (see
+/// [`KernelMetadata::ptxas_stats`]).
+fn want_generate_bin() -> bool {
+    match std::env::var("TEENYC_GENERATE_BIN") {
+        Ok(v) => matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes"),
+        Err(_) => false,
+    }
 }
 
 /// Conservative default PTX ISA version per SM architecture (see
@@ -186,6 +246,7 @@ impl<'c> MlirModule<'c> {
         // Safety: CompileOptionsData is a union; default_cuda() sets the cuda variant.
         options.data.cuda.capability = capability;
         options.data.cuda.ptx_version = OptionalI32::some(resolve_ptx_version(capability));
+        options.data.cuda.generate_bin = want_generate_bin();
         // `debug` gates the C++ backend's per-pass IR printing (see
         // CudaBackend::makeTTIR/makeTTGIR/makeLLIR) — only worth paying for
         // when a subscriber is actually listening at trace level for this

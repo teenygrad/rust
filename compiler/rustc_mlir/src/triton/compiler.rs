@@ -73,6 +73,11 @@ impl TritonCompiler {
         ptr_to_str(self, unsafe { ffi::mlirTritonCompilerGetASM(self.raw) })
     }
 
+    /// Returns the compiled cubin from the last successful [TritonCompiler::compile],
+    /// base64-encoded (the underlying binary can contain NUL bytes / invalid UTF-8,
+    /// which can't cross the C-string FFI boundary raw). Only populated when
+    /// `CudaCompileOptions::generate_bin` was set to `true` for this compile;
+    /// otherwise `ptxas` was never invoked and this returns `None`.
     pub fn get_bin(&self) -> Option<&str> {
         ptr_to_str(self, unsafe { ffi::mlirTritonCompilerGetBIN(self.raw) })
     }

@@ -129,6 +129,14 @@ pub struct CudaCompileOptions {
     pub disable_line_info: bool,
     pub enable_reflect_ftz: bool,
     pub dump_ir_extract_di_local_variables: bool,
+
+    /// Opt-in: when true, `CudaBackend::makeBIN` actually invokes `ptxas` to
+    /// assemble the PTX into a cubin, and parses `ptxas -v`'s stderr for
+    /// register/spill statistics. This is a real subprocess compile
+    /// targeting a specific device architecture, so it defaults to `false` —
+    /// when unset, `makeBIN` stays a no-op and no register/spill metadata is
+    /// produced (see `KernelMetadata::ptxas_stats` in `mlir::module`).
+    pub generate_bin: bool,
 }
 
 impl Default for CudaCompileOptions {
@@ -177,6 +185,7 @@ impl Default for CudaCompileOptions {
             disable_line_info: false,
             enable_reflect_ftz: false,
             dump_ir_extract_di_local_variables: false,
+            generate_bin: false,
         }
     }
 }

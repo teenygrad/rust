@@ -41,10 +41,20 @@ namespace ttng = mlir::triton::nvidia_gpu;
 // Kernel metadata collected during lowering
 // ---------------------------------------------------------------------------
 
+/// Per-bank constant memory usage reported by `ptxas -v` (e.g. `cmem[0]`,
+/// `cmem[2]`).
+struct CmemBank {
+  int32_t bank;
+  int32_t bytes;
+};
+
 /// Resource metadata for a compiled GPU kernel. Populated by makeLLIR (from
-/// MLIR module attributes written by the allocation passes) and makeASM (kernel
-/// name extracted from PTX). Appended to m_asm as PTX line comments so that
-/// the Rust side can parse them without an extra FFI channel.
+/// MLIR module attributes written by the allocation passes), makeASM (kernel
+/// name extracted from PTX), and -- only when a binary was actually
+/// requested (`CudaCompileOptions::generate_bin`) -- makeBIN, which parses
+/// register/spill statistics out of `ptxas -v`'s stderr. Appended to m_asm as
+/// PTX line comments so that the Rust side can parse them without an extra
+/// FFI channel.
 struct KernelMetadata {
   std::string name;
   int32_t num_warps            = 0;
@@ -55,6 +65,18 @@ struct KernelMetadata {
   int32_t global_scratch_align = 1;
   int32_t profile_scratch_size  = 0;
   int32_t profile_scratch_align = 1;
+
+  // The fields below are only meaningful when `has_ptxas_stats` is true,
+  // which only happens when makeBIN actually ran ptxas (i.e. the caller set
+  // `generate_bin = true`). They are left at their zero defaults otherwise,
+  // and no corresponding `// meta:` comment lines are emitted, so the Rust
+  // parser can distinguish "not measured" from "measured as zero".
+  bool has_ptxas_stats  = false;
+  int32_t num_regs      = 0;  // registers used per thread
+  int32_t spill_stores  = 0;  // bytes spilled to local memory (stores)
+  int32_t spill_loads   = 0;  // bytes spilled to local memory (loads)
+  int32_t stack_frame   = 0;  // bytes of stack frame per thread
+  std::vector<CmemBank> cmem_banks;
 };
 
 // ---------------------------------------------------------------------------
@@ -138,6 +160,14 @@ struct CudaCompileOptions {
   bool disable_line_info;
   bool enable_reflect_ftz;
   bool dump_ir_extract_di_local_variables;
+
+  /// Opt-in: when true, makeBIN actually invokes ptxas to assemble the PTX
+  /// into a cubin for `arch`/`capability`, and parses `ptxas -v`'s stderr for
+  /// register/spill statistics (see KernelMetadata::has_ptxas_stats). This is
+  /// a real subprocess compile targeting a specific device architecture, so
+  /// it is off by default -- when false, makeBIN is a no-op exactly as
+  /// before and no register/spill metadata is produced.
+  bool generate_bin;
 };
 
 enum Capability {

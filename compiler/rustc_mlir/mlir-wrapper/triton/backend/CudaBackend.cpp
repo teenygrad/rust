@@ -18,6 +18,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Target/LLVMIR/Dialect/NVVM/NVVMToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/IR/DataLayout.h"
@@ -27,8 +28,11 @@
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/Linker/Linker.h"
 #include "llvm/MC/TargetRegistry.h"
+#include "llvm/Support/Base64.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/Path.h"
+#include "llvm/Support/Program.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
@@ -45,10 +49,96 @@
 
 #include <cstdlib>
 #include <regex>
+#include <sstream>
 
 using namespace mlir;
 using namespace triton;
 using namespace nvidia_gpu;
+
+namespace {
+
+/// Locates the `ptxas` executable: honors `TEENYC_PTXAS_PATH` (explicit
+/// override) first, then `CUDA_HOME`/`CUDA_PATH`, then the standard CUDA
+/// toolkit install location, then falls back to searching `PATH`.
+std::string findPtxas() {
+  if (const char *env = std::getenv("TEENYC_PTXAS_PATH")) {
+    if (llvm::sys::fs::exists(env)) {
+      return env;
+    }
+  }
+
+  for (const char *envVar : {"CUDA_HOME", "CUDA_PATH"}) {
+    if (const char *base = std::getenv(envVar)) {
+      llvm::SmallString<256> candidate(base);
+      llvm::sys::path::append(candidate, "bin", "ptxas");
+      if (llvm::sys::fs::exists(candidate)) {
+        return std::string(candidate.str());
+      }
+    }
+  }
+
+  static const char *defaultPath = "/usr/local/cuda/bin/ptxas";
+  if (llvm::sys::fs::exists(defaultPath)) {
+    return defaultPath;
+  }
+
+  auto found = llvm::sys::findProgramByName("ptxas");
+  if (found) {
+    return *found;
+  }
+
+  return {};
+}
+
+/// Parses the register/spill/stack-frame/constant-memory statistics that
+/// `ptxas -v` writes to stderr, e.g.:
+///
+///   ptxas info    : Compiling entry function 'kernel' for 'sm_90a'
+///   ptxas info    : Function properties for kernel
+///       32 bytes stack frame, 16 bytes spill stores, 8 bytes spill loads
+///   ptxas info    : Used 40 registers, 384 bytes cmem[0], 8 bytes cmem[2]
+///
+/// This backend compiles a single kernel per module (see the single-name
+/// assumption in makeASM), so it's sufficient to search the whole log for
+/// each field rather than associating blocks with individual kernel names.
+/// Returns false (leaving `metadata` untouched) if the "Used N registers"
+/// line isn't found, which means ptxas's output wasn't in the expected
+/// format -- we'd rather report nothing than fabricate zeros.
+bool parsePtxasStats(const std::string &log, KernelMetadata &metadata) {
+  static const std::regex regsRe(R"(Used (\d+) registers)");
+  static const std::regex stackRe(R"((\d+) bytes stack frame)");
+  static const std::regex spillStoresRe(R"((\d+) bytes spill stores)");
+  static const std::regex spillLoadsRe(R"((\d+) bytes spill loads)");
+  static const std::regex cmemRe(R"((\d+) bytes cmem\[(\d+)\])");
+
+  std::smatch match;
+  if (!std::regex_search(log, match, regsRe)) {
+    return false;
+  }
+  metadata.num_regs = std::stoi(match[1].str());
+
+  if (std::regex_search(log, match, stackRe)) {
+    metadata.stack_frame = std::stoi(match[1].str());
+  }
+  if (std::regex_search(log, match, spillStoresRe)) {
+    metadata.spill_stores = std::stoi(match[1].str());
+  }
+  if (std::regex_search(log, match, spillLoadsRe)) {
+    metadata.spill_loads = std::stoi(match[1].str());
+  }
+
+  for (auto it = std::sregex_iterator(log.begin(), log.end(), cmemRe);
+       it != std::sregex_iterator(); ++it) {
+    int32_t bytes = std::stoi((*it)[1].str());
+    int32_t bank = std::stoi((*it)[2].str());
+    metadata.cmem_banks.push_back({bank, bytes});
+  }
+
+  metadata.has_ptxas_stats = true;
+  return true;
+}
+
+} // namespace
 
 CudaBackend::CudaBackend(std::string target, CudaCompileOptions options)
     : Backend(target), m_options(options) {
@@ -566,6 +656,146 @@ CudaBackend::createTritonGPUProxyFenceInsertionWrapper(int32_t capability) {
 }
 
 LogicalResult CudaBackend::makeBIN(MLIRContext &context, ModuleOp module) {
+  if (!m_options.generate_bin) {
+    // Not requested: stay a no-op, exactly as before. m_bin stays empty and
+    // the ptxas-derived KernelMetadata fields stay at their zero defaults
+    // (has_ptxas_stats stays false), since nothing was actually measured.
+    return LogicalResult::success();
+  }
+
+  std::string ptxas = findPtxas();
+  if (ptxas.empty()) {
+    llvm::errs() << "CudaBackend: generate_bin was requested but `ptxas` "
+                    "could not be found. Set TEENYC_PTXAS_PATH, CUDA_HOME, "
+                    "or CUDA_PATH, or ensure `ptxas` is on PATH.\n";
+    return LogicalResult::failure();
+  }
+
+  llvm::SmallString<128> ptxPath, binPath, logPath;
+  int ptxFd;
+  if (auto ec = llvm::sys::fs::createTemporaryFile("teenyc-triton", "ptx",
+                                                    ptxFd, ptxPath)) {
+    llvm::errs() << "CudaBackend: failed to create temp PTX file: "
+                 << ec.message() << "\n";
+    return LogicalResult::failure();
+  }
+  {
+    llvm::raw_fd_ostream ptxOut(ptxFd, /*shouldClose=*/true);
+    ptxOut << m_asm;
+  }
+
+  if (auto ec = llvm::sys::fs::createTemporaryFile("teenyc-triton", "cubin",
+                                                    binPath)) {
+    llvm::errs() << "CudaBackend: failed to create temp cubin path: "
+                 << ec.message() << "\n";
+    llvm::sys::fs::remove(ptxPath);
+    return LogicalResult::failure();
+  }
+  if (auto ec =
+          llvm::sys::fs::createTemporaryFile("teenyc-triton", "log", logPath)) {
+    llvm::errs() << "CudaBackend: failed to create temp log path: "
+                 << ec.message() << "\n";
+    llvm::sys::fs::remove(ptxPath);
+    llvm::sys::fs::remove(binPath);
+    return LogicalResult::failure();
+  }
+
+  auto cleanup = [&]() {
+    llvm::sys::fs::remove(ptxPath);
+    llvm::sys::fs::remove(binPath);
+    llvm::sys::fs::remove(logPath);
+  };
+
+  std::string arch = "sm_" + std::to_string(m_capability);
+  if (m_capability >= 90) {
+    arch += "a";
+  }
+
+  // Mirrors the ptxas invocation in the vendored Triton Python backend
+  // (third_party/nvidia/backend/compiler.py, make_cubin).
+  std::vector<std::string> args = {ptxas};
+  if (!m_options.disable_line_info) {
+    args.push_back("-lineinfo");
+  }
+  if (!m_options.enable_fp_fusion) {
+    args.push_back("--fmad=false");
+  }
+  args.push_back("-v");
+  args.push_back("--regAllocOptLevel=2");
+  if (m_options.ptx_options) {
+    std::istringstream extra(m_options.ptx_options);
+    std::string opt;
+    while (extra >> opt) {
+      args.push_back(opt);
+    }
+  }
+  args.push_back("--gpu-name=" + arch);
+  args.push_back(std::string(ptxPath.str()));
+  args.push_back("-o");
+  args.push_back(std::string(binPath.str()));
+
+  std::vector<llvm::StringRef> argRefs(args.begin(), args.end());
+  std::optional<llvm::StringRef> redirects[] = {std::nullopt, std::nullopt,
+                                                llvm::StringRef(logPath)};
+
+  std::string execError;
+  bool executionFailed = false;
+  int rc = llvm::sys::ExecuteAndWait(
+      ptxas, argRefs, /*Env=*/std::nullopt, redirects,
+      /*SecondsToWait=*/0, /*MemoryLimit=*/0, &execError, &executionFailed);
+
+  llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> logBuf =
+      llvm::MemoryBuffer::getFile(logPath);
+  std::string log = logBuf ? (*logBuf)->getBuffer().str() : std::string();
+
+  if (executionFailed || rc != 0) {
+    llvm::errs() << "CudaBackend: `ptxas` failed (exit code " << rc << ")\n";
+    if (!execError.empty()) {
+      llvm::errs() << execError << "\n";
+    }
+    llvm::errs() << "ptxas stderr:\n" << log << "\n";
+    cleanup();
+    return LogicalResult::failure();
+  }
+
+  llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> binBuf =
+      llvm::MemoryBuffer::getFile(binPath, /*IsText=*/false);
+  if (!binBuf) {
+    llvm::errs()
+        << "CudaBackend: ptxas reported success but produced no cubin at "
+        << binPath << "\n";
+    cleanup();
+    return LogicalResult::failure();
+  }
+  // m_bin crosses the FFI boundary as a null-terminated C string (see
+  // Backend::getBIN), which can't safely carry arbitrary binary data
+  // (embedded NULs, invalid UTF-8), so the cubin is base64-encoded here and
+  // must be decoded by the Rust caller.
+  m_bin = llvm::encodeBase64((*binBuf)->getBuffer());
+
+  if (parsePtxasStats(log, m_metadata)) {
+    // Only append these once they were actually measured: their presence in
+    // the PTX comment block is itself the "was a bin requested and did
+    // ptxas run" signal the Rust-side parser keys off.
+    m_asm += "// meta:num_regs=" + std::to_string(m_metadata.num_regs) + "\n";
+    m_asm +=
+        "// meta:spill_stores=" + std::to_string(m_metadata.spill_stores) + "\n";
+    m_asm +=
+        "// meta:spill_loads=" + std::to_string(m_metadata.spill_loads) + "\n";
+    m_asm +=
+        "// meta:stack_frame=" + std::to_string(m_metadata.stack_frame) + "\n";
+    if (!m_metadata.cmem_banks.empty()) {
+      std::string cmem;
+      for (size_t i = 0; i < m_metadata.cmem_banks.size(); ++i) {
+        if (i) cmem += ",";
+        cmem += std::to_string(m_metadata.cmem_banks[i].bank) + ":" +
+                std::to_string(m_metadata.cmem_banks[i].bytes);
+      }
+      m_asm += "// meta:cmem=" + cmem + "\n";
+    }
+  }
+
+  cleanup();
   return LogicalResult::success();
 }
 
