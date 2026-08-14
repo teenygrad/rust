@@ -42,6 +42,7 @@
 #![feature(rustc_private)]
 
 use melior::ir::attribute::IntegerAttribute;
+use melior::ir::operation::OperationLike;
 use melior::ir::r#type::IntegerType;
 use melior::ir::{Block, BlockLike, Location, Operation, RegionLike, Type, Value};
 use rustc_codegen_llvm::mlir::MlirModule;
