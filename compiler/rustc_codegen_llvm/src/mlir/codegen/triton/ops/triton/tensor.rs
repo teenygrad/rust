@@ -209,6 +209,79 @@ impl<'a> TritonCodegen<'a> {
         Ok(None)
     }
 
+    /// Mixed-ops probe: stages `x` — the resolved `Value` from whatever
+    /// normal (`Language::TRITON`-shaped) op produced it, with whatever
+    /// encoding (or lack of one) that op's own codegen already gave it —
+    /// through shared memory via `ttg.local_alloc`/`local_store`/`local_load`,
+    /// and returns the loaded value. Unlike
+    /// `codegen_gluon_shared_mem_smoke_test`, this does NOT rebuild `x` with
+    /// an explicit `#ttg.blocked` encoding — the whole point is to see
+    /// whether Gluon's encoding-inference pass tolerates (or crashes on) a
+    /// mix of encoded and unencoded tensors in one kernel.
+    pub fn codegen_gluon_shared_mem_roundtrip<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        mir: &Body<'tcx>,
+        _func: &Operand<'tcx>,
+        _func_name: &str,
+        args: &[Spanned<Operand<'tcx>>],
+        _destination: &Place<'tcx>,
+        _target: &Option<BasicBlock>,
+        _unwind: &UnwindAction,
+        _call_source: &CallSource,
+        _fn_span: &Span,
+        location: Location<'a>,
+        mlir_block: &BlockRef<'a, 'a>,
+        state: &mut CodegenState<'a, 'a>,
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
+        debug_assert!(
+            args.len() == 1,
+            "codegen_gluon_shared_mem_roundtrip: args length must be 1 (x)"
+        );
+
+        let context = self.module.context();
+
+        let x = self.codegen_operand(
+            tcx,
+            instance,
+            &args[0].node,
+            args[0].node.ty(mir, tcx),
+            location,
+            mlir_block,
+            state,
+        )?;
+
+        let tensor_ty = x.r#type();
+        let ranked: RankedTensorType = tensor_ty.try_into().map_err(|e: melior::error::Error| {
+            MlirError::InvalidType { msg: format!("expected a ranked tensor for x: {e}") }
+        })?;
+        let elem_ty = ranked.element();
+        let dims =
+            ranked.dims().map_err(|e| MlirError::InvalidType { msg: e.to_string() })?;
+        let num_elements = dims.first().copied().unwrap_or(0);
+        let mem_desc_ty = shared_mem_desc_type(context, elem_ty, num_elements, true);
+
+        let alloc_op: Operation<'a> = local_alloc(context, location, None, None, mem_desc_ty)
+            .map_err(|e| MlirError::CreateOperation { err: e })?
+            .into();
+        let mem_desc: Value<'a, 'a> = alloc_op.result(0).expect("local_alloc result").into();
+        mlir_block.append_operation(alloc_op);
+
+        let local_store_op: Operation<'a> = local_store(location, x, mem_desc)
+            .map_err(|e| MlirError::CreateOperation { err: e })?
+            .into();
+        mlir_block.append_operation(local_store_op);
+
+        let load_op: Operation<'a> = local_load(location, mem_desc, tensor_ty)
+            .map_err(|e| MlirError::CreateOperation { err: e })?
+            .into();
+        let loaded: Value<'a, 'a> = load_op.result(0).expect("local_load result").into();
+        mlir_block.append_operation(load_op);
+
+        Ok(Some(loaded))
+    }
+
     pub fn codegen_arange<'tcx>(
         &self,
         tcx: TyCtxt<'tcx>,

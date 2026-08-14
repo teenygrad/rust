@@ -219,6 +219,9 @@ impl<'a> TritonCodegen<'a> {
             "triton::Triton::gluon_shared_mem_smoke_test" => {
                 TritonCodegen::codegen_gluon_shared_mem_smoke_test as LocalCallHandler<'a, 'tcx>
             }
+            "triton::Triton::gluon_shared_mem_roundtrip" => {
+                TritonCodegen::codegen_gluon_shared_mem_roundtrip as LocalCallHandler<'a, 'tcx>
+            }
             "triton::Triton::maximum" => {
                 TritonCodegen::codegen_maximum as LocalCallHandler<'a, 'tcx>
             }
