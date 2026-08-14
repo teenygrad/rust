@@ -6,11 +6,17 @@
 /inst/
 /dl/
 /vendor/
-/src/
 
-# LLVM project (very large, mostly C++ - exclude unless specifically needed)
-# Uncomment if you need to search LLVM code:
+# Large source subtrees excluded from indexing. NOTE: src/triton is
+# intentionally NOT ignored here so its sources are searchable/editable
+# (a blanket /src/ would re-block it, since an ignored parent cannot be
+# selectively re-included).
 /src/llvm-project/
+/src/gcc/
+/src/melior/
+/src/bootstrap/
+/src/tools/
+/src/doc/
 
 # Triton third-party dependencies (large, less relevant)
 /src/triton/third_party/

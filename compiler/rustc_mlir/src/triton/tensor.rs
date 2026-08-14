@@ -339,6 +339,34 @@ pub fn local_load<'ctx>(
         .map_err(|e| Error::InvalidType { msg: format!("failed to build ttg.local_load: {e}") })
 }
 
+/// Discardable unit attribute a codegen attaches to the op whose (single)
+/// result should be staged through shared memory by the
+/// `tritongpu-stage-shared-memory` TTGIR pass (teenyc-6mv).
+pub const STAGE_SHARED_ATTR: &str = "ttg.stage_shared";
+
+/// Mark `op` so the `tritongpu-stage-shared-memory` pass stages its result
+/// through shared memory (teenyc-6mv).
+///
+/// This is the front-end half of the "mixed kernel" flow and the preferred
+/// alternative to hand-emitting [`local_alloc`]/[`local_store`]/[`local_load`]:
+/// emit ordinary register-layout Triton ops, mark the value you want buffered
+/// in shared memory with this helper, then drive the module through the normal
+/// [`crate::triton::TritonCompiler::compile`] (`Language::TRITON`) pipeline.
+///
+/// `convert-triton-to-tritongpu` assigns every tensor a distributed
+/// (`#ttg.blocked`) encoding and preserves this marker; the staging pass then
+/// rewrites the marked result into `ttg.local_alloc` / `ttg.local_store` /
+/// `ttg.local_load` reusing that encoding. Because the staging happens
+/// post-encoding, this avoids both the null-encoding crash of the Gluon path
+/// and the unresolved encoded<->unencoded materialization of hand-emitting the
+/// `ttg` ops pre-conversion.
+///
+/// `op` must produce exactly one ranked-tensor result (the pass warns and skips
+/// otherwise).
+pub fn mark_stage_shared<'ctx>(context: &'ctx Context, op: &mut Operation<'ctx>) {
+    op.set_attribute(STAGE_SHARED_ATTR, Attribute::unit(context));
+}
+
 /// Build a `tt.load` operation.
 ///
 /// Loads from a tensor of pointers (or a tensor pointer).  An optional `mask`

@@ -463,6 +463,15 @@ LogicalResult CudaBackend::makeTTGIR(MLIRContext &context, ModuleOp module) {
     pm.enableIRPrinting();
   }
 
+  // teenyc-6mv: stage any values a front-end/codegen marked with
+  // `ttg.stage_shared` through shared memory. This runs immediately after
+  // `convert-triton-to-tritongpu` (which just assigned a distributed encoding
+  // to every tensor and preserved the marker) so the inserted
+  // local_alloc/local_store/local_load reuse that encoding, avoiding both the
+  // null-encoding crash (Gluon path) and unresolved encoded<->unencoded
+  // materialization (direct path). A no-op when nothing is marked.
+  addPass(pm, MlirPass::ttgpuir_stage_shared_memory);
+
   // optimize TTGIR
   addPass(pm, MlirPass::ttgpuir_coalesce);
   addPass(pm, MlirPass::ttgpuir_f32_dot_tc, emuTF32);

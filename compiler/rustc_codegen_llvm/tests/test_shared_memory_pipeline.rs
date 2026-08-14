@@ -43,7 +43,7 @@
 //! per-`Type` predicate on the function's argument/result types. Both predicates
 //!
 //! ```text
-//! // InferCoalescedEncodings.cpp
+//! // InferCoalescedEncodings.cpp (pre-fix)
 //! bool isCoalescedEncodingTensorType(Type ty) {
 //!   auto tensorTy = dyn_cast<RankedTensorType>(ty);
 //!   return tensorTy && isa<gluon::CoalescedEncodingAttr>(tensorTy.getEncoding());
@@ -51,23 +51,30 @@
 //! // ResolveAutoEncodings.cpp: same shape with AutoEncodingAttr
 //! ```
 //!
-//! call `isa<...>(tensorTy.getEncoding())`. For a plain `tensor<128xi32>` the
+//! called `isa<...>(tensorTy.getEncoding())`. For a plain `tensor<128xi32>` the
 //! encoding is a **null `Attribute`**, and `isa<>` on a null attribute
 //! dereferences null -> SIGSEGV. Gluon's own Python frontend never emits
 //! null-encoding tensors (it attaches a distributed layout to everything and
 //! sets `ttg.num-warps` / `ttg.num-ctas` / `ttg.threads-per-warp` / `ttg.target`
-//! on the module up front), so this contract was implicit and undocumented. The
-//! golden fixture reconstructs it by hand.
+//! on the module up front), so this contract was implicit and undocumented.
 //!
-//! # To debug the crash manually
+//! # The fix (teenyc-6mv)
 //!
-//! ```text
-//! TRITON_OPT=target/build/triton-build/build/bin/triton-opt
-//! gdb -q -ex run --args "$TRITON_OPT" \
-//!     compiler/rustc_codegen_llvm/tests/data/shared_memory/naive_shared_memory.mlir \
-//!     --gluon-infer-coalesced-encodings -o /dev/null
-//! # bt: isCoalescedEncodingTensorType <- inferLayout <- runOnOperation
-//! ```
+//! Two complementary changes in the vendored Triton (`src/triton`):
+//!
+//!   * **Fix #1 — null guards.** Both predicates above now also check
+//!     `tensorTy.getEncoding()` before the `isa<>`, so an unencoded tensor is
+//!     treated as "not a coalesced/auto encoding" instead of crashing. The
+//!     naive fixture that used to SIGSEGV now passes cleanly (see
+//!     `naive_gluon_shared_memory_no_longer_segfaults`).
+//!   * **Fix #2 — TTGIR-level staging.** A new `tritongpu-stage-shared-memory`
+//!     pass lets a "mixed" kernel (plain Triton ops + a shared-memory staging
+//!     step) route through the ordinary `convert-triton-to-tritongpu` pipeline:
+//!     the value to stage is marked with a discardable `ttg.stage_shared`
+//!     attribute, the conversion assigns it a real `#ttg.blocked` encoding, and
+//!     the new pass then rewrites it into `local_alloc` / `local_store` /
+//!     `local_load` reusing that encoding (see
+//!     `mixed_marked_shared_memory_stages_through_shared_memory`).
 //!
 //! If `triton-opt` cannot be located (a checkout without the vendored Triton
 //! build), the tests print a skip notice and pass, rather than failing.
@@ -127,14 +134,18 @@ fn run_triton_opt(opt: &Path, input: &Path, passes: &[&str]) -> Output {
         .expect("failed to spawn triton-opt")
 }
 
-/// The naive, un-encoded hand-built module must reproduce the crash: driving a
-/// single Gluon encoding-inference pass over it terminates the process with a
-/// signal (SIGSEGV in practice). This pins the bug so that a future fix flips
-/// this assertion loudly instead of silently changing behavior.
+/// Fix #1 regression: the naive, un-encoded hand-built module used to SIGSEGV
+/// when a single Gluon encoding-inference pass ran over it (null-encoding deref
+/// in `isCoalescedEncodingTensorType`). With the null guards in place it must
+/// now run to completion WITHOUT any crash signal — the pass simply treats an
+/// unencoded tensor as "not a coalesced encoding" and leaves it alone.
+///
+/// If this ever regresses to a crash again, this assertion fails loudly at the
+/// `signal.is_none()` check.
 #[test]
-fn naive_gluon_shared_memory_segfaults() {
+fn naive_gluon_shared_memory_no_longer_segfaults() {
     let Some(opt) = find_triton_opt() else {
-        eprintln!("skipping naive_gluon_shared_memory_segfaults: triton-opt not found");
+        eprintln!("skipping naive_gluon_shared_memory_no_longer_segfaults: triton-opt not found");
         return;
     };
 
@@ -149,31 +160,27 @@ fn naive_gluon_shared_memory_segfaults() {
         use std::os::unix::process::ExitStatusExt;
         let signal = output.status.signal();
         assert!(
-            signal.is_some(),
-            "expected the naive Gluon shared-memory module to CRASH \
-             (null-encoding deref in isCoalescedEncodingTensorType), but \
-             triton-opt exited normally with {:?}.\nIf the underlying \
-             null-encoding guard was fixed upstream, update this test to assert \
-             success instead.\nstderr:\n{}",
-            output.status.code(),
+            signal.is_none(),
+            "the null-encoding guard (teenyc-6mv fix #1) must keep the naive \
+             Gluon shared-memory module from crashing, but triton-opt was killed \
+             by signal {:?} (11 = SIGSEGV, the original bug).\nstderr:\n{}",
+            signal,
             String::from_utf8_lossy(&output.stderr),
         );
-        // SIGSEGV (11) is the observed signature; accept any crash signal but
-        // surface the actual one to make regressions in the failure *mode*
-        // visible.
-        assert_eq!(
-            signal,
-            Some(11),
-            "expected SIGSEGV (11) from the null-encoding deref, got signal {:?}",
-            signal,
+        assert!(
+            output.status.success(),
+            "expected the guarded pass to exit cleanly on the naive fixture, got \
+             {:?}.\nstderr:\n{}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr),
         );
     }
 
     #[cfg(not(unix))]
     {
         assert!(
-            !output.status.success(),
-            "expected the naive Gluon shared-memory module to fail hard"
+            output.status.success(),
+            "expected the guarded pass to exit cleanly on the naive fixture"
         );
     }
 }
@@ -212,4 +219,86 @@ fn golden_gluon_shared_memory_survives_pipeline() {
             "expected `{needle}` in the lowered Gluon shared-memory IR, got:\n{ir}"
         );
     }
+}
+
+/// Fix #2 prototype: a "mixed" kernel (plain register-layout Triton ops plus a
+/// value marked `ttg.stage_shared`) must route through the ordinary
+/// `convert-triton-to-tritongpu` pipeline and then get its marked value staged
+/// through shared memory by the new `tritongpu-stage-shared-memory` pass —
+/// reusing the `#ttg.blocked` encoding the conversion assigned, so no null
+/// encoding and no unresolved encoded<->unencoded materialization.
+///
+/// This asserts the intermediate TTGIR (the three shared-memory ops appear and
+/// the marker is consumed) AND that the staged module lowers all the way to LLVM
+/// with a real shared-memory write + barrier and no leftover casts.
+#[test]
+fn mixed_marked_shared_memory_stages_through_shared_memory() {
+    let Some(opt) = find_triton_opt() else {
+        eprintln!(
+            "skipping mixed_marked_shared_memory_stages_through_shared_memory: triton-opt not found"
+        );
+        return;
+    };
+
+    let convert = "--convert-triton-to-tritongpu=target=cuda:90 num-warps=4 \
+                   threads-per-warp=32 num-ctas=1";
+
+    // Stage 1: convert (encode) + stage-shared-memory -> TTGIR with the ops.
+    let ttgir_out = Command::new(&opt)
+        .arg(fixture("mixed_marked_shared_memory.mlir"))
+        .args([convert, "--tritongpu-stage-shared-memory"])
+        .output()
+        .expect("failed to spawn triton-opt");
+    assert!(
+        ttgir_out.status.success(),
+        "convert + stage-shared-memory must succeed on the mixed kernel, got \
+         {:?}.\nstderr:\n{}",
+        ttgir_out.status,
+        String::from_utf8_lossy(&ttgir_out.stderr),
+    );
+    let ttgir = String::from_utf8_lossy(&ttgir_out.stdout);
+    for needle in ["ttg.local_alloc", "ttg.local_store", "ttg.local_load"] {
+        assert!(
+            ttgir.contains(needle),
+            "expected `{needle}` after staging the marked mixed kernel, got:\n{ttgir}"
+        );
+    }
+    assert!(
+        !ttgir.contains("stage_shared"),
+        "the `ttg.stage_shared` marker must be consumed by the pass, got:\n{ttgir}"
+    );
+
+    // Stage 2: lower the staged TTGIR all the way to LLVM and confirm a real
+    // shared-memory write + sync survive, with no unresolved casts left.
+    let llvm_out = Command::new(&opt)
+        .arg(fixture("mixed_marked_shared_memory.mlir"))
+        .args([
+            convert,
+            "--tritongpu-stage-shared-memory",
+            "--allocate-shared-memory-nv",
+            "--convert-triton-gpu-to-llvm",
+            "--reconcile-unrealized-casts",
+        ])
+        .output()
+        .expect("failed to spawn triton-opt");
+    assert!(
+        llvm_out.status.success(),
+        "the staged mixed kernel must lower to LLVM cleanly, got {:?}.\nstderr:\n{}",
+        llvm_out.status,
+        String::from_utf8_lossy(&llvm_out.stderr),
+    );
+    let llvm = String::from_utf8_lossy(&llvm_out.stdout);
+    assert!(
+        llvm.contains("st.shared") || llvm.contains("ptr<3>"),
+        "expected a shared-memory write (st.shared / addrspace(3)) in the lowered \
+         mixed kernel, got:\n{llvm}"
+    );
+    assert!(
+        llvm.contains("barrier"),
+        "expected a barrier synchronizing the shared-memory round-trip, got:\n{llvm}"
+    );
+    assert!(
+        !llvm.contains("unrealized_conversion_cast"),
+        "expected no leftover unrealized_conversion_cast after reconciliation, got:\n{llvm}"
+    );
 }
