@@ -16,6 +16,9 @@
 
 #include "mlir/IR/Builders.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Target/LLVMIR/Dialect/Builtin/BuiltinToLLVMIRTranslation.h"
+#include "mlir/Target/LLVMIR/Dialect/GPU/GPUToLLVMIRTranslation.h"
+#include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Dialect/NVVM/NVVMToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
 #include "llvm/ADT/SmallString.h"
@@ -166,6 +169,15 @@ void CudaBackend::loadDialects(MLIRContext &context) {
                   mlir::triton::nvgpu::NVGPUDialect,
                   mlir::triton::nvws::NVWSDialect>();
 
+  // Register the LLVM-IR translation interfaces for every dialect that survives
+  // into the post-`convert-triton-gpu-to-llvm` module. `translateModuleToLLVMIR`
+  // (see makeLLVMIR) looks these up on the *module's* context, so without them
+  // it fails with "missing LLVMTranslationDialectInterface registration ... for
+  // op: builtin.module". NVVM alone is not enough — builtin/llvm/gpu are also
+  // present in the lowered kernel.
+  registerBuiltinDialectTranslation(registry);
+  registerLLVMDialectTranslation(registry);
+  registerGPUDialectTranslation(registry);
   registerNVVMDialectTranslation(registry);
 
   context.appendDialectRegistry(registry);

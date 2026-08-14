@@ -48,6 +48,14 @@ extern "C" bool mlirTritonCompilerCompile(::MlirTritonCompiler compiler,
   return succeeded(handle->compile(moduleOp));
 }
 
+extern "C" bool mlirTritonCompilerCompileGluon(::MlirTritonCompiler compiler,
+                                               MlirModule module) {
+  auto *handle = unwrap(compiler);
+  const auto *op = reinterpret_cast<const Operation *>(module.ptr);
+  ModuleOp moduleOp = llvm::cast<ModuleOp>(const_cast<Operation *>(op));
+  return succeeded(handle->compileGluon(moduleOp));
+}
+
 extern "C" const char *
 mlirTritonCompilerGetLLIR(::MlirTritonCompiler compiler) {
   auto *handle = unwrap(compiler);

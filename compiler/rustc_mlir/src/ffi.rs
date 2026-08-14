@@ -244,6 +244,17 @@ unsafe extern "C" {
 
     pub fn mlirCreateTritonPointerType(pointee: MlirType, address_space: i32) -> MlirType;
 
+    // teenyc-6mv: CUDA shared-memory primitives (TritonGPU dialect).
+
+    pub fn mlirLoadTritonGPUDialect(context: MlirContext);
+
+    pub fn mlirCreateTritonGPUSharedMemDescType(
+        context: MlirContext,
+        element_type: MlirType,
+        num_elements: i64,
+        mutable_memory: bool,
+    ) -> MlirType;
+
     // Triton compiler opaque handle API
     pub fn mlirTritonCompilerCreate(
         context: MlirContext,
@@ -252,6 +263,9 @@ unsafe extern "C" {
     ) -> MlirTritonCompiler;
 
     pub fn mlirTritonCompilerCompile(compiler: MlirTritonCompiler, module: MlirModule) -> bool;
+
+    pub fn mlirTritonCompilerCompileGluon(compiler: MlirTritonCompiler, module: MlirModule)
+    -> bool;
 
     pub fn mlirTritonCompilerGetLLIR(compiler: MlirTritonCompiler) -> *const c_char;
     pub fn mlirTritonCompilerGetTTIR(compiler: MlirTritonCompiler) -> *const c_char;

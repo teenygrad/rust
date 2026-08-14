@@ -24,7 +24,10 @@ use melior::ir::r#type::{FunctionType, IntegerType};
 use melior::ir::{Identifier, Location, Operation, Region, Type, TypeLike, Value};
 
 use crate::errors::Error;
-use crate::ffi::{mlirCreateTritonPointerType, mlirLoadTritonDialect};
+use crate::ffi::{
+    mlirCreateTritonGPUSharedMemDescType, mlirCreateTritonPointerType, mlirLoadTritonDialect,
+    mlirLoadTritonGPUDialect,
+};
 use crate::triton::tt::{CallOperation, FuncOperation, IntToPtrOperation, PtrToIntOperation, ReturnOperation};
 
 pub mod compiler;
@@ -55,6 +58,33 @@ pub fn attr_i32<'ctx>(context: &'ctx Context, value: i32) -> IntegerAttribute<'c
 
 pub fn pointer_type<'a>(pointee: Type<'a>) -> Type<'a> {
     unsafe { Type::from_raw(mlirCreateTritonPointerType(pointee.to_raw(), 1)) }
+}
+
+/// teenyc-6mv: loads the `TritonGPU` (`ttg`) dialect, needed to build
+/// CUDA shared-memory ops (`ttg.local_alloc`/`local_store`/`local_load`).
+pub fn load_triton_gpu_dialect(context: &Context) {
+    unsafe {
+        mlirLoadTritonGPUDialect(context.to_raw());
+    }
+}
+
+/// Builds a `!ttg.memdesc<...>` type for a 1-D, unswizzled, single-CTA
+/// shared-memory buffer of `num_elements` scalars of `element_type`. See
+/// [`crate::triton::tensor::local_alloc`].
+pub fn shared_mem_desc_type<'a>(
+    context: &'a Context,
+    element_type: Type<'a>,
+    num_elements: i64,
+    mutable_memory: bool,
+) -> Type<'a> {
+    unsafe {
+        Type::from_raw(mlirCreateTritonGPUSharedMemDescType(
+            context.to_raw(),
+            element_type.to_raw(),
+            num_elements,
+            mutable_memory,
+        ))
+    }
 }
 
 // Extracted function for creating a tt.func operation with empty body and tt.divisibility attrs.

@@ -245,6 +245,100 @@ pub fn add_ptr<'ctx>(
         .build())
 }
 
+// teenyc-6mv: CUDA shared-memory primitives. `ttg.local_alloc`/
+// `local_store`/`local_load` live in the `TritonGPU` dialect, which isn't
+// part of this file's `tt` ODS macro block (`crate::triton::tt`), so they're
+// built via the raw `OperationBuilder::new(...)` idiom already used
+// elsewhere in this file for ops with optional operands/attributes rather
+// than a generated `Operation` builder struct.
+//
+// IMPORTANT construction contract (see teenyc-6mv): the Gluon pipeline's
+// encoding-inference passes crash (SIGSEGV) on tensors that carry a *null*
+// encoding attribute, because they call `isa<...EncodingAttr>(getEncoding())`
+// without a null guard. So the tensor operands/results wired into these ops
+// must carry a distributed (e.g. `#ttg.blocked`) encoding, and the enclosing
+// module must set `ttg.num-warps`/`ttg.num-ctas`/`ttg.threads-per-warp`/
+// `ttg.target`, exactly as Gluon's own frontend does.
+
+/// Build a `ttg.local_alloc` operation (`mlir::triton::gpu::LocalAllocOp`).
+///
+/// Allocates a buffer in shared memory and returns a `!ttg.memdesc<...>`
+/// descriptor. `result_ty` must be built with
+/// [`crate::triton::shared_mem_desc_type`], with `mutable_memory = true`
+/// when `src` is `None` (required by the op's verifier: an uninitialized
+/// alloc must have a mutable memdesc type).
+///
+/// # Assembly format
+///
+/// ```text
+/// ttg.local_alloc : () -> !ttg.memdesc<128xf32, ...>
+/// ```
+pub fn local_alloc<'ctx>(
+    context: &'ctx Context,
+    location: Location<'ctx>,
+    src: Option<Value<'ctx, '_>>,
+    alignment: Option<i32>,
+    result_ty: Type<'ctx>,
+) -> Result<Operation<'ctx>, Error> {
+    let mut builder = OperationBuilder::new("ttg.local_alloc", location);
+    if let Some(src) = src {
+        builder = builder.add_operands(&[src]);
+    }
+    if let Some(alignment) = alignment {
+        builder = builder.add_attributes(&[(
+            Identifier::new(context, "alignment"),
+            Attribute::from(attr_i32(context, alignment)),
+        )]);
+    }
+    builder.add_results(&[result_ty]).build().map_err(|e| Error::InvalidType {
+        msg: format!("failed to build ttg.local_alloc: {e}"),
+    })
+}
+
+/// Build a `ttg.local_store` operation (`mlir::triton::gpu::LocalStoreOp`).
+///
+/// Stores tensor `src` into shared-memory descriptor `dst`. No result (the
+/// op's only effect is the write).
+///
+/// # Assembly format
+///
+/// ```text
+/// ttg.local_store %src, %dst : tensor<128xf32> -> !ttg.memdesc<128xf32, ...>
+/// ```
+pub fn local_store<'ctx>(
+    location: Location<'ctx>,
+    src: Value<'ctx, '_>,
+    dst: Value<'ctx, '_>,
+) -> Result<Operation<'ctx>, Error> {
+    OperationBuilder::new("ttg.local_store", location)
+        .add_operands(&[src, dst])
+        .build()
+        .map_err(|e| Error::InvalidType { msg: format!("failed to build ttg.local_store: {e}") })
+}
+
+/// Build a `ttg.local_load` operation (`mlir::triton::gpu::LocalLoadOp`).
+///
+/// Loads shared-memory descriptor `src` into a distributed tensor. The
+/// optional `token` operand (async-copy synchronization) is always omitted
+/// here — this primitive only targets synchronous shared-memory staging.
+///
+/// # Assembly format
+///
+/// ```text
+/// ttg.local_load %src : !ttg.memdesc<128xf32, ...> -> tensor<128xf32>
+/// ```
+pub fn local_load<'ctx>(
+    location: Location<'ctx>,
+    src: Value<'ctx, '_>,
+    result_ty: Type<'ctx>,
+) -> Result<Operation<'ctx>, Error> {
+    OperationBuilder::new("ttg.local_load", location)
+        .add_operands(&[src])
+        .add_results(&[result_ty])
+        .build()
+        .map_err(|e| Error::InvalidType { msg: format!("failed to build ttg.local_load: {e}") })
+}
+
 /// Build a `tt.load` operation.
 ///
 /// Loads from a tensor of pointers (or a tensor pointer).  An optional `mask`
@@ -2074,7 +2168,82 @@ mod tests {
     use crate::shared::builtin::tensor_type;
     use crate::test::create_test_context;
     use crate::triton::tt::ReturnOperation;
-    use crate::triton::{create_func, int_to_ptr, load_triton_dialect, pointer_type};
+    use crate::triton::{
+        create_func, int_to_ptr, load_triton_dialect, load_triton_gpu_dialect, pointer_type,
+        shared_mem_desc_type,
+    };
+
+    // teenyc-6mv: CUDA shared-memory primitives.
+    //
+    // Verifies the restored `ttg.local_alloc`/`local_store`/`local_load`
+    // builders and the `!ttg.memdesc<...>` C-API type build and pass MLIR's
+    // per-op verifier in isolation, using the *correct* construction contract:
+    // a distributed (`#ttg.blocked`) encoding on the staged tensor (a plain,
+    // un-encoded tensor would later SIGSEGV the Gluon encoding passes -- see
+    // `tests/test_gluon_shared_memory.rs`).
+    #[test]
+    fn test_local_alloc_store_load() {
+        let context = create_test_context();
+        load_triton_dialect(&context);
+        load_triton_gpu_dialect(&context);
+
+        let location = Location::unknown(&context);
+        let module = Module::new(location);
+
+        let elem_ty: Type = IntegerType::new(&context, 32).into();
+        // Distributed layout matching a 128-element i32 tile for
+        // num-warps=4, threads-per-warp=32 (1 * 32 * 4 = 128).
+        let src_ty: Type = Type::parse(
+            &context,
+            "tensor<128xi32, #ttg.blocked<{sizePerThread = [1], threadsPerWarp = [32], \
+             warpsPerCTA = [4], order = [0]}>>",
+        )
+        .expect("blocked-encoded tensor type should parse");
+        let mem_desc_ty = shared_mem_desc_type(&context, elem_ty, 128, true);
+
+        // A function argument stands in for the tensor value being staged
+        // through shared memory (mirrors `test_splat_pretty_format`).
+        let func_op = create_func(
+            &context,
+            location,
+            "test_local_alloc_store_load",
+            "public",
+            &[src_ty],
+            &[src_ty],
+            0,
+        )
+        .unwrap();
+
+        let block = Block::new(&[(src_ty, location)]);
+        let arg: Value = block.argument(0).unwrap().into();
+
+        let alloc_op: Operation = local_alloc(&context, location, None, None, mem_desc_ty)
+            .expect("ttg.local_alloc should build once the ttg dialect is loaded")
+            .into();
+        let mem_desc: Value = alloc_op.result(0).unwrap().into();
+        block.append_operation(alloc_op);
+
+        let store_op: Operation =
+            local_store(location, arg, mem_desc).expect("ttg.local_store should build").into();
+        block.append_operation(store_op);
+
+        let load_op: Operation =
+            local_load(location, mem_desc, src_ty).expect("ttg.local_load should build").into();
+        let loaded: Value = load_op.result(0).unwrap().into();
+        block.append_operation(load_op);
+
+        let ret_op = ReturnOperation::builder(&context, location).srcs(&[loaded]).build();
+        block.append_operation(ret_op.into());
+        func_op.body().unwrap().append_block(block);
+        module.body().append_operation(func_op.into());
+
+        // to_string() runs MLIR's printer/verifier path (as the other tests in
+        // this module rely on), so this confirms all three ops round-trip.
+        let output = module.as_operation().to_string();
+        for needle in ["ttg.local_alloc", "ttg.local_store", "ttg.local_load", "!ttg.memdesc"] {
+            assert!(output.contains(needle), "expected {needle} in output, got:\n{output}");
+        }
+    }
 
     #[test]
     fn test_make_range_generic() {

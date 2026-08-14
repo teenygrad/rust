@@ -63,6 +63,20 @@ impl TritonCompiler {
         unsafe { ffi::mlirTritonCompilerCompile(self.raw, module) }
     }
 
+    /// teenyc-6mv: runs the hand-built Gluon (`Language::GLUON`) pipeline on
+    /// `module`, bypassing `convert-triton-to-tritongpu`. Use this to lower a
+    /// module that already contains hand-built `ttg` shared-memory ops
+    /// (`ttg.local_alloc`/`local_store`/`local_load`) with proper distributed
+    /// encodings and module attributes.
+    ///
+    /// The module is transformed in-place. Returns `true` on success. Note the
+    /// Gluon encoding passes SIGSEGV on tensors with a null encoding attribute,
+    /// so every tensor threaded through the shared-memory ops must carry a
+    /// distributed layout (see [`crate::triton::tensor::local_alloc`]).
+    pub fn compile_gluon(&mut self, module: MlirModule) -> bool {
+        unsafe { ffi::mlirTritonCompilerCompileGluon(self.raw, module) }
+    }
+
     /// Returns the output string from the last successful [TritonCompiler::compile].
     /// This is the assembly (e.g. PTX) output. Prefer [TritonCompiler::get_asm] for clarity.
     ///
