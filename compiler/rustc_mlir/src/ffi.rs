@@ -251,7 +251,9 @@ unsafe extern "C" {
     pub fn mlirCreateTritonGPUSharedMemDescType(
         context: MlirContext,
         element_type: MlirType,
-        num_elements: i64,
+        shape: *const i64,
+        rank: i64,
+        order: *const u32,
         mutable_memory: bool,
     ) -> MlirType;
 

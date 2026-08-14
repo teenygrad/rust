@@ -367,6 +367,153 @@ pub fn mark_stage_shared<'ctx>(context: &'ctx Context, op: &mut Operation<'ctx>)
     op.set_attribute(STAGE_SHARED_ATTR, Attribute::unit(context));
 }
 
+/// Address-space bitmask for [`barrier`]. Matches Triton's `ttg.addr_space`
+/// (`TTG_AddrSpace`): `local = 0b0001` is the one a shared-memory write/read
+/// handshake needs.
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AddrSpace {
+    None = 0b0000,
+    Local = 0b0001,
+    GlobalRead = 0b0010,
+    GlobalWrite = 0b0100,
+    TensorRead = 0b1000,
+    TensorWrite = 0b10000,
+    All = 0b11111,
+}
+
+/// Build a `ttg.memdesc_index` operation (`mlir::triton::gpu::MemDescIndexOp`).
+///
+/// Returns a descriptor pointing at the `index`-th slice of `src` along
+/// dimension 0, dropping rank by 1. The index is a runtime `i32`, so this is
+/// the op that lets a row-loop write (or read) a different row of a
+/// kernel-lifetime 2-D shared buffer on each iteration.
+///
+/// Construction contract (from Triton's verifier + a proven 128x128
+/// lowering):
+/// * `src` must be a *full* alloc (`allocShape == shape`), not a subview
+///   and not itself the result of `memdesc_index`.
+/// * `result_ty` rank is `src` rank - 1, shape equals `srcShape[1:]`.
+/// * The result encoding's `order` length must equal the result rank. A 2-D
+///   parent with `order = [1, 0]` therefore CANNOT reuse that encoding on a
+///   1-D slice -- use [`crate::triton::shared_mem_desc_type`] (1-D
+///   `order = [0]`) for the result.
+///
+/// # Assembly format
+///
+/// ```text
+/// %row = ttg.memdesc_index %sm[%i] : !ttg.memdesc<128x128xi32, ...> -> !ttg.memdesc<128xi32, ...>
+/// ```
+pub fn memdesc_index<'ctx>(
+    location: Location<'ctx>,
+    src: Value<'ctx, '_>,
+    index: Value<'ctx, '_>,
+    result_ty: Type<'ctx>,
+) -> Result<Operation<'ctx>, Error> {
+    OperationBuilder::new("ttg.memdesc_index", location)
+        .add_operands(&[src, index])
+        .add_results(&[result_ty])
+        .build()
+        .map_err(|e| Error::InvalidType { msg: format!("failed to build ttg.memdesc_index: {e}") })
+}
+
+/// Build a `ttg.memdesc_trans` operation (`mlir::triton::gpu::MemDescTransOp`).
+///
+/// Returns a transposed *view* of `src` (no copy). Combined with
+/// [`memdesc_index`], this is how a row-loop transpose reads a column after
+/// writing rows: `index(sm, i)` stores row `i`; `index(trans(sm), j)` loads
+/// column `j`. `order` is the permutation applied to `src`'s dimensions
+/// (typically `&[1, 0]` for a 2-D swap).
+///
+/// `result_ty` must have the permuted shape *and* a SwizzledShared encoding
+/// whose `order` is the swapped parent order. For an unswizzled 2-D parent
+/// (`order = [1, 0]`), the trans result is
+/// [`crate::triton::shared_mem_desc_type_nd_with_order`] with `order = [0, 1]`.
+/// A full alloc stays a full alloc after trans (`allocShape == shape`), so
+/// the result is a legal [`memdesc_index`] source.
+///
+/// # Assembly format
+///
+/// ```text
+/// %smT = ttg.memdesc_trans %sm {order = array<i32: 1, 0>} : !ttg.memdesc<128x128xi32, ...> -> !ttg.memdesc<128x128xi32, ...>
+/// ```
+pub fn memdesc_trans<'ctx>(
+    context: &'ctx Context,
+    location: Location<'ctx>,
+    src: Value<'ctx, '_>,
+    order: &[i32],
+    result_ty: Type<'ctx>,
+) -> Result<Operation<'ctx>, Error> {
+    let order_attr = DenseI32ArrayAttribute::new(context, order);
+    OperationBuilder::new("ttg.memdesc_trans", location)
+        .add_operands(&[src])
+        .add_attributes(&[(Identifier::new(context, "order"), Attribute::from(order_attr))])
+        .add_results(&[result_ty])
+        .build()
+        .map_err(|e| Error::InvalidType { msg: format!("failed to build ttg.memdesc_trans: {e}") })
+}
+
+/// Build a `ttg.memdesc_subslice` operation
+/// (`mlir::triton::gpu::MemDescSubsliceOp`).
+///
+/// Same-rank sub-rectangle of `src` at *static* `offsets`. Offsets on a split
+/// dimension must be a multiple of the result tile size along that dim. The
+/// result type's `allocShape` must be the parent's shape when the result is
+/// a proper sub-tile (printed as a trailing `MxN` on the memdesc); for an
+/// identity subslice (`offsets` all zero, same shape) [`shared_mem_desc_type_nd`]
+/// is sufficient.
+///
+/// Prefer [`memdesc_index`] when the offset is a runtime `i32` (loop induction
+/// variable) -- subslice cannot express that.
+///
+/// # Assembly format
+///
+/// ```text
+/// %tile = ttg.memdesc_subslice %sm[0, 32] : !ttg.memdesc<256x128xf16, ...> -> !ttg.memdesc<128x32xf16, ..., 256x128>
+/// ```
+pub fn memdesc_subslice<'ctx>(
+    context: &'ctx Context,
+    location: Location<'ctx>,
+    src: Value<'ctx, '_>,
+    offsets: &[i32],
+    result_ty: Type<'ctx>,
+) -> Result<Operation<'ctx>, Error> {
+    let offsets_attr = DenseI32ArrayAttribute::new(context, offsets);
+    OperationBuilder::new("ttg.memdesc_subslice", location)
+        .add_operands(&[src])
+        .add_attributes(&[(Identifier::new(context, "offsets"), Attribute::from(offsets_attr))])
+        .add_results(&[result_ty])
+        .build()
+        .map_err(|e| Error::InvalidType { msg: format!("failed to build ttg.memdesc_subslice: {e}") })
+}
+
+/// Build a `ttg.barrier` operation (`mlir::triton::gpu::BarrierOp`).
+///
+/// CTA-wide synchronization. [`AddrSpace::Local`] is the handshake between a
+/// shared-memory store in one loop iteration and a load from a different
+/// index in a later one -- without it the read can race with the write.
+///
+/// # Assembly format
+///
+/// ```text
+/// ttg.barrier local
+/// ```
+pub fn barrier<'ctx>(
+    context: &'ctx Context,
+    location: Location<'ctx>,
+    addr_space: AddrSpace,
+) -> Result<Operation<'ctx>, Error> {
+    // Generic form is `"ttg.barrier"() <{addrSpace = 1 : i32}>`. The
+    // `addrSpace` bit-enum is an inherent property backed by i32.
+    OperationBuilder::new("ttg.barrier", location)
+        .add_attributes(&[(
+            Identifier::new(context, "addrSpace"),
+            Attribute::from(attr_i32(context, addr_space as i32)),
+        )])
+        .build()
+        .map_err(|e| Error::InvalidType { msg: format!("failed to build ttg.barrier: {e}") })
+}
+
 /// Build a `tt.load` operation.
 ///
 /// Loads from a tensor of pointers (or a tensor pointer).  An optional `mask`
@@ -2198,7 +2345,7 @@ mod tests {
     use crate::triton::tt::ReturnOperation;
     use crate::triton::{
         create_func, int_to_ptr, load_triton_dialect, load_triton_gpu_dialect, pointer_type,
-        shared_mem_desc_type,
+        shared_mem_desc_type, shared_mem_desc_type_nd, shared_mem_desc_type_nd_with_order,
     };
 
     // teenyc-6mv: CUDA shared-memory primitives.
@@ -2269,6 +2416,116 @@ mod tests {
         // this module rely on), so this confirms all three ops round-trip.
         let output = module.as_operation().to_string();
         for needle in ["ttg.local_alloc", "ttg.local_store", "ttg.local_load", "!ttg.memdesc"] {
+            assert!(output.contains(needle), "expected {needle} in output, got:\n{output}");
+        }
+    }
+
+    // teenyc-6mv / teenygrad-3w0.10: indexed 2-D shared buffer.
+    //
+    // The row-loop transpose cannot use mark_stage_shared (same-shape only)
+    // or T::trans (never a 2-D tensor). It needs a kernel-lifetime 2-D
+    // memdesc written at row `i` in one iteration and read at column `j`
+    // in a later one: local_alloc -> memdesc_index(i) -> local_store ->
+    // barrier -> memdesc_trans -> memdesc_index(j) -> local_load.
+    //
+    // This test only checks the builders + verifier (printed IR contains
+    // the ops). Lowering to LLVM/PTX is the companion fixture
+    // `indexed_shared_memory.mlir` / `test_shared_memory_pipeline.rs`.
+    #[test]
+    fn test_memdesc_index_trans_barrier() {
+        let context = create_test_context();
+        load_triton_dialect(&context);
+        load_triton_gpu_dialect(&context);
+
+        let location = Location::unknown(&context);
+        let module = Module::new(location);
+
+        let elem_ty: Type = IntegerType::new(&context, 32).into();
+        let row_ty: Type = Type::parse(
+            &context,
+            "tensor<128xi32, #ttg.blocked<{sizePerThread = [1], threadsPerWarp = [32], \
+             warpsPerCTA = [4], order = [0]}>>",
+        )
+        .expect("blocked-encoded 1-D tensor type should parse");
+
+        let buf_ty = shared_mem_desc_type_nd(&context, elem_ty, &[128, 128], true);
+        let row_mem_ty = shared_mem_desc_type(&context, elem_ty, 128, true);
+        let buf_t_ty =
+            shared_mem_desc_type_nd_with_order(&context, elem_ty, &[128, 128], Some(&[0, 1]), true);
+
+        let func_op = create_func(
+            &context,
+            location,
+            "test_memdesc_index_trans_barrier",
+            "public",
+            &[row_ty],
+            &[row_ty],
+            0,
+        )
+        .unwrap();
+
+        let block = Block::new(&[(row_ty, location)]);
+        let arg: Value = block.argument(0).unwrap().into();
+
+        let idx_op: Operation = create_int_constant(&context, location, Int::I32(0))
+            .expect("arith.constant i32 should build")
+            .into();
+        let idx: Value = idx_op.result(0).unwrap().into();
+        block.append_operation(idx_op);
+
+        let alloc_op: Operation = local_alloc(&context, location, None, None, buf_ty)
+            .expect("ttg.local_alloc of 2-D memdesc should build")
+            .into();
+        let sm: Value = alloc_op.result(0).unwrap().into();
+        block.append_operation(alloc_op);
+
+        let row_op: Operation = memdesc_index(location, sm, idx, row_mem_ty)
+            .expect("ttg.memdesc_index (row) should build")
+            .into();
+        let row: Value = row_op.result(0).unwrap().into();
+        block.append_operation(row_op);
+
+        let store_op: Operation =
+            local_store(location, arg, row).expect("ttg.local_store into indexed row should build").into();
+        block.append_operation(store_op);
+
+        let bar_op: Operation = barrier(&context, location, AddrSpace::Local)
+            .expect("ttg.barrier local should build")
+            .into();
+        block.append_operation(bar_op);
+
+        let trans_op: Operation = memdesc_trans(&context, location, sm, &[1, 0], buf_t_ty)
+            .expect("ttg.memdesc_trans should build")
+            .into();
+        let sm_t: Value = trans_op.result(0).unwrap().into();
+        block.append_operation(trans_op);
+
+        let col_op: Operation = memdesc_index(location, sm_t, idx, row_mem_ty)
+            .expect("ttg.memdesc_index (col of trans) should build")
+            .into();
+        let col: Value = col_op.result(0).unwrap().into();
+        block.append_operation(col_op);
+
+        let load_op: Operation =
+            local_load(location, col, row_ty).expect("ttg.local_load of indexed col should build").into();
+        let loaded: Value = load_op.result(0).unwrap().into();
+        block.append_operation(load_op);
+
+        let ret_op = ReturnOperation::builder(&context, location).srcs(&[loaded]).build();
+        block.append_operation(ret_op.into());
+        func_op.body().unwrap().append_block(block);
+        module.body().append_operation(func_op.into());
+
+        let output = module.as_operation().to_string();
+        for needle in [
+            "ttg.local_alloc",
+            "ttg.memdesc_index",
+            "ttg.local_store",
+            "ttg.barrier",
+            "ttg.memdesc_trans",
+            "ttg.local_load",
+            "128x128xi32",
+        ] {
             assert!(output.contains(needle), "expected {needle} in output, got:\n{output}");
         }
     }

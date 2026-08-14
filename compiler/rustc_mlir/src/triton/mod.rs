@@ -77,11 +77,52 @@ pub fn shared_mem_desc_type<'a>(
     num_elements: i64,
     mutable_memory: bool,
 ) -> Type<'a> {
+    shared_mem_desc_type_nd(context, element_type, &[num_elements], mutable_memory)
+}
+
+/// Builds a `!ttg.memdesc<...>` type for an N-D, unswizzled, single-CTA
+/// shared-memory buffer of `shape` scalars of `element_type` (row-major:
+/// `shape`'s last dimension varies fastest). teenygrad-3w0.10's transpose
+/// fusion uses this for a 2-D `[BLOCK_M, BLOCK_N]` staging tile — see
+/// [`crate::triton::tensor::{local_alloc, memdesc_index, memdesc_trans}`].
+pub fn shared_mem_desc_type_nd<'a>(
+    context: &'a Context,
+    element_type: Type<'a>,
+    shape: &[i64],
+    mutable_memory: bool,
+) -> Type<'a> {
+    shared_mem_desc_type_nd_with_order(context, element_type, shape, None, mutable_memory)
+}
+
+/// Like [`shared_mem_desc_type_nd`], but with an explicit SwizzledShared
+/// encoding `order` (length must equal `shape.len()`). Pass `[0, 1]` for the
+/// column-major / transposed view that is the result of `ttg.memdesc_trans`
+/// on a 2-D row-major tile. `None` selects row-major (`[rank-1, ..., 0]`).
+pub fn shared_mem_desc_type_nd_with_order<'a>(
+    context: &'a Context,
+    element_type: Type<'a>,
+    shape: &[i64],
+    order: Option<&[u32]>,
+    mutable_memory: bool,
+) -> Type<'a> {
+    let order_ptr = match order {
+        Some(o) => {
+            assert_eq!(
+                o.len(),
+                shape.len(),
+                "shared-memory encoding order length must equal rank"
+            );
+            o.as_ptr()
+        }
+        None => std::ptr::null(),
+    };
     unsafe {
         Type::from_raw(mlirCreateTritonGPUSharedMemDescType(
             context.to_raw(),
             element_type.to_raw(),
-            num_elements,
+            shape.as_ptr(),
+            shape.len() as i64,
+            order_ptr,
             mutable_memory,
         ))
     }

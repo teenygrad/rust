@@ -302,3 +302,75 @@ fn mixed_marked_shared_memory_stages_through_shared_memory() {
         "expected no leftover unrealized_conversion_cast after reconciliation, got:\n{llvm}"
     );
 }
+
+/// Indexed 2-D shared buffer (teenygrad-3w0.10 row-loop transpose).
+///
+/// A kernel-lifetime `[128, 128]` memdesc is written at row 0, CTA-barriered,
+/// transposed, and read at column 0. This is the primitive `mark_stage_shared`
+/// cannot express (same-shape only) and that a `T::trans` 2-D tensor never
+/// enters. The Gluon pipeline must allocate 64 KiB of shared memory and the
+/// LLVM lowering must emit a real `st.shared` + barrier + shared read.
+#[test]
+fn indexed_shared_memory_lowers_through_gluon_pipeline() {
+    let Some(opt) = find_triton_opt() else {
+        eprintln!(
+            "skipping indexed_shared_memory_lowers_through_gluon_pipeline: triton-opt not found"
+        );
+        return;
+    };
+
+    let alloc_out = Command::new(&opt)
+        .arg(fixture("indexed_shared_memory.mlir"))
+        .args(GLUON_PIPELINE)
+        .output()
+        .expect("failed to spawn triton-opt");
+    assert!(
+        alloc_out.status.success(),
+        "expected the indexed shared-memory kernel to survive the Gluon pipeline, \
+         got {:?}.\nstderr:\n{}",
+        alloc_out.status,
+        String::from_utf8_lossy(&alloc_out.stderr),
+    );
+    let ttgir = String::from_utf8_lossy(&alloc_out.stdout);
+    for needle in [
+        "ttg.memdesc_index",
+        "ttg.memdesc_trans",
+        "ttg.barrier",
+        "ttg.shared = 65536",
+    ] {
+        assert!(
+            ttgir.contains(needle),
+            "expected `{needle}` after allocating the indexed shared-memory kernel, got:\n{ttgir}"
+        );
+    }
+
+    let llvm_out = Command::new(&opt)
+        .arg(fixture("indexed_shared_memory.mlir"))
+        .args(GLUON_PIPELINE)
+        .args([
+            "--convert-scf-to-cf",
+            "--convert-triton-gpu-to-llvm",
+            "--reconcile-unrealized-casts",
+        ])
+        .output()
+        .expect("failed to spawn triton-opt");
+    assert!(
+        llvm_out.status.success(),
+        "the indexed shared-memory kernel must lower to LLVM cleanly, got {:?}.\nstderr:\n{}",
+        llvm_out.status,
+        String::from_utf8_lossy(&llvm_out.stderr),
+    );
+    let llvm = String::from_utf8_lossy(&llvm_out.stdout);
+    assert!(
+        llvm.contains("st.shared") || llvm.contains("ptr<3>"),
+        "expected a shared-memory write in the lowered indexed kernel, got:\n{llvm}"
+    );
+    assert!(
+        llvm.contains("barrier"),
+        "expected a barrier synchronizing the indexed write/read, got:\n{llvm}"
+    );
+    assert!(
+        !llvm.contains("unrealized_conversion_cast"),
+        "expected no leftover unrealized_conversion_cast after reconciliation, got:\n{llvm}"
+    );
+}

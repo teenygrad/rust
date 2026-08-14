@@ -37,13 +37,27 @@ MlirType mlirCreateTritonPointerType(MlirType pointee, int address_space);
 /// `!ttg.memdesc<...>` type by hand.
 void mlirLoadTritonGPUDialect(MlirContext context);
 
-/// Builds a `!ttg.memdesc<...>` type for a 1-D, unswizzled, single-CTA
-/// shared-memory buffer of `num_elements` scalars of `element_type`. Hides
+/// Builds a `!ttg.memdesc<...>` type for an N-D, unswizzled, single-CTA
+/// shared-memory buffer of `element_type` scalars, shaped by `shape`/`rank`
+/// (`rank == 1` reproduces the original 1-D behaviour). Hides
 /// TritonGPU-specific encoding/memory-space attributes entirely C++-side.
+///
+/// `order` is the SwizzledSharedEncodingAttr dimension order (length ==
+/// `rank`); a null pointer selects row-major (`[rank-1, ..., 0]`, last dim
+/// varies fastest). Pass `[0, 1, ...]` for the column-major / transposed
+/// view used as the result of `ttg.memdesc_trans`.
 MlirType mlirCreateTritonGPUSharedMemDescType(MlirContext context,
                                               MlirType element_type,
-                                              int64_t num_elements,
+                                              const int64_t *shape,
+                                              int64_t rank,
+                                              const unsigned *order,
                                               bool mutable_memory);
+
+// `ttg.memdesc_index` / `ttg.memdesc_subslice` / `ttg.memdesc_trans` /
+// `ttg.barrier` are built directly from Rust via the raw
+// `OperationBuilder::new(...)` idiom (see `rustc_mlir::triton::tensor`) --
+// like `local_alloc`/`local_store`/`local_load`, they need no C++-only
+// encoding-attribute construction beyond this type helper.
 
 #ifdef __cplusplus
 } // extern "C"
