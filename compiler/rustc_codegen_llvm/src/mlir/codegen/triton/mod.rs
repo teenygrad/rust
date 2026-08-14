@@ -46,7 +46,7 @@ use rustc_mlir::shared::attr::create_scalar_attr;
 use rustc_mlir::shared::builtin::{tensor_type, tensor_type_like};
 use rustc_mlir::shared::ub::create_ub_poison;
 use rustc_mlir::triton::tensor::splat;
-use rustc_mlir::triton::{create_func, int_to_ptr, load_triton_dialect};
+use rustc_mlir::triton::{create_func, int_to_ptr, load_triton_dialect, load_triton_gpu_dialect};
 use rustc_span::DUMMY_SP;
 
 use crate::mlir::MlirModule;
@@ -1267,6 +1267,10 @@ impl<'a> TritonCodegen<'a> {
         load_all_dialects(context);
         register_all_llvm_translations(context);
         load_triton_dialect(context);
+        // teenyc-6mv: needed for any kernel using the ttg.local_alloc/store/load
+        // shared-memory smoke-test intrinsic (ops/triton/tensor.rs's
+        // codegen_gluon_shared_mem_smoke_test).
+        load_triton_gpu_dialect(context);
 
         Self { module, type_mapper: TypeMapper::new() }
     }

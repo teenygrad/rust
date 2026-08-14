@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-use melior::ir::attribute::FloatAttribute;
+use melior::ir::attribute::{FloatAttribute, IntegerAttribute};
 use melior::ir::operation::{OperationBuilder, OperationLike};
 use melior::ir::r#type::IntegerType;
 use melior::ir::r#type::RankedTensorType;
 use melior::ir::{
-    Block, BlockLike, BlockRef, Location, Operation, Region, RegionLike, ShapedTypeLike, TypeLike,
-    Value, ValueLike,
+    Block, BlockLike, BlockRef, Location, Operation, Region, RegionLike, ShapedTypeLike, Type,
+    TypeLike, Value, ValueLike,
 };
 use rustc_ast::{FloatTy, IntTy};
 use rustc_middle::mir::{BasicBlock, Body, CallSource, Operand, Place, UnwindAction};
@@ -33,11 +33,12 @@ use rustc_mlir::triton::tensor::{
     CacheModifier, EvictionPolicy, InputPrecision, MemSemantic, MemSyncScope, PropagateNan, RmwOp,
     ScaleDotElemType, add_ptr, advance, assert_op, atomic_cas, atomic_rmw, broadcast, clampf,
     descriptor_load, descriptor_store, dot, dot_scaled, expand_dims, gather, histogram, join, load,
-    make_range, make_tensor_descriptor, make_tensor_ptr, mulhiui, precise_divf, precise_sqrt,
-    print as triton_print, reduce, reduce_return, reshape, scan, scan_return, splat, split, store,
-    trans, zeros_like,
+    local_alloc, local_load, local_store, make_range, make_tensor_descriptor, make_tensor_ptr,
+    mulhiui, precise_divf, precise_sqrt, print as triton_print, reduce, reduce_return, reshape,
+    scan, scan_return, splat, split, store, trans, zeros_like,
 };
-use rustc_mlir::triton::{int_to_ptr, pointer_type};
+use rustc_mlir::triton::tt::MakeRangeOperation;
+use rustc_mlir::triton::{int_to_ptr, pointer_type, shared_mem_desc_type};
 use rustc_span::Span;
 use rustc_span::Spanned;
 
@@ -71,6 +72,143 @@ macro_rules! stub_handler {
 }
 
 impl<'a> TritonCodegen<'a> {
+    /// teenyc-6mv smoke test: drives the exact op sequence
+    /// `test_gluon_shared_memory.rs` already proved works (const -> splat ->
+    /// `ttg.local_alloc` -> `local_store` -> `local_load` -> `make_range` ->
+    /// splat(out_ptr) -> `addptr` -> `store`), but emitted from the real
+    /// MIR-codegen intrinsic-dispatch path (this file + `ops/terminator.rs`)
+    /// instead of hand-built directly in a melior test. The question this
+    /// answers: does the dispatch-table + `Language::GLUON` selection
+    /// (`backend.rs`, gated on `TEENYC_GLUON_SMOKE_TEST`) actually work when
+    /// driven by `rustc`'s real compilation pipeline, not a hand-assembled
+    /// module.
+    ///
+    /// Every tensor here is built from scratch with an explicit `#ttg.blocked`
+    /// encoding, ignoring whatever encoding the rest of this kernel's ops
+    /// would normally carry — this deliberately does NOT attempt to solve the
+    /// separate, harder problem of making the existing `Language::TRITON`-shaped
+    /// intrinsics (`program_id`/`load`/`store`/etc.) Gluon-encoding-aware. See
+    /// this function's caller (`ops/terminator.rs`) and the kernel source in
+    /// `tests/data/triton_shared_mem.rs` for how this gets exercised.
+    pub fn codegen_gluon_shared_mem_smoke_test<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        mir: &Body<'tcx>,
+        _func: &Operand<'tcx>,
+        _func_name: &str,
+        args: &[Spanned<Operand<'tcx>>],
+        _destination: &Place<'tcx>,
+        _target: &Option<BasicBlock>,
+        _unwind: &UnwindAction,
+        _call_source: &CallSource,
+        _fn_span: &Span,
+        location: Location<'a>,
+        mlir_block: &BlockRef<'a, 'a>,
+        state: &mut CodegenState<'a, 'a>,
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
+        debug_assert!(
+            args.len() == 1,
+            "codegen_gluon_shared_mem_smoke_test: args length must be 1 (out_ptr)"
+        );
+
+        let context = self.module.context();
+        let i32_ty: Type = IntegerType::new(context, 32).into();
+
+        let tensor_ty: Type = Type::parse(
+            context,
+            "tensor<128xi32, #ttg.blocked<{sizePerThread = [1], threadsPerWarp = [32], \
+             warpsPerCTA = [4], order = [0]}>>",
+        )
+        .ok_or_else(|| MlirError::InvalidType {
+            msg: "failed to parse blocked tensor<128xi32> type".to_string(),
+        })?;
+        let ptr_tensor_ty: Type = Type::parse(
+            context,
+            "tensor<128x!tt.ptr<i32>, #ttg.blocked<{sizePerThread = [1], threadsPerWarp = [32], \
+             warpsPerCTA = [4], order = [0]}>>",
+        )
+        .ok_or_else(|| MlirError::InvalidType {
+            msg: "failed to parse blocked tensor<128x!tt.ptr<i32>> type".to_string(),
+        })?;
+        let mem_desc_ty = shared_mem_desc_type(context, i32_ty, 128, true);
+
+        let out_ptr = self.codegen_operand(
+            tcx,
+            instance,
+            &args[0].node,
+            args[0].node.ty(mir, tcx),
+            location,
+            mlir_block,
+            state,
+        )?;
+
+        let const_op: Operation<'a> = create_int_constant(context, location, Int::I32(7))
+            .map_err(|e| MlirError::CreateOperation { err: e })?
+            .into();
+        let const_val: Value<'a, 'a> = const_op.result(0).expect("const result").into();
+        mlir_block.append_operation(const_op);
+
+        let splat_op: Operation<'a> = splat(context, location, const_val, tensor_ty)
+            .map_err(|e| MlirError::CreateOperation { err: e })?
+            .into();
+        let tensor_val: Value<'a, 'a> = splat_op.result(0).expect("splat result").into();
+        mlir_block.append_operation(splat_op);
+
+        let alloc_op: Operation<'a> = local_alloc(context, location, None, None, mem_desc_ty)
+            .map_err(|e| MlirError::CreateOperation { err: e })?
+            .into();
+        let mem_desc: Value<'a, 'a> = alloc_op.result(0).expect("local_alloc result").into();
+        mlir_block.append_operation(alloc_op);
+
+        let local_store_op: Operation<'a> = local_store(location, tensor_val, mem_desc)
+            .map_err(|e| MlirError::CreateOperation { err: e })?
+            .into();
+        mlir_block.append_operation(local_store_op);
+
+        let load_op: Operation<'a> = local_load(location, mem_desc, tensor_ty)
+            .map_err(|e| MlirError::CreateOperation { err: e })?
+            .into();
+        let loaded: Value<'a, 'a> = load_op.result(0).expect("local_load result").into();
+        mlir_block.append_operation(load_op);
+
+        let range_op: Operation<'a> = MakeRangeOperation::builder(context, location)
+            .start(IntegerAttribute::new(i32_ty, 0))
+            .end(IntegerAttribute::new(i32_ty, 128))
+            .result(tensor_ty)
+            .build()
+            .into();
+        let range_val: Value<'a, 'a> = range_op.result(0).expect("make_range result").into();
+        mlir_block.append_operation(range_op);
+
+        let out_splat_op: Operation<'a> = splat(context, location, out_ptr, ptr_tensor_ty)
+            .map_err(|e| MlirError::CreateOperation { err: e })?
+            .into();
+        let out_ptrs_base: Value<'a, 'a> = out_splat_op.result(0).expect("out splat result").into();
+        mlir_block.append_operation(out_splat_op);
+
+        let addptr_op: Operation<'a> =
+            add_ptr(context, location, out_ptrs_base, range_val, ptr_tensor_ty)
+                .map_err(|e| MlirError::CreateOperation { err: e })?
+                .into();
+        let out_ptrs: Value<'a, 'a> = addptr_op.result(0).expect("addptr result").into();
+        mlir_block.append_operation(addptr_op);
+
+        let global_store_op: Operation<'a> = store(
+            context,
+            location,
+            out_ptrs,
+            loaded,
+            None,
+            CacheModifier::None,
+            EvictionPolicy::Normal,
+        )
+        .map_err(|e| MlirError::CreateOperation { err: e })?;
+        mlir_block.append_operation(global_store_op);
+
+        Ok(None)
+    }
+
     pub fn codegen_arange<'tcx>(
         &self,
         tcx: TyCtxt<'tcx>,
