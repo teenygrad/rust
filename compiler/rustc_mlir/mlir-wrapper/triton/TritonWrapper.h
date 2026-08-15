@@ -44,14 +44,6 @@ MlirTritonCompiler mlirTritonCompilerCreate(MlirContext context,
 /// transformed in-place and the textual IR is stored as the handle output.
 bool mlirTritonCompilerCompile(MlirTritonCompiler compiler, MlirModule module);
 
-/// teenyc-6mv: runs the hand-built Gluon (`Language::GLUON`) pipeline on
-/// `module`, bypassing `convert-triton-to-tritongpu`. Use this to lower a
-/// module that already contains hand-built `ttg` shared-memory ops. On success
-/// the module is transformed in-place and the textual IR is stored as the
-/// handle output.
-bool mlirTritonCompilerCompileGluon(MlirTritonCompiler compiler,
-                                    MlirModule module);
-
 /// Returns the output string owned by `compiler`.
 /// The returned pointer remains valid until the next successful compile on the
 /// same handle or until `mlirTritonCompilerFree` is called.

@@ -1267,9 +1267,9 @@ impl<'a> TritonCodegen<'a> {
         load_all_dialects(context);
         register_all_llvm_translations(context);
         load_triton_dialect(context);
-        // teenyc-6mv: needed for any kernel using the ttg.local_alloc/store/load
-        // shared-memory smoke-test intrinsic (ops/triton/tensor.rs's
-        // codegen_gluon_shared_mem_smoke_test).
+        // teenyc-6mv: the TritonGPU dialect must be registered before the
+        // `tritongpu-stage-shared-memory` pass (backend.rs::cleanup_mlir_module
+        // pipeline) runs over any module.
         load_triton_gpu_dialect(context);
 
         Self { module, type_mapper: TypeMapper::new() }

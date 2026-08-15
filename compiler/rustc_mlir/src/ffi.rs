@@ -266,9 +266,6 @@ unsafe extern "C" {
 
     pub fn mlirTritonCompilerCompile(compiler: MlirTritonCompiler, module: MlirModule) -> bool;
 
-    pub fn mlirTritonCompilerCompileGluon(compiler: MlirTritonCompiler, module: MlirModule)
-    -> bool;
-
     pub fn mlirTritonCompilerGetLLIR(compiler: MlirTritonCompiler) -> *const c_char;
     pub fn mlirTritonCompilerGetTTIR(compiler: MlirTritonCompiler) -> *const c_char;
     pub fn mlirTritonCompilerGetTTGIR(compiler: MlirTritonCompiler) -> *const c_char;

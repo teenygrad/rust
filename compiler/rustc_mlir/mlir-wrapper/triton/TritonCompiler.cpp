@@ -63,29 +63,6 @@ LogicalResult TritonCompiler::compile(ModuleOp mlir_module) {
   return LogicalResult::success();
 }
 
-LogicalResult TritonCompiler::compileGluon(ModuleOp mlir_module) {
-  auto result = applyGluonPasses(mlir_module);
-  if (failed(result)) {
-    llvm::errs() << "Failed to apply Gluon passes. Aborting translation.\n";
-    return result;
-  }
-
-  // Generate ASM and BIN from the backend
-  auto asmResult = backend->makeASM(*context, mlir_module);
-  if (failed(asmResult)) {
-    llvm::errs() << "Failed to generate ASM from backend.\n";
-    return asmResult;
-  }
-
-  auto binResult = backend->makeBIN(*context, mlir_module);
-  if (failed(binResult)) {
-    llvm::errs() << "Failed to generate BIN from backend.\n";
-    return binResult;
-  }
-
-  return LogicalResult::success();
-}
-
 const char *TritonCompiler::getLLIR() const { return backend->getLLIR(); }
 const char *TritonCompiler::getTTIR() const { return backend->getTTIR(); }
 const char *TritonCompiler::getTTGIR() const { return backend->getTTGIR(); }
@@ -97,15 +74,6 @@ LogicalResult TritonCompiler::applyTritonPasses(ModuleOp mlir_module) {
   auto result = backend->applyPasses(*context, mlir_module, Language::TRITON);
   if (failed(result)) {
     llvm::errs() << "Failed to apply Triton passes. Aborting translation.\n";
-  }
-
-  return result;
-}
-
-LogicalResult TritonCompiler::applyGluonPasses(ModuleOp mlir_module) {
-  auto result = backend->applyPasses(*context, mlir_module, Language::GLUON);
-  if (failed(result)) {
-    llvm::errs() << "Failed to apply Gluon passes. Aborting translation.\n";
   }
 
   return result;

@@ -38,14 +38,6 @@ public:
 
   virtual LogicalResult compile(ModuleOp mlir_module) override;
 
-  /// teenyc-6mv: drive the hand-built `Language::GLUON` pipeline
-  /// (`CudaBackend::gluonToTTGIR` + `makeLLIR`/`makeASM`/`makeBIN`) instead of
-  /// the `Language::TRITON` pipeline that `compile` uses. This bypasses
-  /// `convert-triton-to-tritongpu`, so a module that already contains
-  /// hand-built `ttg` shared-memory ops (with proper distributed encodings and
-  /// module attributes) can be lowered directly.
-  LogicalResult compileGluon(ModuleOp mlir_module);
-
   /// Return the output string from the last successful compile. The pointer
   /// remains valid until the next successful compile or compiler destruction.
   const char *getLLIR() const;
@@ -57,8 +49,6 @@ public:
 
 private:
   LogicalResult applyTritonPasses(ModuleOp mlir_module);
-
-  LogicalResult applyGluonPasses(ModuleOp mlir_module);
 
   Backend *backend;
 };

@@ -117,13 +117,6 @@ fn compile_codegen_unit_impl(
     };
     // Create the MLIR module
     let mut mlir_module = MlirModule::new_with_capability(cgu_name.as_str(), capability);
-    if std::env::var(GLUON_SMOKE_TEST_ENV).is_ok() {
-        // Must happen before ANY pass runs (including cleanup_mlir_module's
-        // canonicalizer below) — a hand-built #ttg.blocked-encoded tensor
-        // needs `ttg.num-warps` on the enclosing module the moment any pass
-        // inspects its layout, not just at compile_gluon() time.
-        stamp_gluon_module_attrs(&mut mlir_module);
-    }
     let mut triton_codegen = TritonCodegen::new(&mlir_module);
 
     // Get all mono items in deterministic order
@@ -171,57 +164,8 @@ fn cleanup_mlir_module(mlir_module: &mut MlirModule<'static>) -> Result<(), Mlir
     Ok(())
 }
 
-/// teenyc-6mv smoke test: when set, routes compilation through
-/// `TritonCompiler::compile_gluon` (`Language::GLUON`) instead of the normal
-/// `compile` (`Language::TRITON`), after stamping the 4 module attributes
-/// Gluon's own frontend sets up front (`ttg.num-warps`/`ttg.num-ctas`/
-/// `ttg.threads-per-warp`/`ttg.target`) — see
-/// `ops/triton/tensor.rs::codegen_gluon_shared_mem_smoke_test` and
-/// `tests/data/triton_shared_mem.rs`. Env-var gated (rather than a new CLI
-/// flag) to keep this change zero-risk for every existing `Language::TRITON`
-/// test in this crate.
-const GLUON_SMOKE_TEST_ENV: &str = "TEENYC_GLUON_SMOKE_TEST";
-
-/// Stamps the 4 module attributes Gluon's own Python frontend sets up front
-/// (`ttg.num-warps`/`ttg.num-ctas`/`ttg.threads-per-warp`/`ttg.target`) —
-/// required the moment any pass (including the generic canonicalizer in
-/// `cleanup_mlir_module`) inspects a `#ttg.blocked`-encoded tensor's layout,
-/// so this must run before `codegen`/`cleanup_mlir_module`/`compile_module`,
-/// not just before `compile_gluon`.
-fn stamp_gluon_module_attrs(mlir_module: &mut MlirModule<'static>) {
-    use melior::ir::operation::OperationMutLike;
-
-    // Disjoint field access (not the `.context()`/`.llmod_mut()` methods,
-    // which each borrow all of `*mlir_module`) so the context reference and
-    // the mutable module-operation borrow can coexist.
-    let context = &mlir_module.context;
-    let i32_ty = melior::ir::r#type::IntegerType::new(context, 32).into();
-    let mut module_op = mlir_module.mlir.as_operation_mut();
-    module_op.set_attribute(
-        "ttg.num-warps",
-        melior::ir::attribute::IntegerAttribute::new(i32_ty, 4).into(),
-    );
-    module_op.set_attribute(
-        "ttg.num-ctas",
-        melior::ir::attribute::IntegerAttribute::new(i32_ty, 1).into(),
-    );
-    module_op.set_attribute(
-        "ttg.threads-per-warp",
-        melior::ir::attribute::IntegerAttribute::new(i32_ty, 32).into(),
-    );
-    module_op.set_attribute(
-        "ttg.target",
-        melior::ir::attribute::StringAttribute::new(context, "cuda:90").into(),
-    );
-}
-
 fn compile_module(mlir_module: &mut MlirModule<'static>) -> Result<(), MlirError> {
-    let use_gluon = std::env::var(GLUON_SMOKE_TEST_ENV).is_ok();
-    let ok = if use_gluon {
-        mlir_module.compiler.compile_gluon(mlir_module.llmod().to_raw())
-    } else {
-        mlir_module.compiler.compile(mlir_module.llmod().to_raw())
-    };
+    let ok = mlir_module.compiler.compile(mlir_module.llmod().to_raw());
     if !ok {
         return Err(MlirError::CodegenFailed { err: "Triton compilation failed".to_string() });
     }

@@ -252,13 +252,12 @@ pub fn add_ptr<'ctx>(
 // elsewhere in this file for ops with optional operands/attributes rather
 // than a generated `Operation` builder struct.
 //
-// IMPORTANT construction contract (see teenyc-6mv): the Gluon pipeline's
-// encoding-inference passes crash (SIGSEGV) on tensors that carry a *null*
-// encoding attribute, because they call `isa<...EncodingAttr>(getEncoding())`
-// without a null guard. So the tensor operands/results wired into these ops
-// must carry a distributed (e.g. `#ttg.blocked`) encoding, and the enclosing
-// module must set `ttg.num-warps`/`ttg.num-ctas`/`ttg.threads-per-warp`/
-// `ttg.target`, exactly as Gluon's own frontend does.
+// IMPORTANT construction contract (see teenyc-6mv): the normal
+// `convert-triton-to-tritongpu` + `tritongpu-stage-shared-memory` pipeline
+// assigns every tensor a distributed (e.g. `#ttg.blocked`) encoding, so any
+// tensor operand/result wired into these ops must carry one too — a plain,
+// un-encoded tensor is not a valid `ttg.local_alloc`/`local_store`/
+// `local_load` operand.
 
 /// Build a `ttg.local_alloc` operation (`mlir::triton::gpu::LocalAllocOp`).
 ///
@@ -2353,9 +2352,8 @@ mod tests {
     // Verifies the restored `ttg.local_alloc`/`local_store`/`local_load`
     // builders and the `!ttg.memdesc<...>` C-API type build and pass MLIR's
     // per-op verifier in isolation, using the *correct* construction contract:
-    // a distributed (`#ttg.blocked`) encoding on the staged tensor (a plain,
-    // un-encoded tensor would later SIGSEGV the Gluon encoding passes -- see
-    // `tests/test_gluon_shared_memory.rs`).
+    // a distributed (`#ttg.blocked`) encoding on the staged tensor, matching
+    // what `convert-triton-to-tritongpu` assigns to a real kernel's tensors.
     #[test]
     fn test_local_alloc_store_load() {
         let context = create_test_context();
