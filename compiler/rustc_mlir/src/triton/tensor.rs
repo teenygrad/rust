@@ -17,7 +17,9 @@
 use melior::Context;
 use melior::dialect::arith;
 use melior::dialect::ods::arith::{ConstantOperation, MaxSIOperation, MaximumFOperation};
-use melior::ir::attribute::{BoolAttribute, DenseI32ArrayAttribute, StringAttribute};
+use melior::ir::attribute::{
+    BoolAttribute, DenseI32ArrayAttribute, DenseI64ArrayAttribute, StringAttribute, TypeAttribute,
+};
 use melior::ir::operation::{OperationBuilder, OperationMutLike};
 use melior::ir::r#type::{IntegerType, RankedTensorType};
 use melior::ir::{Attribute, Identifier, Location, Operation, Type, TypeLike, Value, ValueLike};
@@ -511,6 +513,151 @@ pub fn barrier<'ctx>(
         )])
         .build()
         .map_err(|e| Error::InvalidType { msg: format!("failed to build ttg.barrier: {e}") })
+}
+
+/// Front-end marker ops for an indexed shared-memory buffer (teenyc-6mv /
+/// teenygrad-3w0.10) — the pattern `ttg.stage_shared` cannot express, because
+/// it only supports staging a value through shared memory and reading it
+/// back with the *same* indexing it was written with. These five `tt.*` ops
+/// (not `ttg.*`) let a front-end write row `i` in one loop iteration and read
+/// column `j` (of a transposed view) in another.
+///
+/// Unlike hand-emitting `ttg.local_alloc`/`local_store`/`local_load`
+/// directly, these ops carry real tensor/index operands and go through
+/// ordinary `convert-triton-to-tritongpu` conversion just like `tt.load`/
+/// `tt.store` — so their tensor operands/results earn a real `#ttg.blocked`
+/// encoding there. The `tritongpu-lower-indexed-shared-memory` pass then
+/// rewrites each into the real `ttg` sequence, reusing that encoding. Emit
+/// these from a normal kernel and drive it through the ordinary
+/// [`crate::triton::TritonCompiler::compile`] (`Language::TRITON`) pipeline —
+/// no Gluon involved.
+/// Build the `!tt.shared_mem` type (`tt.shared_alloc`'s result / every other
+/// marker op's buffer-handle operand). Opaque and unparameterized on purpose:
+/// shape/element type live on `tt.shared_alloc`'s attributes instead, and are
+/// recovered by `tritongpu-lower-indexed-shared-memory` by walking back
+/// through the (SSA) chain of `tt.shared_trans` ops to their `tt.shared_alloc`.
+pub fn shared_mem_type<'ctx>(context: &'ctx Context) -> Type<'ctx> {
+    Type::parse(context, "!tt.shared_mem").expect("!tt.shared_mem should parse")
+}
+
+/// Build a `tt.shared_alloc` operation.
+///
+/// Allocates a kernel-lifetime indexed shared-memory buffer of `shape`
+/// (row-major) and element type `elem_type`. Currently only rank-2 shapes are
+/// supported downstream (by the lowering pass and `tt.shared_trans`).
+///
+/// # Assembly format
+///
+/// ```text
+/// %sm = tt.shared_alloc {shape = array<i64: 128, 128>, elem_type = i32} : !tt.shared_mem
+/// ```
+pub fn shared_alloc<'ctx>(
+    context: &'ctx Context,
+    location: Location<'ctx>,
+    shape: &[i64],
+    elem_type: Type<'ctx>,
+) -> Result<Operation<'ctx>, Error> {
+    let shape_attr = DenseI64ArrayAttribute::new(context, shape);
+    let elem_type_attr = TypeAttribute::new(elem_type);
+    OperationBuilder::new("tt.shared_alloc", location)
+        .add_attributes(&[
+            (Identifier::new(context, "shape"), Attribute::from(shape_attr)),
+            (Identifier::new(context, "elem_type"), Attribute::from(elem_type_attr)),
+        ])
+        .add_results(&[shared_mem_type(context)])
+        .build()
+        .map_err(|e| Error::InvalidType { msg: format!("failed to build tt.shared_alloc: {e}") })
+}
+
+/// Build a `tt.shared_store_index` operation.
+///
+/// Stores 1-D tile `src` into row `index` (a runtime `i32`) of `buf`. No
+/// result.
+///
+/// # Assembly format
+///
+/// ```text
+/// tt.shared_store_index %buf[%index], %src : tensor<128xi32>
+/// ```
+pub fn shared_store_index<'ctx>(
+    location: Location<'ctx>,
+    buf: Value<'ctx, '_>,
+    index: Value<'ctx, '_>,
+    src: Value<'ctx, '_>,
+) -> Result<Operation<'ctx>, Error> {
+    OperationBuilder::new("tt.shared_store_index", location)
+        .add_operands(&[buf, index, src])
+        .build()
+        .map_err(|e| Error::InvalidType {
+            msg: format!("failed to build tt.shared_store_index: {e}"),
+        })
+}
+
+/// Build a `tt.shared_barrier` operation.
+///
+/// CTA-wide handshake between an indexed shared-memory write and a later
+/// read. Not tied to any specific buffer (mirrors [`barrier`]'s `ttg.barrier
+/// local` it lowers to).
+///
+/// # Assembly format
+///
+/// ```text
+/// tt.shared_barrier
+/// ```
+pub fn shared_barrier<'ctx>(location: Location<'ctx>) -> Result<Operation<'ctx>, Error> {
+    OperationBuilder::new("tt.shared_barrier", location)
+        .build()
+        .map_err(|e| Error::InvalidType { msg: format!("failed to build tt.shared_barrier: {e}") })
+}
+
+/// Build a `tt.shared_trans` operation.
+///
+/// Transposes `buf`'s logical row/column order (currently rank-2 only, a
+/// fixed `[1, 0]` swap — no explicit `order` operand, unlike
+/// [`memdesc_trans`]). Combined with [`shared_store_index`]/
+/// [`shared_load_index`], this is how a row-loop transpose reads a column
+/// after writing rows.
+///
+/// # Assembly format
+///
+/// ```text
+/// %smT = tt.shared_trans %sm : !tt.shared_mem
+/// ```
+pub fn shared_trans<'ctx>(
+    context: &'ctx Context,
+    location: Location<'ctx>,
+    buf: Value<'ctx, '_>,
+) -> Result<Operation<'ctx>, Error> {
+    OperationBuilder::new("tt.shared_trans", location)
+        .add_operands(&[buf])
+        .add_results(&[shared_mem_type(context)])
+        .build()
+        .map_err(|e| Error::InvalidType { msg: format!("failed to build tt.shared_trans: {e}") })
+}
+
+/// Build a `tt.shared_load_index` operation.
+///
+/// Loads the 1-D tile at row `index` (a runtime `i32`) of `buf` into a
+/// tensor of type `result_ty`.
+///
+/// # Assembly format
+///
+/// ```text
+/// %tile = tt.shared_load_index %buf[%index] : tensor<128xi32>
+/// ```
+pub fn shared_load_index<'ctx>(
+    location: Location<'ctx>,
+    buf: Value<'ctx, '_>,
+    index: Value<'ctx, '_>,
+    result_ty: Type<'ctx>,
+) -> Result<Operation<'ctx>, Error> {
+    OperationBuilder::new("tt.shared_load_index", location)
+        .add_operands(&[buf, index])
+        .add_results(&[result_ty])
+        .build()
+        .map_err(|e| Error::InvalidType {
+            msg: format!("failed to build tt.shared_load_index: {e}"),
+        })
 }
 
 /// Build a `tt.load` operation.

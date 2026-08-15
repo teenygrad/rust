@@ -472,6 +472,15 @@ LogicalResult CudaBackend::makeTTGIR(MLIRContext &context, ModuleOp module) {
   // materialization (direct path). A no-op when nothing is marked.
   addPass(pm, MlirPass::ttgpuir_stage_shared_memory);
 
+  // teenyc-6mv / teenygrad-3w0.10: lower any `tt.shared_alloc`/
+  // `shared_store_index`/`shared_barrier`/`shared_trans`/`shared_load_index`
+  // marker ops (an indexed shared-memory buffer, e.g. a transpose staging
+  // area -- something `ttg.stage_shared` can't express) into the real
+  // `ttg.local_alloc`/`memdesc_index`/`local_store`/`barrier`/`memdesc_trans`/
+  // `local_load` sequence. Must also run right after conversion, for the same
+  // reason as the pass above. A no-op when nothing is marked.
+  addPass(pm, MlirPass::ttgpuir_lower_indexed_shared_memory);
+
   // optimize TTGIR
   addPass(pm, MlirPass::ttgpuir_coalesce);
   addPass(pm, MlirPass::ttgpuir_f32_dot_tc, emuTF32);
