@@ -216,6 +216,21 @@ impl<'a> TritonCodegen<'a> {
                 TritonCodegen::codegen_load_scalar_f32_as_i32 as LocalCallHandler<'a, 'tcx>
             }
             "triton::Triton::store" => TritonCodegen::codegen_store as LocalCallHandler<'a, 'tcx>,
+            "triton::Triton::shared_alloc" => {
+                TritonCodegen::codegen_shared_alloc as LocalCallHandler<'a, 'tcx>
+            }
+            "triton::Triton::shared_store_index" => {
+                TritonCodegen::codegen_shared_store_index as LocalCallHandler<'a, 'tcx>
+            }
+            "triton::Triton::shared_barrier" => {
+                TritonCodegen::codegen_shared_barrier as LocalCallHandler<'a, 'tcx>
+            }
+            "triton::Triton::shared_trans" => {
+                TritonCodegen::codegen_shared_trans as LocalCallHandler<'a, 'tcx>
+            }
+            "triton::Triton::shared_load_index" => {
+                TritonCodegen::codegen_shared_load_index as LocalCallHandler<'a, 'tcx>
+            }
             "triton::Triton::maximum" => {
                 TritonCodegen::codegen_maximum as LocalCallHandler<'a, 'tcx>
             }

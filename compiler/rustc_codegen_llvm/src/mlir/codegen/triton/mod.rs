@@ -45,7 +45,7 @@ use rustc_mlir::shared::arith::{
 use rustc_mlir::shared::attr::create_scalar_attr;
 use rustc_mlir::shared::builtin::{tensor_type, tensor_type_like};
 use rustc_mlir::shared::ub::create_ub_poison;
-use rustc_mlir::triton::tensor::splat;
+use rustc_mlir::triton::tensor::{shared_mem_type, splat};
 use rustc_mlir::triton::{create_func, int_to_ptr, load_triton_dialect, load_triton_gpu_dialect};
 use rustc_span::DUMMY_SP;
 
@@ -97,6 +97,14 @@ type SliceDynValues<'c, 'p> = HashMap<Local, Vec<Value<'c, 'p>>>;
 /// Maps a descriptor local to its block shape (the tile dimensions it loads).
 type DescBlockShapes = HashMap<Local, Vec<i64>>;
 
+/// Maps an indexed shared-memory buffer local (`Triton::SharedMem<D>`) to its
+/// static shape (teenygrad-3w0.10). Populated by `codegen_shared_alloc` from
+/// its `shape: &[i32]` argument; `codegen_shared_trans` records the swapped
+/// shape for its result. `codegen_shared_store_index`/`shared_load_index`
+/// look this up (via the `buf` operand's local) for the row/column length,
+/// since `!tt.shared_mem` — unlike `!ttg.memdesc` — carries no shape itself.
+type SharedMemShapes = HashMap<Local, Vec<i64>>;
+
 /// Maps a MIR local to its statically-known discriminant value (u64).
 /// Built by pre-scanning for `SetDiscriminant` and `Discriminant` assignments
 /// so that SwitchInt on Option<T> locals can be constant-folded during codegen.
@@ -121,6 +129,8 @@ pub(crate) struct CodegenState<'c, 'p> {
     pub(crate) slice_dyn_values: SliceDynValues<'c, 'p>,
     /// Block shapes for tensor descriptors: `desc_local → [dim0, dim1, ...]`.
     pub(crate) desc_block_shapes: DescBlockShapes,
+    /// Static shape of an indexed shared-memory buffer, keyed by local.
+    pub(crate) shared_mem_shapes: SharedMemShapes,
     /// When generating inside a `scf.for` body: the MIR basic block that is the loop header.
     /// `codegen_goto` checks this and emits `scf.yield` instead of `cf.br` on the back edge.
     pub(crate) loop_header_bb: Option<BasicBlock>,
@@ -166,6 +176,7 @@ impl<'c, 'p> CodegenState<'c, 'p> {
             ptr_to_dyn_array: HashMap::new(),
             slice_dyn_values: HashMap::new(),
             desc_block_shapes: HashMap::new(),
+            shared_mem_shapes: HashMap::new(),
             loop_header_bb: None,
             loop_iter_carry_locals: Vec::new(),
             loop_body_bbs: HashSet::new(),
@@ -2360,6 +2371,11 @@ impl<'a> TritonCodegen<'a> {
                             state.slice_shape.insert(place.local, shape);
                             return Ok(());
                         }
+                        // shared_mem_shapes copy: keep the buffer's shape alongside the
+                        // SSA value (fall through to codegen_operand for the value itself).
+                        if let Some(shape) = state.shared_mem_shapes.get(&src.local).cloned() {
+                            state.shared_mem_shapes.insert(place.local, shape);
+                        }
                         // ADT/Range locals stored in tuple_fields (e.g. Range moves for for-loops).
                         if let Some(fields) = state.tuple_fields.get(&src.local).cloned() {
                             state.tuple_fields.insert(place.local, fields);
@@ -2580,7 +2596,8 @@ impl<'a> TritonCodegen<'a> {
                     let adt_def = tcx.adt_def(*def_id);
                     let adt_name = format!("{:?}", adt_def);
                     let is_triton_type = adt_name == "triton::llvm::triton::tensor::LlvmTensor"
-                        || adt_name == "triton::llvm::triton::pointer::LlvmPointer";
+                        || adt_name == "triton::llvm::triton::pointer::LlvmPointer"
+                        || adt_name == "triton::llvm::triton::shared::LlvmSharedMem";
                     if !is_triton_type {
                         let fields: Result<Vec<Value<'_, '_>>, MlirError> = index_vec
                             .iter()
@@ -2800,6 +2817,10 @@ impl<'a> TritonCodegen<'a> {
                     self.codegen_create_pointer(
                         tcx, instance, mir, index_vec, location, mlir_block, state,
                     )
+                } else if "triton::llvm::triton::shared::LlvmSharedMem" == adt_name {
+                    self.codegen_create_shared_mem(
+                        tcx, instance, mir, index_vec, location, mlir_block, state,
+                    )
                 } else {
                     todo!(
                         "codegen_aggregate_create: {:?} {:?} {:?}",
@@ -2843,6 +2864,29 @@ impl<'a> TritonCodegen<'a> {
         let tensor_result = tensor_op.result(0).unwrap();
         mlir_block.append_operation(tensor_op);
         Ok(Some(tensor_result.into()))
+    }
+
+    /// `LlvmSharedMem(0 as *mut D)` dummy constructor. This is only ever
+    /// reached from `LlvmTriton`'s own (never-invoked) dummy method bodies —
+    /// real `T::shared_alloc`/`shared_trans` calls are intercepted by the
+    /// dispatch table (`ops/terminator.rs`) before reaching this — so a
+    /// poison `!tt.shared_mem` value is fine, matching `codegen_create_tensor`.
+    fn codegen_create_shared_mem<'tcx>(
+        &self,
+        _tcx: TyCtxt<'tcx>,
+        _instance: &Instance<'tcx>,
+        _mir: &Body<'tcx>,
+        _index_vec: &IndexVec<FieldIdx, Operand<'tcx>>,
+        location: Location<'a>,
+        mlir_block: &BlockRef<'a, 'a>,
+        _state: &mut CodegenState<'a, 'a>,
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
+        let shared_mem_ty = shared_mem_type(self.module.context());
+        let poison = create_ub_poison(self.module.context(), location, shared_mem_ty)
+            .map_err(|e| MlirError::CreateOperation { err: e })?;
+        let result = poison.result(0).unwrap();
+        mlir_block.append_operation(poison);
+        Ok(Some(result.into()))
     }
 
     fn codegen_create_pointer<'tcx>(

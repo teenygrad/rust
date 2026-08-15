@@ -39,6 +39,7 @@ pub fn is_option_ty<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> bool {
 }
 use rustc_mlir::shared::builtin::tensor_type;
 use rustc_mlir::triton::pointer_type;
+use rustc_mlir::triton::tensor::shared_mem_type;
 
 type AdtHandler =
     for<'tcx, 'c> fn(&TypeMapper, &'c Context, &TyCtxt<'tcx>, &[GenericArg<'tcx>]) -> Type<'c>;
@@ -134,6 +135,7 @@ impl TypeMapper {
             let entries: Vec<(&'static str, AdtHandler)> = vec![
                 ("triton::llvm::triton::tensor::LlvmTensor", triton_tensor_handler),
                 ("triton::llvm::triton::pointer::LlvmPointer", triton_pointer_handler),
+                ("triton::llvm::triton::shared::LlvmSharedMem", triton_shared_mem_handler),
                 ("triton::llvm::triton::types::LlvmBool", triton_bool_handler),
                 ("triton::Axis", triton_program_axis_handler),
             ];
@@ -275,6 +277,21 @@ pub fn triton_pointer_handler<'tcx, 'c>(
     let arg_ty = args[0].expect_ty();
     let arg_type = type_mapper.map_type(context, tcx, &arg_ty);
     pointer_type(arg_type)
+}
+
+/// Maps `LlvmSharedMem<D>` to the opaque `!tt.shared_mem` marker type
+/// (teenygrad-3w0.10). Deliberately ignores `D` and `args` — shape/element
+/// type live on `tt.shared_alloc`'s attributes instead, populated by
+/// `codegen_shared_alloc` from the destination place directly, not by
+/// mapping this type.
+pub fn triton_shared_mem_handler<'tcx, 'c>(
+    _type_mapper: &TypeMapper,
+    context: &'c Context,
+    _tcx: &TyCtxt<'tcx>,
+    args: &[GenericArg<'tcx>],
+) -> Type<'c> {
+    debug_assert_eq!(args.len(), 1, "SharedMem should have 1 argument");
+    shared_mem_type(context)
 }
 
 pub fn triton_bool_handler<'tcx, 'c>(

@@ -34,7 +34,8 @@ use rustc_mlir::triton::tensor::{
     ScaleDotElemType, add_ptr, advance, assert_op, atomic_cas, atomic_rmw, broadcast, clampf,
     descriptor_load, descriptor_store, dot, dot_scaled, expand_dims, gather, histogram, join, load,
     make_range, make_tensor_descriptor, make_tensor_ptr, mulhiui, precise_divf, precise_sqrt,
-    print as triton_print, reduce, reduce_return, reshape, scan, scan_return, splat, split, store,
+    print as triton_print, reduce, reduce_return, reshape, scan, scan_return, shared_alloc,
+    shared_barrier, shared_load_index, shared_store_index, shared_trans, splat, split, store,
     trans, zeros_like,
 };
 use rustc_mlir::triton::{int_to_ptr, pointer_type};
@@ -1048,6 +1049,279 @@ impl<'a> TritonCodegen<'a> {
                 err: format!("shape_from_slice_arg_i32: unexpected operand: {other:?}"),
             }),
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Indexed shared-memory buffer (teenygrad-3w0.10): `T::shared_alloc` /
+    // `shared_store_index` / `shared_barrier` / `shared_trans` /
+    // `shared_load_index`. Each emits the corresponding `tt.shared_*` marker
+    // op (rustc_mlir::triton::tensor) — real ops with real tensor/index
+    // operands that go through ordinary `convert-triton-to-tritongpu`
+    // conversion like `tt.load`/`tt.store`, so their tensor operands/results
+    // earn a real `#ttg.blocked` encoding there. The
+    // `tritongpu-lower-indexed-shared-memory` MLIR pass (../teeny's
+    // src/triton submodule) then rewrites them into the real
+    // `ttg.local_alloc`/`memdesc_index`/`local_store`/`barrier`/
+    // `memdesc_trans`/`local_load` sequence after that conversion. No hand-
+    // built `ttg.*` ops, no Gluon.
+    // -------------------------------------------------------------------------
+
+    /// Extract the dtype generic argument `D` from an ADT place's type
+    /// (`Tensor<D>`, `Pointer<D>`, `SharedMem<D>`, ...) and map it directly
+    /// to its scalar MLIR type — as opposed to `type_mapper.map_type` on the
+    /// whole ADT, which for `Tensor<D>` returns a placeholder tensor.
+    fn mlir_dtype_from_adt_place<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        mir: &Body<'tcx>,
+        place: &Place<'tcx>,
+    ) -> Result<Type<'a>, MlirError> {
+        let dest_ty = place.ty(mir, tcx).ty;
+        let dest_ty = instance.instantiate_mir_and_normalize_erasing_regions(
+            tcx,
+            TypingEnv::fully_monomorphized(),
+            EarlyBinder::bind(dest_ty),
+        );
+        match dest_ty.kind() {
+            TyKind::Adt(_, args) if !args.is_empty() => {
+                Ok(self.type_mapper.map_type(self.module.context(), &tcx, &args[0].expect_ty()))
+            }
+            other => Err(MlirError::InvalidType {
+                msg: format!("expected ADT with dtype generic, got {other:?}"),
+            }),
+        }
+    }
+
+    /// Look up an indexed shared-memory buffer operand's static shape,
+    /// tracked in `state.shared_mem_shapes` since `!tt.shared_mem` (unlike
+    /// `!ttg.memdesc`) carries no shape itself.
+    fn shared_mem_shape_from_arg<'tcx>(
+        &self,
+        arg: &Operand<'tcx>,
+        state: &CodegenState<'a, 'a>,
+        ctx: &str,
+    ) -> Result<Vec<i64>, MlirError> {
+        match arg {
+            Operand::Copy(p) | Operand::Move(p) => {
+                state.shared_mem_shapes.get(&p.local).cloned().ok_or_else(|| {
+                    MlirError::CodegenFailed {
+                        err: format!("{ctx}: shared_mem_shapes not found for {:?}", p.local),
+                    }
+                })
+            }
+            other => Err(MlirError::CodegenFailed {
+                err: format!("{ctx}: unexpected operand for SharedMem arg: {other:?}"),
+            }),
+        }
+    }
+
+    /// `T::shared_alloc<D>(shape) -> Self::SharedMem<D>`.
+    pub fn codegen_shared_alloc<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        mir: &Body<'tcx>,
+        _func: &Operand<'tcx>,
+        _func_name: &str,
+        args: &[Spanned<Operand<'tcx>>],
+        destination: &Place<'tcx>,
+        _target: &Option<BasicBlock>,
+        _unwind: &UnwindAction,
+        _call_source: &CallSource,
+        _fn_span: &Span,
+        location: Location<'a>,
+        mlir_block: &BlockRef<'a, 'a>,
+        state: &mut CodegenState<'a, 'a>,
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
+        debug_assert!(args.len() == 1, "codegen_shared_alloc: args length must be 1 (shape)");
+        let shape = self.shape_from_slice_arg(&args[0].node, state, "shared_alloc")?;
+        let elem_ty = self.mlir_dtype_from_adt_place(tcx, instance, mir, destination)?;
+        let alloc_op: Operation<'a> =
+            shared_alloc(self.module.context(), location, &shape, elem_ty)
+                .map_err(|e| MlirError::CreateOperation { err: e })?
+                .into();
+        let result: Value<'a, 'a> = alloc_op.result(0).expect("tt.shared_alloc result").into();
+        mlir_block.append_operation(alloc_op);
+        state.shared_mem_shapes.insert(destination.local, shape);
+        Ok(Some(result))
+    }
+
+    /// `T::shared_store_index<D>(buf, index, src)`.
+    pub fn codegen_shared_store_index<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        mir: &Body<'tcx>,
+        _func: &Operand<'tcx>,
+        _func_name: &str,
+        args: &[Spanned<Operand<'tcx>>],
+        _destination: &Place<'tcx>,
+        _target: &Option<BasicBlock>,
+        _unwind: &UnwindAction,
+        _call_source: &CallSource,
+        _fn_span: &Span,
+        location: Location<'a>,
+        mlir_block: &BlockRef<'a, 'a>,
+        state: &mut CodegenState<'a, 'a>,
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
+        debug_assert!(
+            args.len() == 3,
+            "codegen_shared_store_index: args length must be 3 (buf, index, src)"
+        );
+        let buf = self.codegen_operand(
+            tcx,
+            instance,
+            &args[0].node,
+            args[0].node.ty(mir, tcx),
+            location,
+            mlir_block,
+            state,
+        )?;
+        let index = self.codegen_operand(
+            tcx,
+            instance,
+            &args[1].node,
+            args[1].node.ty(mir, tcx),
+            location,
+            mlir_block,
+            state,
+        )?;
+        let src = self.codegen_operand(
+            tcx,
+            instance,
+            &args[2].node,
+            args[2].node.ty(mir, tcx),
+            location,
+            mlir_block,
+            state,
+        )?;
+        let store_op: Operation<'a> = shared_store_index(location, buf, index, src)
+            .map_err(|e| MlirError::CreateOperation { err: e })?;
+        mlir_block.append_operation(store_op);
+        Ok(None)
+    }
+
+    /// `T::shared_barrier()`.
+    pub fn codegen_shared_barrier<'tcx>(
+        &self,
+        _tcx: TyCtxt<'tcx>,
+        _instance: &Instance<'tcx>,
+        _mir: &Body<'tcx>,
+        _func: &Operand<'tcx>,
+        _func_name: &str,
+        _args: &[Spanned<Operand<'tcx>>],
+        _destination: &Place<'tcx>,
+        _target: &Option<BasicBlock>,
+        _unwind: &UnwindAction,
+        _call_source: &CallSource,
+        _fn_span: &Span,
+        location: Location<'a>,
+        mlir_block: &BlockRef<'a, 'a>,
+        _state: &mut CodegenState<'a, 'a>,
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
+        let bar_op: Operation<'a> =
+            shared_barrier(location).map_err(|e| MlirError::CreateOperation { err: e })?;
+        mlir_block.append_operation(bar_op);
+        Ok(None)
+    }
+
+    /// `T::shared_trans<D>(buf) -> Self::SharedMem<D>`.
+    pub fn codegen_shared_trans<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        mir: &Body<'tcx>,
+        _func: &Operand<'tcx>,
+        _func_name: &str,
+        args: &[Spanned<Operand<'tcx>>],
+        destination: &Place<'tcx>,
+        _target: &Option<BasicBlock>,
+        _unwind: &UnwindAction,
+        _call_source: &CallSource,
+        _fn_span: &Span,
+        location: Location<'a>,
+        mlir_block: &BlockRef<'a, 'a>,
+        state: &mut CodegenState<'a, 'a>,
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
+        debug_assert!(args.len() == 1, "codegen_shared_trans: args length must be 1 (buf)");
+        let shape = self.shared_mem_shape_from_arg(&args[0].node, state, "shared_trans")?;
+        if shape.len() != 2 {
+            return Err(MlirError::CodegenFailed {
+                err: format!("shared_trans currently supports rank-2 buffers, got {shape:?}"),
+            });
+        }
+        let swapped = vec![shape[1], shape[0]];
+        let buf = self.codegen_operand(
+            tcx,
+            instance,
+            &args[0].node,
+            args[0].node.ty(mir, tcx),
+            location,
+            mlir_block,
+            state,
+        )?;
+        let trans_op: Operation<'a> = shared_trans(self.module.context(), location, buf)
+            .map_err(|e| MlirError::CreateOperation { err: e })?
+            .into();
+        let result: Value<'a, 'a> = trans_op.result(0).expect("tt.shared_trans result").into();
+        mlir_block.append_operation(trans_op);
+        state.shared_mem_shapes.insert(destination.local, swapped);
+        Ok(Some(result))
+    }
+
+    /// `T::shared_load_index<D>(buf, index) -> Self::Tensor<D>`.
+    pub fn codegen_shared_load_index<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        mir: &Body<'tcx>,
+        _func: &Operand<'tcx>,
+        _func_name: &str,
+        args: &[Spanned<Operand<'tcx>>],
+        destination: &Place<'tcx>,
+        _target: &Option<BasicBlock>,
+        _unwind: &UnwindAction,
+        _call_source: &CallSource,
+        _fn_span: &Span,
+        location: Location<'a>,
+        mlir_block: &BlockRef<'a, 'a>,
+        state: &mut CodegenState<'a, 'a>,
+    ) -> Result<Option<Value<'a, 'a>>, MlirError> {
+        debug_assert!(
+            args.len() == 2,
+            "codegen_shared_load_index: args length must be 2 (buf, index)"
+        );
+        let shape = self.shared_mem_shape_from_arg(&args[0].node, state, "shared_load_index")?;
+        let n = *shape.get(1).ok_or_else(|| MlirError::CodegenFailed {
+            err: format!("shared_load_index: expected rank-2 shape, got {shape:?}"),
+        })?;
+        let buf = self.codegen_operand(
+            tcx,
+            instance,
+            &args[0].node,
+            args[0].node.ty(mir, tcx),
+            location,
+            mlir_block,
+            state,
+        )?;
+        let index = self.codegen_operand(
+            tcx,
+            instance,
+            &args[1].node,
+            args[1].node.ty(mir, tcx),
+            location,
+            mlir_block,
+            state,
+        )?;
+        let elem_ty = self.mlir_dtype_from_adt_place(tcx, instance, mir, destination)?;
+        let result_ty = tensor_type(&[n], elem_ty).into();
+        let load_op: Operation<'a> = shared_load_index(location, buf, index, result_ty)
+            .map_err(|e| MlirError::CreateOperation { err: e })?
+            .into();
+        let result: Value<'a, 'a> = load_op.result(0).expect("tt.shared_load_index result").into();
+        mlir_block.append_operation(load_op);
+        Ok(Some(result))
     }
 
     // -------------------------------------------------------------------------
