@@ -37,7 +37,11 @@ impl<'a> TritonCodegen<'a> {
 
         // If the return place _0 holds a tuple (multiple return values), return all fields.
         let return_values: Vec<_> = if let Some(fields) = state.tuple_fields.get(&Local::ZERO) {
-            fields.to_vec()
+            fields
+                .iter()
+                .enumerate()
+                .map(|(i, slot)| slot.unwrap_value(Local::ZERO, i))
+                .collect()
         } else {
             state.ssa_values.get(&Local::ZERO).copied().into_iter().collect()
         };

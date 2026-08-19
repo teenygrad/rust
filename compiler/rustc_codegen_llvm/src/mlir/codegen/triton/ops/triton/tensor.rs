@@ -42,7 +42,7 @@ use rustc_mlir::triton::{int_to_ptr, pointer_type};
 use rustc_span::Span;
 use rustc_span::Spanned;
 
-use crate::mlir::codegen::triton::{CodegenState, TritonCodegen};
+use crate::mlir::codegen::triton::{CodegenState, FieldSlot, TritonCodegen};
 use crate::mlir::errors::MlirError;
 
 /// Generate a stub codegen method that ignores all args and returns `ub.poison`
@@ -1424,7 +1424,10 @@ impl<'a> TritonCodegen<'a> {
         };
 
         // Store both results as tuple fields; return None to skip ssa_values insertion.
-        state.tuple_fields.insert(destination.local, vec![lhs_out, rhs_out]);
+        state.tuple_fields.insert(
+            destination.local,
+            vec![FieldSlot::Value(lhs_out), FieldSlot::Value(rhs_out)],
+        );
         Ok(None)
     }
 
@@ -2039,7 +2042,10 @@ impl<'a> TritonCodegen<'a> {
         // store src twice as a no-op so subsequent field accesses still work.
         if last_dim != 2 {
             eprintln!("[WARN] split: last dim {} != 2; using src for both halves", last_dim);
-            state.tuple_fields.insert(destination.local, vec![src, src]);
+            state.tuple_fields.insert(
+                destination.local,
+                vec![FieldSlot::Value(src), FieldSlot::Value(src)],
+            );
             return Ok(None);
         }
 
@@ -2055,7 +2061,10 @@ impl<'a> TritonCodegen<'a> {
         mlir_block.append_operation(op);
 
         // Store as tuple fields; return None to skip ssa_values insertion.
-        state.tuple_fields.insert(destination.local, vec![lhs_val, rhs_val]);
+        state.tuple_fields.insert(
+            destination.local,
+            vec![FieldSlot::Value(lhs_val), FieldSlot::Value(rhs_val)],
+        );
         Ok(None)
     }
 

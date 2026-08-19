@@ -69,9 +69,31 @@ type SsaValues<'c, 'p> = HashMap<Local, Value<'c, 'p>>;
 /// These locals are NEVER inserted into `SsaValues`.
 type OptionTable<'c, 'p> = HashMap<Local, Option<Value<'c, 'p>>>;
 
-/// Tracks tuple MIR locals (including the return place `_0` for tuple-returning functions).
-/// The vec contains the individual MLIR values for each tuple field in order.
-type TupleTable<'c, 'p> = HashMap<Local, Vec<Value<'c, 'p>>>;
+/// One field of a tuple or user struct tracked in [`TupleTable`].
+///
+/// Triton IR has no struct/`Option` type: presence of an `Option` field is a
+/// compile-time fact (same model as `tt.load`'s optional mask operand).
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum FieldSlot<'c, 'p> {
+    Value(Value<'c, 'p>),
+    Option(Option<Value<'c, 'p>>),
+}
+
+impl<'c, 'p> FieldSlot<'c, 'p> {
+    fn unwrap_value(self, local: Local, idx: usize) -> Value<'c, 'p> {
+        match self {
+            FieldSlot::Value(v) => v,
+            FieldSlot::Option(_) => panic!(
+                "tuple/struct field {idx} of local {local:?} is Option; use option_from_place"
+            ),
+        }
+    }
+}
+
+/// Tracks tuple and user-struct MIR locals (including the return place `_0`
+/// for tuple-returning functions). Option-typed fields are `FieldSlot::Option`
+/// so they compose with `option_table` rather than demanding a plain `Value`.
+type TupleTable<'c, 'p> = HashMap<Local, Vec<FieldSlot<'c, 'p>>>;
 
 /// Constant integer arrays (e.g. shape arrays like `[BLOCK_SIZE]`).
 /// Keyed by the MIR `Local` that holds the array; value is the elements as `i64`.
@@ -2310,11 +2332,14 @@ impl<'a> TritonCodegen<'a> {
                 // Route Option<T> locals into the option_table instead of ssa_values.
                 if is_option_ty(tcx, normalized_ty) {
                     let opt_value = match operand {
-                        Operand::Copy(src) | Operand::Move(src) => {
-                            *state.option_table.get(&src.local).unwrap_or_else(|| {
-                                panic!("Option local {:?} not found in option_table", src.local)
-                            })
-                        }
+                        Operand::Copy(src) | Operand::Move(src) => self
+                            .option_from_place(src, state)
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "Option place {:?} not found in option_table/tuple_fields",
+                                    src
+                                )
+                            }),
                         // `None::<T>` as a constant — no inner value.
                         Operand::Constant(_) => None,
                         Operand::RuntimeChecks(_) => {
@@ -2333,9 +2358,13 @@ impl<'a> TritonCodegen<'a> {
                                 panic!("Tuple local {:?} not found in tuple_fields", src.local)
                             })
                         }
-                        Operand::Constant(const_op) => self.codegen_tuple_constant(
-                            tcx, instance, const_op, elem_tys, location, mlir_block,
-                        )?,
+                        Operand::Constant(const_op) => self
+                            .codegen_tuple_constant(
+                                tcx, instance, const_op, elem_tys, location, mlir_block,
+                            )?
+                            .into_iter()
+                            .map(FieldSlot::Value)
+                            .collect(),
                         Operand::RuntimeChecks(_) => todo!("RuntimeChecks for tuple"),
                     };
                     state.tuple_fields.insert(place.local, fields);
@@ -2529,10 +2558,7 @@ impl<'a> TritonCodegen<'a> {
 
                     let fields = index_vec
                         .iter()
-                        .map(|op| match op {
-                            Operand::Copy(p) | Operand::Move(p) => self.codegen_copy(&p, state),
-                            _ => todo!("Tuple aggregate with non-copy/move operand: {:?}", op),
-                        })
+                        .map(|op| self.codegen_field_slot(tcx, instance, mir, op, location, mlir_block, state))
                         .collect::<Result<Vec<_>, _>>()?;
                     state.tuple_fields.insert(place.local, fields);
                     return Ok(());
@@ -2599,21 +2625,12 @@ impl<'a> TritonCodegen<'a> {
                         || adt_name == "triton::llvm::triton::pointer::LlvmPointer"
                         || adt_name == "triton::llvm::triton::shared::LlvmSharedMem";
                     if !is_triton_type {
-                        let fields: Result<Vec<Value<'_, '_>>, MlirError> = index_vec
+                        let fields: Result<Vec<FieldSlot<'_, '_>>, MlirError> = index_vec
                             .iter()
-                            .map(|op| match op {
-                                Operand::Copy(p) | Operand::Move(p) => self.codegen_copy(p, state),
-                                Operand::Constant(_) | Operand::RuntimeChecks(_) => {
-                                    let ty = instance
-                                        .instantiate_mir_and_normalize_erasing_regions(
-                                            tcx,
-                                            TypingEnv::fully_monomorphized(),
-                                            EarlyBinder::bind(op.ty(mir, tcx)),
-                                        );
-                                    self.codegen_operand(
-                                        tcx, instance, op, ty, location, mlir_block, state,
-                                    )
-                                }
+                            .map(|op| {
+                                self.codegen_field_slot(
+                                    tcx, instance, mir, op, location, mlir_block, state,
+                                )
                             })
                             .collect();
                         state.tuple_fields.insert(place.local, fields?);
@@ -2694,7 +2711,10 @@ impl<'a> TritonCodegen<'a> {
                                 .into();
                         let false_val: Value<'_, '_> = false_op.result(0).unwrap().into();
                         mlir_block.append_operation(false_op);
-                        state.tuple_fields.insert(place.local, vec![result_val, false_val]);
+                        state.tuple_fields.insert(
+                            place.local,
+                            vec![FieldSlot::Value(result_val), FieldSlot::Value(false_val)],
+                        );
                     }
                 } else {
                     let value = self.codegen_binary_op(
@@ -2756,13 +2776,14 @@ impl<'a> TritonCodegen<'a> {
                     EarlyBinder::bind(src_ty),
                 );
                 if is_option_ty(tcx, norm_src_ty) {
-                    // The discriminant of an Option is statically known from the option_table.
-                    let discr: i64 = match state.option_table.get(&src_place.local) {
+                    // The discriminant of an Option is statically known from option_table
+                    // or from an Option-typed field of a struct local.
+                    let discr: i64 = match self.option_from_place(src_place, state) {
                         Some(None) => 0,    // None variant
                         Some(Some(_)) => 1, // Some variant
                         None => panic!(
-                            "Option local {:?} not found in option_table for Discriminant",
-                            src_place.local
+                            "Option place {:?} not found in option_table/tuple_fields for Discriminant",
+                            src_place
                         ),
                     };
                     let int_val = Int::I8(discr as u8);
@@ -3076,19 +3097,33 @@ impl<'a> TritonCodegen<'a> {
         );
 
         if is_option_ty(tcx, norm_ty) {
-            if variant_index.as_usize() == 0 {
-                // Two-phase None: discriminant set to 0.
-                state.option_table.insert(place.local, None);
+            let inner = if variant_index.as_usize() == 0 {
+                None
             } else {
                 // Two-phase Some: inner value was written into ssa_values[place.local] by
                 // a preceding field-assignment via Place::Downcast projection.  Promote it.
-                let inner = state.ssa_values.remove(&place.local).unwrap_or_else(|| {
+                Some(state.ssa_values.remove(&place.local).unwrap_or_else(|| {
                     panic!(
                         "SetDiscriminant Some: expected inner value in ssa_values for {:?}",
                         place.local
                     )
-                });
-                state.option_table.insert(place.local, Some(inner));
+                }))
+            };
+
+            if let [ProjectionElem::Field(field_idx, _)] = place.projection.as_slice() {
+                let fields = state.tuple_fields.entry(place.local).or_default();
+                let idx = field_idx.index();
+                if fields.len() <= idx {
+                    fields.resize(idx + 1, FieldSlot::Option(None));
+                }
+                fields[idx] = FieldSlot::Option(inner);
+            } else if place.projection.is_empty() {
+                state.option_table.insert(place.local, inner);
+            } else {
+                todo!(
+                    "SetDiscriminant Option with unsupported projection {:?}",
+                    place.projection
+                );
             }
             return Ok(());
         }
@@ -3390,6 +3425,58 @@ impl<'a> TritonCodegen<'a> {
         }
     }
 
+    /// Evaluate one operand of a tuple/struct aggregate into a [`FieldSlot`].
+    /// Option-typed operands are resolved through `option_table` (compile-time
+    /// presence); everything else is a plain MLIR `Value`.
+    fn codegen_field_slot<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        instance: &Instance<'tcx>,
+        mir: &Body<'tcx>,
+        op: &Operand<'tcx>,
+        location: Location<'a>,
+        mlir_block: &BlockRef<'a, 'a>,
+        state: &mut CodegenState<'a, 'a>,
+    ) -> Result<FieldSlot<'a, 'a>, MlirError> {
+        let ty = instance.instantiate_mir_and_normalize_erasing_regions(
+            tcx,
+            TypingEnv::fully_monomorphized(),
+            EarlyBinder::bind(op.ty(mir, tcx)),
+        );
+        if is_option_ty(tcx, ty) {
+            Ok(FieldSlot::Option(self.codegen_option_operand(
+                tcx, instance, mir, op, location, mlir_block, state,
+            )?))
+        } else {
+            Ok(FieldSlot::Value(self.codegen_operand(
+                tcx, instance, op, ty, location, mlir_block, state,
+            )?))
+        }
+    }
+
+    /// Resolve an Option-typed place to its compile-time presence.
+    ///
+    /// Whole Option locals live in `option_table`. Option-typed fields of a
+    /// struct/tuple local live in `tuple_fields` as `FieldSlot::Option`.
+    pub(crate) fn option_from_place<'tcx>(
+        &self,
+        place: &Place<'tcx>,
+        state: &CodegenState<'a, 'a>,
+    ) -> Option<Option<Value<'a, 'a>>> {
+        if place.projection.is_empty() {
+            return state.option_table.get(&place.local).copied();
+        }
+        if let [ProjectionElem::Field(field_idx, _)] = place.projection.as_slice() {
+            if let Some(fields) = state.tuple_fields.get(&place.local) {
+                match fields.get(field_idx.index()) {
+                    Some(FieldSlot::Option(inner)) => return Some(*inner),
+                    Some(FieldSlot::Value(_)) | None => return None,
+                }
+            }
+        }
+        None
+    }
+
     /// Resolve an operand that may be `Option<T>`.
     /// Returns the inner MLIR value if the option is `Some` (or if the operand is not an Option),
     /// or `None` if the option is absent.
@@ -3412,8 +3499,11 @@ impl<'a> TritonCodegen<'a> {
         if is_option_ty(tcx, ty) {
             let inner = match operand {
                 Operand::Copy(p) | Operand::Move(p) => {
-                    *state.option_table.get(&p.local).unwrap_or_else(|| {
-                        panic!("Option local {:?} not found in option_table", p.local)
+                    self.option_from_place(p, state).unwrap_or_else(|| {
+                        panic!(
+                            "Option place {:?} not found in option_table/tuple_fields",
+                            p
+                        )
                     })
                 }
                 // `None::<T>` constant — no inner value.
@@ -3496,8 +3586,7 @@ impl<'a> TritonCodegen<'a> {
         state: &mut CodegenState<'a, 'a>,
     ) -> Result<Value<'a, 'a>, MlirError> {
         // Handle Option downcast+field projection: `(_opt as Some).0` — extract the inner value.
-        if let [ProjectionElem::Downcast(_, _), ProjectionElem::Field(_, _)]
-        | [ProjectionElem::Field(_, _)] = place.projection.as_slice()
+        if let [ProjectionElem::Downcast(_, _), ProjectionElem::Field(_, _)] = place.projection.as_slice()
         {
             if let Some(opt_val) = state.option_table.get(&place.local) {
                 return Ok(opt_val.unwrap_or_else(|| {
@@ -3505,20 +3594,46 @@ impl<'a> TritonCodegen<'a> {
                 }));
             }
         }
+        // Same, but the Option is a field of a struct/tuple local: `(_tile.1 as Some).0`.
+        if let [ProjectionElem::Field(field_idx, _), ProjectionElem::Downcast(_, _), ProjectionElem::Field(_, _)] =
+            place.projection.as_slice()
+        {
+            if let Some(fields) = state.tuple_fields.get(&place.local) {
+                match fields.get(field_idx.index()) {
+                    Some(FieldSlot::Option(Some(v))) => return Ok(*v),
+                    Some(FieldSlot::Option(None)) => {
+                        panic!(
+                            "Accessing field of None Option field {} of local {:?}",
+                            field_idx.index(),
+                            place.local
+                        )
+                    }
+                    _ => {}
+                }
+            }
+        }
 
         debug_assert!(
-            !state.option_table.contains_key(&place.local),
+            !state.option_table.contains_key(&place.local) || !place.projection.is_empty(),
             "BUG: Option local {:?} used as a direct MLIR value; use codegen_option_operand instead",
             place.local
         );
 
-        // Handle a single Field projection on a tuple local stored in tuple_fields.
+        // Handle a single Field projection on a tuple/struct local stored in tuple_fields.
         if let [ProjectionElem::Field(field_idx, _)] = place.projection.as_slice() {
             if let Some(fields) = state.tuple_fields.get(&place.local) {
                 let idx = field_idx.index();
-                return Ok(*fields.get(idx).unwrap_or_else(|| {
+                let slot = fields.get(idx).unwrap_or_else(|| {
                     panic!("Tuple field {} not found for local {:?}", idx, place.local)
-                }));
+                });
+                return match slot {
+                    FieldSlot::Value(v) => Ok(*v),
+                    FieldSlot::Option(Some(v)) => Ok(*v),
+                    FieldSlot::Option(None) => panic!(
+                        "Accessing Option field {} of None local {:?} as a Value",
+                        idx, place.local
+                    ),
+                };
             }
         }
 
