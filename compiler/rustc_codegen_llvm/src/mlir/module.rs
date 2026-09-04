@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 
 use melior::Context;
 use melior::ir::{Location, Module};
@@ -82,6 +82,13 @@ pub struct MlirModule<'c> {
     pub mlir_source: Option<String>,
     /// Kernel metadata parsed from the PTX comment block appended by CudaBackend.
     pub kernel_metadata: Option<KernelMetadata>,
+    /// Owned backing storage for any `*const c_char` fields in `compiler`'s
+    /// `CompileOptions` (e.g. `RiscvCompileOptions::cpu`/`target_triple`).
+    /// The C++ backend stores that struct *by value*, pointers and all, so
+    /// these must outlive `compiler` itself, not just the `TritonCompiler::new`
+    /// call that read them -- never drop this before `compiler`. Empty for
+    /// backends (e.g. Cuda today) whose options carry no such pointers.
+    _ffi_strings: Vec<CString>,
 }
 
 /// Resolve the PTX ISA version (encoded as `major*10 + minor`, e.g. `82` for
@@ -202,6 +209,7 @@ impl<'c> MlirModule<'c> {
             ptx_asm: None,
             mlir_source: None,
             kernel_metadata: None,
+            _ffi_strings: Vec::new(),
         }
     }
 
@@ -214,7 +222,7 @@ impl<'c> MlirModule<'c> {
         let location = Location::unknown(&context);
         let module = Module::new(location);
 
-        let (options, target_name, _keep_alive) = crate::mlir::target::resolve(sess);
+        let (options, target_name, ffi_strings) = crate::mlir::target::resolve(sess);
         let compiler = TritonCompiler::new(context.to_raw(), target_name, &options)
             .expect("Failed to create Triton compiler");
 
@@ -226,6 +234,11 @@ impl<'c> MlirModule<'c> {
             ptx_asm: None,
             mlir_source: None,
             kernel_metadata: None,
+            // Backend structs like RiscvCompileOptions are stored by value in
+            // the C++ backend, pointers and all -- these CStrings must
+            // outlive `compiler`, not just the `TritonCompiler::new` call
+            // above. See the field doc on `_ffi_strings`.
+            _ffi_strings: ffi_strings,
         }
     }
 
@@ -254,6 +267,7 @@ impl<'c> MlirModule<'c> {
             ptx_asm: None,
             mlir_source: None,
             kernel_metadata: None,
+            _ffi_strings: Vec::new(),
         }
     }
 

@@ -17,8 +17,11 @@
 #ifndef TRITON_RISCV_BACKEND_H
 #define TRITON_RISCV_BACKEND_H
 
+#include <memory>
 #include <stdint.h>
 #include <string>
+
+#include "llvm/Target/TargetMachine.h"
 
 #include "Backend.h"
 
@@ -28,10 +31,11 @@ namespace triton {
 // ---------------------------------------------------------------------------
 // RISC-V backend compile options (FFI-safe / repr(C))
 //
-// Reserved for a future real RISC-V Triton backend. RiscvBackend below is a
-// stub that reports Error::NotImplemented for every codegen stage; these
-// fields are not yet consumed. Mirrors the FFI-safe struct conventions used
-// by CudaCompileOptions in CudaBackend.h.
+// Mirrors the FFI-safe struct conventions used by CudaCompileOptions in
+// CudaBackend.h. RiscvBackend below does not yet lower the incoming
+// Triton/MLIR module (see makeTTIR/makeTTGIR/makeLLIR): makeLLVMIR
+// synthesizes a placeholder kernel function instead, which makeASM/makeBIN
+// then compile for real through LLVM's RISC-V backend.
 // ---------------------------------------------------------------------------
 
 /// FFI-safe compilation options for the (stub) RISC-V backend.
@@ -42,10 +46,11 @@ struct RiscvCompileOptions {
   bool debug;
 };
 
-/// Stub RISC-V backend. Implements the Backend interface so
-/// TargetBackend_Riscv can be dispatched without crashing, but every codegen
-/// stage returns failure with Error::NotImplemented until a real Triton
-/// RISC-V backend is implemented.
+/// RISC-V backend. Does not yet lower the incoming Triton/MLIR module (see
+/// makeTTIR/makeTTGIR/makeLLIR); makeLLVMIR instead synthesizes a minimal
+/// placeholder `void @<name>()` kernel function, which makeASM/makeBIN
+/// compile for real through LLVM's RISC-V backend -- makeBIN links the
+/// result into a shared library via `ld.lld` so it can be dlopen'd and run.
 class RiscvBackend : public Backend {
 public:
   RiscvBackend(std::string target, RiscvCompileOptions options);
@@ -74,7 +79,22 @@ public:
   virtual LogicalResult makeBIN(MLIRContext &context, ModuleOp module) override;
 
 private:
-  LogicalResult notImplemented(const char *stage);
+  /// Creates an LLVM `TargetMachine` for this backend's target triple,
+  /// logging why and returning nullptr on failure. Caller owns the
+  /// returned pointer. Uses a real, generic LLVM cpu name matching the
+  /// triple's width rather than `m_options.cpu` -- see the comment in the
+  /// .cpp for why forwarding that Triton-side chip identifier directly
+  /// would abort the process instead of failing gracefully.
+  llvm::TargetMachine *createRiscvTargetMachine();
+
+  /// Reparses `m_llvmir` (populated by makeLLVMIR) into `context`, logging
+  /// why and returning nullptr on failure.
+  std::unique_ptr<llvm::Module> parseStoredLLVMIR(llvm::LLVMContext &context);
+
+  /// Locates the `ld.lld` binary used to link makeBIN's object file into a
+  /// shared library: `$TEENYC_LLD_PATH` if set, else the first `ld.lld` on
+  /// `PATH`. Returns an empty string if neither is found.
+  std::string findLld();
 
   RiscvCompileOptions m_options;
 };

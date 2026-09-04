@@ -96,16 +96,20 @@ fn cuda_invalid_target_cpu_is_rejected() {
 }
 
 #[test]
-fn riscv_target_reaches_riscv_backend_stub() {
+fn riscv_target_compiles_placeholder_kernel_end_to_end() {
     // riscv64-generic selects TargetBackend::Riscv (see
     // rustc_target::spec::targets::riscv64_generic and
-    // rustc_codegen_llvm::mlir::target::resolve). RiscvBackend is currently a
-    // stub that fails every codegen stage with Error::NotImplemented, so
-    // compilation is expected to fail here too -- the point of this test is
-    // that it fails *inside Triton's RISC-V backend* (proving dispatch
-    // worked), not with "unsupported target architecture" (which would mean
-    // dispatch itself is broken).
+    // rustc_codegen_llvm::mlir::target::resolve). RiscvBackend doesn't lower
+    // the incoming module yet (makeTTIR/makeTTGIR/makeLLIR are no-ops) --
+    // makeLLVMIR instead synthesizes a placeholder `void @<name>()` kernel,
+    // which makeASM/makeBIN then compile for real through LLVM's RISC-V
+    // backend (makeBIN additionally links the result into a shared library
+    // via ld.lld). This test only confirms that whole pipeline completes
+    // without error; it doesn't yet verify the linked .so's bytes, since
+    // TritonCompiler::compile() calls makeBIN but nothing on the Rust side
+    // retrieves getBIN() (compile_module only reads get_asm()) -- exposing
+    // that is a separate follow-up.
     let src = data_file("triton_relu.rs");
     let result = try_compile(&src, "riscv64-generic", "riscv_stub", &[]);
-    assert!(result.is_err(), "expected the RiscvBackend stub to fail codegen (NotImplemented)");
+    assert!(result.is_ok(), "expected the RISC-V placeholder pipeline to succeed: {result:?}");
 }

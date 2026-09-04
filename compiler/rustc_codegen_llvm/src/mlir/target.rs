@@ -111,7 +111,10 @@ fn resolve_riscv(sess: &Session) -> (CompileOptions, Vec<CString>) {
     let cpu_c = CString::new(cpu).unwrap_or_else(|_| {
         sess.dcx().fatal(format!("`-C target-cpu` value `{cpu}` contains a NUL byte"))
     });
-    let triple_c = CString::new(sess.opts.target_triple.tuple()).ok();
+    // `sess.target.llvm_target` (e.g. "riscv64"), not `sess.opts.target_triple`
+    // (the rustc-level tuple, e.g. "riscv64-generic") -- the latter isn't a
+    // real LLVM triple `TargetRegistry::lookupTarget` can resolve.
+    let triple_c = CString::new(sess.target.llvm_target.as_ref()).ok();
 
     let mut options = CompileOptions::default_riscv();
     // Safety: CompileOptionsData is a union; default_riscv() sets the riscv variant.
