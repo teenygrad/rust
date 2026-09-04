@@ -41,6 +41,7 @@ namespace triton {
 enum TargetBackend : uint32_t {
   TargetBackend_Cuda = 0,
   TargetBackend_Rocm = 1,
+  TargetBackend_Riscv = 2,
 };
 
 // ---------------------------------------------------------------------------
