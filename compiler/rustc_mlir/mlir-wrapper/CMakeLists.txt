@@ -53,6 +53,7 @@ set(WRAPPER_SOURCES
     triton/TritonCompiler.cpp
     triton/backend/Backend.cpp
     triton/backend/CudaBackend.cpp
+    triton/backend/RiscvBackend.cpp
 )
 
 # Create static library

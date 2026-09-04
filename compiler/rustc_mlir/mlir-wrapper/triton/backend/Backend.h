@@ -54,6 +54,7 @@ using namespace mlir::triton::instrument;
 enum Error {
   InvalidPass,
   InvalidLLVMModule,
+  NotImplemented,
 };
 
 enum Language {
