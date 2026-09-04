@@ -33,6 +33,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/TargetParser/Triple.h"
 
+#include "riscv/Dialect/RVV/IR/Dialect.h"
+
 #include "RiscvBackend.h"
 
 #include <cstdlib>
@@ -59,9 +61,15 @@ RiscvBackend::RiscvBackend(std::string target, RiscvCompileOptions options)
 RiscvBackend::~RiscvBackend() {}
 
 void RiscvBackend::loadDialects(MLIRContext &context) {
-  // No RISC-V-specific dialects to register: this backend does not lower
-  // the incoming Triton/MLIR module yet (see makeTTIR/makeTTGIR/makeLLIR
-  // below); makeLLVMIR synthesizes a placeholder kernel function directly.
+  // Registered for future use: this backend does not yet lower the
+  // incoming Triton/MLIR module through any dialect at all (see
+  // makeTTIR/makeTTGIR/makeLLIR below) -- makeLLVMIR synthesizes a
+  // placeholder kernel function directly. RVVDialect exists so real
+  // MIR-to-LLVM-IR lowering has somewhere to represent RVV-specific
+  // concepts (see RVVDialect.td) once that lowering exists.
+  DialectRegistry registry;
+  registry.insert<mlir::rvv::RVVDialect>();
+  context.appendDialectRegistry(registry);
 }
 
 LogicalResult RiscvBackend::makeTTIR(MLIRContext &context, ModuleOp module) {
