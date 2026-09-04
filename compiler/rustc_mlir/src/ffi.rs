@@ -186,6 +186,32 @@ impl Default for CudaCompileOptions {
 // Tagged union of backend option structs (mirrors `CompileOptionsData` in C++)
 // ---------------------------------------------------------------------------
 
+/// FFI-safe compilation options for the (stub) RISC-V backend.
+/// Mirrors `RiscvCompileOptions` in `RiscvBackend.h`.
+///
+/// Reserved for a future real RISC-V Triton backend; the C++ `RiscvBackend`
+/// stub reports `Error::NotImplemented` for every codegen stage and does not
+/// yet consume these fields.
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct RiscvCompileOptions {
+    pub target_triple: *const c_char, // NULL = backend default
+    pub cpu: *const c_char,           // NULL = backend default
+    pub features: *const c_char,      // NULL = backend default
+    pub debug: bool,
+}
+
+impl Default for RiscvCompileOptions {
+    fn default() -> Self {
+        Self {
+            target_triple: std::ptr::null(),
+            cpu: std::ptr::null(),
+            features: std::ptr::null(),
+            debug: false,
+        }
+    }
+}
+
 /// Union of all per-backend option structs.  Only the member corresponding to
 /// `CompileOptions::backend` may be read.
 ///
@@ -197,6 +223,8 @@ impl Default for CudaCompileOptions {
 pub union CompileOptionsData {
     pub cuda: CudaCompileOptions,
     // pub rocm:  RocmCompileOptions,  // reserved for future use
+    // pub riscv: RiscvCompileOptions, // reserved for future use; see
+    //                                 // RiscvCompileOptions above
 }
 
 /// Complete compile options passed to `mlirTritonCompilerCreate`.

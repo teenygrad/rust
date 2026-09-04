@@ -61,6 +61,8 @@ enum TargetBackend : uint32_t {
 union CompileOptionsData {
   CudaCompileOptions cuda;
   // RocmCompileOptions  rocm;   // reserved for future use
+  // RiscvCompileOptions riscv;  // reserved for future use; see
+                                  // triton/backend/RiscvBackend.h
 };
 
 /// Complete compile options passed across the C/Rust FFI boundary.
