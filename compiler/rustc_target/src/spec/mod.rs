@@ -1743,6 +1743,7 @@ supported_targets! {
     ("aarch64-unknown-uefi", aarch64_unknown_uefi),
 
     ("nvptx64-nvidia-cuda", nvptx64_nvidia_cuda),
+    ("riscv64-generic", riscv64_generic),
 
     ("amdgcn-amd-amdhsa", amdgcn_amd_amdhsa),
 

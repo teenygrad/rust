@@ -43,6 +43,7 @@ use rustc_middle::ty::TyCtxt;
 use rustc_session::Session;
 use rustc_session::config::{self, OutputFilenames, PrintKind, PrintRequest};
 use rustc_span::Symbol;
+use rustc_target::spec::Arch;
 use tracing::info;
 
 use crate::mlir::MlirModule;
@@ -109,14 +110,10 @@ fn compile_codegen_unit_impl(
     info!("CGU size estimate: {}", cgu.size_estimate());
     info!("========================================");
 
-    // Determine GPU capability from -Ctarget-cpu (e.g. "sm_120a" → 120, "sm_90a" → 90).
-    let target_cpu = crate::llvm_util::target_cpu(tcx.sess);
-    let capability: i32 = {
-        let s = target_cpu.trim_start_matches("sm_").trim_end_matches('a');
-        s.parse::<i32>().unwrap_or(90)
-    };
-    // Create the MLIR module
-    let mut mlir_module = MlirModule::new_with_capability(cgu_name.as_str(), capability);
+    // Create the MLIR module: backend (Cuda/Riscv) and compile options are
+    // resolved from the session's --target architecture and -C target-cpu
+    // (see crate::mlir::target::resolve).
+    let mut mlir_module = MlirModule::new_for_session(cgu_name.as_str(), tcx.sess);
     let mut triton_codegen = TritonCodegen::new(&mlir_module);
 
     // Get all mono items in deterministic order
@@ -197,7 +194,9 @@ fn compile_module(mlir_module: &mut MlirModule<'static>) -> Result<(), MlirError
 /// before ttir, rather than ttir itself.
 ///
 /// A caller turns this on via `RUSTC_LOG=rustc_codegen_llvm::mlir=debug` (or
-/// `=trace` for the per-pass detail too).
+/// `=trace` for the per-pass detail too). See
+/// [`crate::mlir::module::MlirModule::new_for_session`] for how
+/// `CompileOptions::debug` gets set from this same log target.
 fn log_pipeline_stages(mlir_module: &MlirModule<'static>, ptx: &str) {
     let compiler = &mlir_module.compiler;
 
@@ -459,15 +458,35 @@ impl CodegenBackend for MlirCodegenBackend {
         }
     }
 
-    fn print(&self, req: &PrintRequest, out: &mut String, _sess: &Session) {
+    fn print(&self, req: &PrintRequest, out: &mut String, sess: &Session) {
         match req.kind {
             PrintKind::TargetCPUs => {
                 out.push_str("MLIR backend target CPUs:\n");
-                out.push_str("  (uses LLVM target CPUs)\n");
+                match &sess.target.arch {
+                    Arch::Nvptx64 => {
+                        out.push_str(
+                            "  an NVIDIA SM version in the form `sm_<NN>` or `sm_<NN>a`, \
+                             e.g. sm_70, sm_80, sm_90, sm_90a, sm_100a, sm_120a\n",
+                        );
+                    }
+                    Arch::RiscV32 | Arch::RiscV64 => {
+                        out.push_str(
+                            "  a RISC-V chip identifier understood by this backend's (currently \
+                             stub) RISC-V/Triton path, e.g. generic-rvv1.0, spacemit-k3 -- not \
+                             an LLVM -mcpu value\n",
+                        );
+                    }
+                    other => {
+                        out.push_str(&format!(
+                            "  (unsupported target architecture `{}` for the `mlir` backend)\n",
+                            other.desc()
+                        ));
+                    }
+                }
             }
             PrintKind::TargetFeatures => {
                 out.push_str("MLIR backend target features:\n");
-                out.push_str("  (uses LLVM target features)\n");
+                out.push_str("  (not yet modeled separately from target-cpu)\n");
             }
             _ => {
                 // Delegate other print requests to LLVM

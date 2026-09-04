@@ -22,6 +22,7 @@ use rustc_codegen_ssa::back::write::CodegenContext;
 use rustc_errors::DiagCtxtHandle;
 use rustc_mlir::ffi::{CompileOptions, OptionalI32};
 use rustc_mlir::triton::TritonCompiler;
+use rustc_session::Session;
 
 /// Resource metadata for a compiled GPU kernel, recovered by parsing the
 /// structured `// meta:key=value` comments appended to the PTX by CudaBackend.
@@ -95,7 +96,7 @@ pub struct MlirModule<'c> {
 /// hardware at all — but a toolkit/driver newer than that floor can safely
 /// run PTX declaring a *higher* version too, which is why an exact match via
 /// the env var is preferable whenever the real target version is known.
-fn resolve_ptx_version(capability: i32) -> i32 {
+pub(crate) fn resolve_ptx_version(capability: i32) -> i32 {
     if let Ok(v) = std::env::var("TEENYC_PTX_VERSION") {
         if let Ok(parsed) = v.parse::<i32>() {
             return parsed;
@@ -173,26 +174,48 @@ unsafe impl<'c> Send for MlirModule<'c> {}
 unsafe impl<'c> Sync for MlirModule<'c> {}
 
 impl<'c> MlirModule<'c> {
+    /// Creates a placeholder module fixed to CUDA capability 90, for paths
+    /// that never run real per-target codegen through this module: the
+    /// allocator shim (`codegen_allocator`) and the thin-LTO pass-through
+    /// reconstruction (`optimize_and_codegen_thin`), both of which populate
+    /// `ptx_asm` from elsewhere rather than invoking `compiler.compile()`.
+    /// Real per-CGU codegen goes through [`Self::new_for_session`] instead,
+    /// which resolves the backend/capability from the session's
+    /// `--target`/`-C target-cpu` (see `crate::mlir::target`).
     pub fn new(mod_name: &str) -> Self {
-        Self::new_with_capability(mod_name, 90)
-    }
-
-    pub fn new_with_capability(mod_name: &str, capability: i32) -> Self {
         let context = Context::new();
         let location = Location::unknown(&context);
         let module = Module::new(location);
 
         let mut options = CompileOptions::default_cuda();
         // Safety: CompileOptionsData is a union; default_cuda() sets the cuda variant.
-        options.data.cuda.capability = capability;
-        options.data.cuda.ptx_version = OptionalI32::some(resolve_ptx_version(capability));
-        // `debug` gates the C++ backend's per-pass IR printing (see
-        // CudaBackend::makeTTIR/makeTTGIR/makeLLIR) — only worth paying for
-        // when a subscriber is actually listening at trace level for this
-        // backend's log target.
-        options.data.cuda.debug =
-            tracing::enabled!(target: crate::mlir::LOG_TARGET, tracing::Level::TRACE);
+        options.data.cuda.capability = 90;
+        options.data.cuda.ptx_version = OptionalI32::some(resolve_ptx_version(90));
         let compiler = TritonCompiler::new(context.to_raw(), "cuda", &options)
+            .expect("Failed to create Triton compiler");
+
+        Self {
+            name: mod_name.to_string(),
+            mlir: module,
+            compiler,
+            context,
+            ptx_asm: None,
+            mlir_source: None,
+            kernel_metadata: None,
+        }
+    }
+
+    /// Creates the module used for real per-CGU codegen, with the Triton
+    /// backend (Cuda/Riscv) and compile options resolved from `sess`'s
+    /// `--target` architecture and `-C target-cpu` (see
+    /// `crate::mlir::target::resolve`).
+    pub fn new_for_session(mod_name: &str, sess: &Session) -> Self {
+        let context = Context::new();
+        let location = Location::unknown(&context);
+        let module = Module::new(location);
+
+        let (options, target_name, _keep_alive) = crate::mlir::target::resolve(sess);
+        let compiler = TritonCompiler::new(context.to_raw(), target_name, &options)
             .expect("Failed to create Triton compiler");
 
         Self {
