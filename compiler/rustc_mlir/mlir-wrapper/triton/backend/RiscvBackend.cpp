@@ -26,6 +26,7 @@
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
@@ -225,6 +226,7 @@ LogicalResult RiscvBackend::makeBIN(MLIRContext &context, ModuleOp module) {
            "library (set $TEENYC_LLD_PATH, or put ld.lld on PATH)\n";
     return failure();
   }
+  llvm::errs() << "RiscvBackend: linking with " << lldPath << "\n";
 
   llvm::SmallVector<llvm::StringRef, 8> args = {
       lldPath, "-shared", "-m", "elf64lriscv", "-o", soPath, objPath};
@@ -313,11 +315,66 @@ RiscvBackend::parseStoredLLVMIR(llvm::LLVMContext &context) {
   return mod;
 }
 
+/// Locates the `rust-lld` copy bundled with the running `teenyc`'s own
+/// toolchain, at `<prefix>/lib/rustlib/<host-target>/bin/gcc-ld/ld.lld`
+/// (present on any standard rustup/cargo-teeny install, precisely so a
+/// compiler like this one can self-contained-link without depending on a
+/// system linker package). `<prefix>` is derived from the running
+/// executable's own path (`<prefix>/bin/teenyc`) rather than assumed, so
+/// this works regardless of install location. `<host-target>` is found by
+/// scanning `lib/rustlib/*` rather than constructed from a triple string,
+/// since only the host's own subdirectory ships `bin/gcc-ld/ld.lld` and its
+/// exact spelling doesn't need to match LLVM's triple formatting this way.
+///
+/// Named `ld.lld` (not the bare `rust-lld` binary one level up) because
+/// LLD's driver selects its ELF/Darwin/etc. "flavor" from argv[0]'s
+/// basename by default; invoking the bare `rust-lld` binary directly with
+/// this backend's plain `-shared -m ... -o ...` arguments (no `-flavor`
+/// flag) would not reliably select the ELF driver the way invoking a
+/// binary actually named `ld.lld` does.
+static std::string findToolchainLld() {
+  // Passing this function's own address is the standard LLVM idiom for
+  // getMainExecutable's dladdr-based fallback path (used on platforms
+  // without a reliable /proc/self/exe equivalent); it never needs to be
+  // called.
+  std::string exePath = llvm::sys::fs::getMainExecutable(
+      nullptr, reinterpret_cast<void *>(&findToolchainLld));
+  if (exePath.empty()) {
+    return {};
+  }
+
+  // exePath is <prefix>/bin/teenyc (or /rustc, /cargo-teeny's teenyc, etc.)
+  // -- strip twice to get <prefix>.
+  llvm::SmallString<256> rustlibDir(exePath);
+  llvm::sys::path::remove_filename(rustlibDir); // drop the executable name
+  llvm::sys::path::remove_filename(rustlibDir); // drop "bin"
+  llvm::sys::path::append(rustlibDir, "lib", "rustlib");
+
+  std::error_code ec;
+  llvm::sys::fs::directory_iterator it(rustlibDir, ec);
+  llvm::sys::fs::directory_iterator end;
+  for (; !ec && it != end; it.increment(ec)) {
+    llvm::SmallString<256> candidate(it->path());
+    llvm::sys::path::append(candidate, "bin", "gcc-ld", "ld.lld");
+    if (llvm::sys::fs::exists(candidate)) {
+      return std::string(candidate);
+    }
+  }
+  return {};
+}
+
 std::string RiscvBackend::findLld() {
   if (const char *override_path = std::getenv("TEENYC_LLD_PATH")) {
     if (llvm::sys::fs::exists(override_path)) {
       return override_path;
     }
+  }
+  // Prefer the toolchain's own bundled linker over anything on PATH (e.g. a
+  // separately apt-installed `lld` package) -- this is what "just works"
+  // out of the box on any machine with only teenyc/rustup installed, no
+  // extra system dependency required.
+  if (std::string toolchainLld = findToolchainLld(); !toolchainLld.empty()) {
+    return toolchainLld;
   }
   if (auto found = llvm::sys::findProgramByName("ld.lld")) {
     return *found;

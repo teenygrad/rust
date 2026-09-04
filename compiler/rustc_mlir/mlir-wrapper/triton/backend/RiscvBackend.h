@@ -92,8 +92,11 @@ private:
   std::unique_ptr<llvm::Module> parseStoredLLVMIR(llvm::LLVMContext &context);
 
   /// Locates the `ld.lld` binary used to link makeBIN's object file into a
-  /// shared library: `$TEENYC_LLD_PATH` if set, else the first `ld.lld` on
-  /// `PATH`. Returns an empty string if neither is found.
+  /// shared library: `$TEENYC_LLD_PATH` if set, else the `rust-lld` copy
+  /// bundled with this running `teenyc`'s own toolchain (see the .cpp),
+  /// else the first `ld.lld` on `PATH` (e.g. a separately apt-installed
+  /// `lld` package) as a last resort. Returns an empty string if none are
+  /// found.
   std::string findLld();
 
   RiscvCompileOptions m_options;
