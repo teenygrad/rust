@@ -48,7 +48,8 @@ LogicalResult RiscvBackend::makeTTGIR(MLIRContext &context, ModuleOp module) {
 
 LogicalResult RiscvBackend::gluonToTTGIR(MLIRContext &context,
                                          ModuleOp module) {
-  return notImplemented("gluonToTTGIR");
+  // NOP for RISC-V backend
+  return success();
 }
 
 LogicalResult RiscvBackend::makeLLIR(MLIRContext &context, ModuleOp module) {

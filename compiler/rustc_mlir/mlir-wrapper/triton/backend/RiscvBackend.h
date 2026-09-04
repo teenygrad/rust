@@ -36,9 +36,9 @@ namespace triton {
 
 /// FFI-safe compilation options for the (stub) RISC-V backend.
 struct RiscvCompileOptions {
-  const char *target_triple; ///< NULL = backend default
-  const char *cpu;           ///< NULL = backend default
-  const char *features;      ///< NULL = backend default
+  const char *target_triple; /// RISC-V target triple
+  const char *cpu;           /// RISC-V CPU
+  const char *features;      /// RISC-V features
   bool debug;
 };
 
