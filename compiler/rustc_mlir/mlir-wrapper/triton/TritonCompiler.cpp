@@ -20,6 +20,7 @@
 
 #include "TritonCompiler.h"
 #include "backend/CudaBackend.h"
+#include "backend/RiscvBackend.h"
 
 using namespace std;
 
@@ -30,6 +31,9 @@ TritonCompiler::TritonCompiler(MLIRContext *context, std::string target,
                                CompileOptions options)
     : Compiler(context, target, options) {
   switch (options.backend) {
+  case TargetBackend_Riscv:
+    backend = new RiscvBackend(target, options.data.riscv);
+    break;
   case TargetBackend_Cuda:
   default:
     backend = new CudaBackend(target, options.data.cuda);
