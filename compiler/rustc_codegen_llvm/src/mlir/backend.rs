@@ -178,6 +178,11 @@ fn compile_module(mlir_module: &mut MlirModule<'static>) -> Result<(), MlirError
     let metadata = crate::mlir::module::KernelMetadata::parse(&ptx);
     mlir_module.kernel_metadata = Some(metadata);
     mlir_module.ptx_asm = Some(ptx);
+    // Some backends (e.g. RiscvBackend) additionally link a real binary
+    // (a shared library) in makeBIN; write_compiled_module prefers this
+    // over ptx_asm when present, so the actual final artifact -- not just
+    // its assembly text -- reaches the output file.
+    mlir_module.compiled_bin = mlir_module.compiler.get_bin_bytes().map(<[u8]>::to_vec);
     Ok(())
 }
 
@@ -304,10 +309,12 @@ impl WriteBackendMethods for MlirCodegenBackend {
         let name = thin.name().to_string();
         info!("=== MLIR optimize_and_codegen_thin '{}' (pass-through) ===", name);
 
-        // Recover the PTX that serialize_module serialized into the thin buffer.
-        let ptx = String::from_utf8(thin.data().to_vec()).ok();
+        // Recover the bytes serialize_module serialized into the thin buffer
+        // (compiled_bin if the backend produced one, else the ptx_asm text --
+        // see serialize_module). write_compiled_module treats compiled_bin
+        // opaquely, so this round-trip is correct either way.
         let mut mlir_module = MlirModule::new(&name);
-        mlir_module.ptx_asm = ptx;
+        mlir_module.compiled_bin = Some(thin.data().to_vec());
 
         write_compiled_module(cgcx, ModuleCodegen::new_regular(name, mlir_module))
     }
@@ -324,36 +331,58 @@ impl WriteBackendMethods for MlirCodegenBackend {
     }
 
     fn serialize_module(module: Self::Module, _is_thin: bool) -> Self::ModuleBuffer {
-        // Serialize the PTX into the buffer so optimize_and_codegen_thin can recover it.
-        let ptx_bytes = module.ptx_asm.map(|s| s.into_bytes()).unwrap_or_default();
-        ModuleBuffer { data: ptx_bytes }
+        // Prefer compiled_bin (e.g. RiscvBackend's linked shared library)
+        // over the ptx_asm text, matching write_compiled_module's
+        // precedence -- so optimize_and_codegen_thin's pass-through
+        // preserves the backend's actual final artifact, not just its
+        // assembly text.
+        let bytes = module
+            .compiled_bin
+            .unwrap_or_else(|| module.ptx_asm.map(|s| s.into_bytes()).unwrap_or_default());
+        ModuleBuffer { data: bytes }
     }
 }
 
-/// Writes a compiled module's PTX (and, if captured, its pre-Triton MLIR source) to
-/// the expected output paths and builds the resulting `CompiledModule`. Shared by
-/// `codegen` (no-LTO path) and `optimize_and_codegen_thin` (ThinLTO pass-through path)
-/// since both end up with a `ModuleCodegen<MlirModule>` whose `ptx_asm` is already
-/// populated by compile_codegen_unit_impl (via compile_module).
+/// Writes a compiled module's final artifact (and, if captured, its
+/// pre-Triton MLIR source) to the expected output paths and builds the
+/// resulting `CompiledModule`. Shared by `codegen` (no-LTO path) and
+/// `optimize_and_codegen_thin` (ThinLTO pass-through path) since both end up
+/// with a `ModuleCodegen<MlirModule>` whose `ptx_asm`/`compiled_bin` are
+/// already populated by compile_codegen_unit_impl (via compile_module).
+///
+/// `compiled_bin` (e.g. RiscvBackend's linked ELF shared library) is
+/// preferred over `ptx_asm` when present, so the backend's actual final
+/// artifact reaches the output file rather than just its assembly text.
+/// `serialize_module`/`optimize_and_codegen_thin` round-trip whichever of
+/// the two was preferred through the ThinLTO pass-through path too.
 fn write_compiled_module(
     cgcx: &CodegenContext,
     module: ModuleCodegen<MlirModule<'static>>,
 ) -> CompiledModule {
     info!("Module name: {}", module.name);
 
-    let ptx = module.module_llvm.ptx_asm.as_deref().unwrap_or_else(|| {
-        panic!(
-            "No PTX available for module '{}' — Triton compilation may not have run",
-            module.name
-        )
-    });
+    let bytes: &[u8] = if let Some(bin) = module.module_llvm.compiled_bin.as_deref() {
+        bin
+    } else {
+        module
+            .module_llvm
+            .ptx_asm
+            .as_deref()
+            .unwrap_or_else(|| {
+                panic!(
+                    "No output available for module '{}' — Triton compilation may not have run",
+                    module.name
+                )
+            })
+            .as_bytes()
+    };
 
     let out_path = cgcx
         .output_filenames
         .temp_path_for_cgu(rustc_session::config::OutputType::Object, &module.name);
-    std::fs::write(&out_path, ptx.as_bytes())
-        .unwrap_or_else(|e| panic!("Failed to write PTX to {}: {}", out_path.display(), e));
-    info!("PTX written to {} ({} bytes)", out_path.display(), ptx.len());
+    std::fs::write(&out_path, bytes)
+        .unwrap_or_else(|e| panic!("Failed to write output to {}: {}", out_path.display(), e));
+    info!("Output written to {} ({} bytes)", out_path.display(), bytes.len());
 
     if let Some(mlir_src) = module.module_llvm.mlir_source.as_deref() {
         let mlir_path = cgcx

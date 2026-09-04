@@ -103,13 +103,22 @@ fn riscv_target_compiles_placeholder_kernel_end_to_end() {
     // the incoming module yet (makeTTIR/makeTTGIR/makeLLIR are no-ops) --
     // makeLLVMIR instead synthesizes a placeholder `void @<name>()` kernel,
     // which makeASM/makeBIN then compile for real through LLVM's RISC-V
-    // backend (makeBIN additionally links the result into a shared library
-    // via ld.lld). This test only confirms that whole pipeline completes
-    // without error; it doesn't yet verify the linked .so's bytes, since
-    // TritonCompiler::compile() calls makeBIN but nothing on the Rust side
-    // retrieves getBIN() (compile_module only reads get_asm()) -- exposing
-    // that is a separate follow-up.
+    // backend and link the result into a shared library via ld.lld.
+    // compile_module retrieves those bytes via get_bin_bytes() and
+    // write_compiled_module prefers them over the ASM text, so the output
+    // file below is the actual linked .so, not just assembly -- this was
+    // manually verified further (outside this test) by cross-compiling a
+    // dlopen(3)/dlsym(3) harness for riscv64-linux-gnu and running it under
+    // `qemu-riscv64`: it loads this exact .so and successfully calls the
+    // exported `riscv_kernel` symbol.
     let src = data_file("triton_relu.rs");
     let result = try_compile(&src, "riscv64-generic", "riscv_stub", &[]);
     assert!(result.is_ok(), "expected the RISC-V placeholder pipeline to succeed: {result:?}");
+
+    let bytes = std::fs::read("/tmp/kernel-riscv_stub.asm").expect("read compiled output");
+    assert_eq!(&bytes[..4], b"\x7fELF", "expected a real ELF file, not assembly text");
+    // e_type at offset 16 (u16 LE): ET_DYN (3) for a shared object.
+    assert_eq!(u16::from_le_bytes([bytes[16], bytes[17]]), 3, "expected ET_DYN (shared object)");
+    // e_machine at offset 18 (u16 LE): EM_RISCV (243).
+    assert_eq!(u16::from_le_bytes([bytes[18], bytes[19]]), 243, "expected EM_RISCV");
 }

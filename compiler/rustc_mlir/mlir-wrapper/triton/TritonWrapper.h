@@ -17,6 +17,8 @@
 #ifndef TRITON_WRAPPER_H
 #define TRITON_WRAPPER_H
 
+#include <cstddef>
+
 #include "mlir/CAPI/Wrap.h"
 #include <mlir-c/IR.h>
 
@@ -52,7 +54,12 @@ const char *mlirTritonCompilerGetTTIR(MlirTritonCompiler compiler);
 const char *mlirTritonCompilerGetTTGIR(MlirTritonCompiler compiler);
 const char *mlirTritonCompilerGetLLVMIR(MlirTritonCompiler compiler);
 const char *mlirTritonCompilerGetASM(MlirTritonCompiler compiler);
+
+/// `getBIN`'s buffer may contain embedded NUL bytes (e.g. a linked ELF
+/// shared library) -- always pair it with `mlirTritonCompilerGetBINSize`
+/// rather than treating it as a NUL-terminated C string.
 const char *mlirTritonCompilerGetBIN(MlirTritonCompiler compiler);
+size_t mlirTritonCompilerGetBINSize(MlirTritonCompiler compiler);
 
 /// Frees the compiler handle.
 void mlirTritonCompilerFree(MlirTritonCompiler compiler);

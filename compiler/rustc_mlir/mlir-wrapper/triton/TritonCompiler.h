@@ -46,6 +46,7 @@ public:
   const char *getLLVMIR() const;
   const char *getASM() const;
   const char *getBIN() const;
+  size_t getBINSize() const;
 
 private:
   LogicalResult applyTritonPasses(ModuleOp mlir_module);

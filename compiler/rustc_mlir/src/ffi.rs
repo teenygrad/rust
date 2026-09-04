@@ -317,7 +317,11 @@ unsafe extern "C" {
     pub fn mlirTritonCompilerGetTTGIR(compiler: MlirTritonCompiler) -> *const c_char;
     pub fn mlirTritonCompilerGetLLVMIR(compiler: MlirTritonCompiler) -> *const c_char;
     pub fn mlirTritonCompilerGetASM(compiler: MlirTritonCompiler) -> *const c_char;
+    /// May contain embedded NUL bytes (e.g. a linked ELF shared library) --
+    /// always pair with `mlirTritonCompilerGetBINSize` rather than treating
+    /// this as a NUL-terminated C string.
     pub fn mlirTritonCompilerGetBIN(compiler: MlirTritonCompiler) -> *const c_char;
+    pub fn mlirTritonCompilerGetBINSize(compiler: MlirTritonCompiler) -> usize;
 
     pub fn mlirTritonCompilerFree(compiler: MlirTritonCompiler);
 }

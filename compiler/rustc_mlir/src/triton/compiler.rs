@@ -73,8 +73,35 @@ impl TritonCompiler {
         ptr_to_str(self, unsafe { ffi::mlirTritonCompilerGetASM(self.raw) })
     }
 
+    /// Textual interpretation of the compiled binary, if it happens to be
+    /// valid NUL-free UTF-8. Real binary output (e.g. RiscvBackend's linked
+    /// ELF shared library) generally isn't, and this returns `None` for it
+    /// even though data is present -- use [TritonCompiler::get_bin_bytes]
+    /// instead for anything that isn't guaranteed to be text.
     pub fn get_bin(&self) -> Option<&str> {
         ptr_to_str(self, unsafe { ffi::mlirTritonCompilerGetBIN(self.raw) })
+    }
+
+    /// Returns the raw bytes of the compiled binary from the last successful
+    /// [TritonCompiler::compile], e.g. RiscvBackend's linked ELF shared
+    /// library. Unlike [TritonCompiler::get_bin], this does not assume the
+    /// content is text: it uses the backend's explicit byte length rather
+    /// than stopping at the first NUL. Returns `None` if there is no output.
+    ///
+    /// The returned slice's lifetime rules match [TritonCompiler::get_asm].
+    pub fn get_bin_bytes(&self) -> Option<&[u8]> {
+        let ptr = unsafe { ffi::mlirTritonCompilerGetBIN(self.raw) };
+        if ptr.is_null() {
+            return None;
+        }
+        let len = unsafe { ffi::mlirTritonCompilerGetBINSize(self.raw) };
+        if len == 0 {
+            return None;
+        }
+        // Safety: `ptr` is non-null and owned by `self` (the C++ compiler
+        // handle), valid for `len` bytes per getBINSize()'s contract, and
+        // the returned slice's lifetime is tied to `&self` below.
+        Some(unsafe { std::slice::from_raw_parts(ptr as *const u8, len) })
     }
 
     /// Returns the LLIR (input MLIR) string from the last successful compile.

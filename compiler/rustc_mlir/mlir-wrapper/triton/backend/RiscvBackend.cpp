@@ -280,10 +280,20 @@ llvm::TargetMachine *RiscvBackend::createRiscvTargetMachine() {
   // can be honored.
   std::string cpu = triple.isArch64Bit() ? "generic-rv64" : "generic-rv32";
 
+  // "generic-rv64"/"generic-rv32" alone imply no ISA extensions, which
+  // defaults codegen to the soft-float ABI (lp64/ilp32) -- incompatible
+  // with the hard-float ABI (lp64d/ilp32d) essentially all real RISC-V
+  // Linux userspace (glibc, other .so's on the system) actually uses.
+  // Matches the `features` rustc_target::spec::targets::riscv64_generic
+  // declares (M/A/F/D/C, i.e. the standard "G" extension set, plus V);
+  // once m_options.features carries a real per-chip feature string this
+  // should prefer that instead of always using this fixed baseline.
+  std::string features = "+m,+a,+f,+d,+c";
+
   // PIC: makeBIN links the resulting object into a shared library.
   llvm::TargetOptions opts;
   llvm::TargetMachine *tm = target->createTargetMachine(
-      triple, cpu, /*Features=*/"", opts, llvm::Reloc::PIC_, std::nullopt,
+      triple, cpu, features, opts, llvm::Reloc::PIC_, std::nullopt,
       llvm::CodeGenOptLevel::Default);
   if (!tm) {
     llvm::errs() << "RiscvBackend: failed to create target machine for "

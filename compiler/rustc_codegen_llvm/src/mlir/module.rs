@@ -78,6 +78,13 @@ pub struct MlirModule<'c> {
     /// PTX produced by Triton. Populated in compile_codegen_unit_impl and
     /// threaded through the thin-LTO pass-through so codegen can write it.
     pub ptx_asm: Option<String>,
+    /// Raw compiled binary (e.g. RiscvBackend's linked ELF shared library),
+    /// populated in compile_codegen_unit_impl from
+    /// `TritonCompiler::get_bin_bytes` when the backend produced one.
+    /// `write_compiled_module` prefers this over `ptx_asm` when present, so
+    /// the backend's actual final artifact reaches the output file instead
+    /// of just its assembly text.
+    pub compiled_bin: Option<Vec<u8>>,
     /// MLIR source captured after cleanup passes, before Triton passes run.
     pub mlir_source: Option<String>,
     /// Kernel metadata parsed from the PTX comment block appended by CudaBackend.
@@ -209,6 +216,7 @@ impl<'c> MlirModule<'c> {
             ptx_asm: None,
             mlir_source: None,
             kernel_metadata: None,
+            compiled_bin: None,
             _ffi_strings: Vec::new(),
         }
     }
@@ -234,6 +242,7 @@ impl<'c> MlirModule<'c> {
             ptx_asm: None,
             mlir_source: None,
             kernel_metadata: None,
+            compiled_bin: None,
             // Backend structs like RiscvCompileOptions are stored by value in
             // the C++ backend, pointers and all -- these CStrings must
             // outlive `compiler`, not just the `TritonCompiler::new` call
@@ -267,6 +276,7 @@ impl<'c> MlirModule<'c> {
             ptx_asm: None,
             mlir_source: None,
             kernel_metadata: None,
+            compiled_bin: None,
             _ffi_strings: Vec::new(),
         }
     }

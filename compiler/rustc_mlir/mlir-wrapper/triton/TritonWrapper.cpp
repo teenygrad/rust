@@ -82,6 +82,12 @@ extern "C" const char *mlirTritonCompilerGetBIN(::MlirTritonCompiler compiler) {
   return handle->getBIN();
 }
 
+extern "C" size_t
+mlirTritonCompilerGetBINSize(::MlirTritonCompiler compiler) {
+  auto *handle = unwrap(compiler);
+  return handle->getBINSize();
+}
+
 extern "C" void mlirTritonCompilerFree(::MlirTritonCompiler compiler) {
   auto *handle = unwrap(compiler);
   delete handle;

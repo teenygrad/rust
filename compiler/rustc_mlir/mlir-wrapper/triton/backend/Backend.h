@@ -167,7 +167,14 @@ public:
 
   const char *getASM() const { return m_asm.c_str(); }
 
+  /// May contain embedded NUL bytes (e.g. a linked ELF shared library, see
+  /// RiscvBackend::makeBIN) -- callers MUST use getBINSize() as the real
+  /// length rather than treating this as a NUL-terminated C string.
   const char *getBIN() const { return m_bin.c_str(); }
+
+  /// Byte length of getBIN()'s buffer, valid even when it contains embedded
+  /// NULs.
+  size_t getBINSize() const { return m_bin.size(); }
 
 protected:
   std::string m_target;
@@ -180,7 +187,10 @@ protected:
   std::string m_llvmir;
 
   std::string m_asm;
-  std::string m_bin; // utf-8 encoded string
+  // Raw bytes of the compiled binary. Despite the type, not necessarily
+  // text or even valid UTF-8 -- e.g. RiscvBackend::makeBIN stores a linked
+  // ELF shared library here. Always pair getBIN() with getBINSize().
+  std::string m_bin;
 
   virtual std::optional<Error> addPass(PassManager &pm, MlirPass pass);
 
