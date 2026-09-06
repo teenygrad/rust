@@ -79,7 +79,8 @@ impl TritonCompiler {
     /// even though data is present -- use [TritonCompiler::get_bin_bytes]
     /// instead for anything that isn't guaranteed to be text.
     pub fn get_bin(&self) -> Option<&str> {
-        ptr_to_str(self, unsafe { ffi::mlirTritonCompilerGetBIN(self.raw) })
+        let ptr = unsafe { ffi::mlirTritonCompilerGetBIN(self.raw) } as *const std::ffi::c_char;
+        ptr_to_str(self, ptr)
     }
 
     /// Returns the raw bytes of the compiled binary from the last successful
@@ -101,7 +102,7 @@ impl TritonCompiler {
         // Safety: `ptr` is non-null and owned by `self` (the C++ compiler
         // handle), valid for `len` bytes per getBINSize()'s contract, and
         // the returned slice's lifetime is tied to `&self` below.
-        Some(unsafe { std::slice::from_raw_parts(ptr as *const u8, len) })
+        Some(unsafe { std::slice::from_raw_parts(ptr, len) })
     }
 
     /// Returns the LLIR (input MLIR) string from the last successful compile.

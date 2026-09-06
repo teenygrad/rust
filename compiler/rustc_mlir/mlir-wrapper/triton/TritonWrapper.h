@@ -18,6 +18,7 @@
 #define TRITON_WRAPPER_H
 
 #include <cstddef>
+#include <cstdint>
 
 #include "mlir/CAPI/Wrap.h"
 #include <mlir-c/IR.h>
@@ -57,8 +58,10 @@ const char *mlirTritonCompilerGetASM(MlirTritonCompiler compiler);
 
 /// `getBIN`'s buffer may contain embedded NUL bytes (e.g. a linked ELF
 /// shared library) -- always pair it with `mlirTritonCompilerGetBINSize`
-/// rather than treating it as a NUL-terminated C string.
-const char *mlirTritonCompilerGetBIN(MlirTritonCompiler compiler);
+/// rather than treating it as a NUL-terminated C string. Returned as
+/// `uint8_t*` (not `char*`) so the type itself signals this is a raw byte
+/// buffer.
+const uint8_t *mlirTritonCompilerGetBIN(MlirTritonCompiler compiler);
 size_t mlirTritonCompilerGetBINSize(MlirTritonCompiler compiler);
 
 /// Frees the compiler handle.

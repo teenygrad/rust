@@ -77,7 +77,8 @@ extern "C" const char *mlirTritonCompilerGetASM(::MlirTritonCompiler compiler) {
   return handle->getASM();
 }
 
-extern "C" const char *mlirTritonCompilerGetBIN(::MlirTritonCompiler compiler) {
+extern "C" const uint8_t *
+mlirTritonCompilerGetBIN(::MlirTritonCompiler compiler) {
   auto *handle = unwrap(compiler);
   return handle->getBIN();
 }

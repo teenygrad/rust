@@ -17,6 +17,7 @@
 #ifndef TRITON_BACKEND_H
 #define TRITON_BACKEND_H
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -169,8 +170,11 @@ public:
 
   /// May contain embedded NUL bytes (e.g. a linked ELF shared library, see
   /// RiscvBackend::makeBIN) -- callers MUST use getBINSize() as the real
-  /// length rather than treating this as a NUL-terminated C string.
-  const char *getBIN() const { return m_bin.c_str(); }
+  /// length. Returned as `uint8_t*` rather than `char*` so the type itself
+  /// signals this is a raw byte buffer, not a NUL-terminated C string.
+  const uint8_t *getBIN() const {
+    return reinterpret_cast<const uint8_t *>(m_bin.data());
+  }
 
   /// Byte length of getBIN()'s buffer, valid even when it contains embedded
   /// NULs.

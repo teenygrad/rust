@@ -72,7 +72,7 @@ const char *TritonCompiler::getTTIR() const { return backend->getTTIR(); }
 const char *TritonCompiler::getTTGIR() const { return backend->getTTGIR(); }
 const char *TritonCompiler::getLLVMIR() const { return backend->getLLVMIR(); }
 const char *TritonCompiler::getASM() const { return backend->getASM(); }
-const char *TritonCompiler::getBIN() const { return backend->getBIN(); }
+const uint8_t *TritonCompiler::getBIN() const { return backend->getBIN(); }
 size_t TritonCompiler::getBINSize() const { return backend->getBINSize(); }
 
 LogicalResult TritonCompiler::applyTritonPasses(ModuleOp mlir_module) {
