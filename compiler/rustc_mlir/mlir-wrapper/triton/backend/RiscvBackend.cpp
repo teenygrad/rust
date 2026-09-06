@@ -56,7 +56,11 @@ std::string kernelNameFor(ModuleOp module) {
 } // namespace
 
 RiscvBackend::RiscvBackend(std::string target, RiscvCompileOptions options)
-    : Backend(target), m_options(options) {}
+    : Backend(target),
+      m_target_triple(options.target_triple ? options.target_triple : ""),
+      m_cpu(options.cpu ? options.cpu : ""),
+      m_features(options.features ? options.features : ""),
+      m_debug(options.debug) {}
 
 RiscvBackend::~RiscvBackend() {}
 
@@ -108,7 +112,7 @@ LogicalResult RiscvBackend::makeLLVMIR(MLIRContext &context, ModuleOp module) {
   auto llvmMod = std::make_unique<llvm::Module>(kernelName, llvmContext);
 
   llvm::Triple triple(llvm::Triple::normalize(
-      m_options.target_triple ? m_options.target_triple : "riscv64"));
+      m_target_triple.empty() ? "riscv64" : m_target_triple));
   llvmMod->setTargetTriple(triple);
 
   auto *funcTy =
@@ -266,7 +270,7 @@ llvm::TargetMachine *RiscvBackend::createRiscvTargetMachine() {
   llvm::InitializeAllAsmPrinters();
 
   llvm::Triple triple(llvm::Triple::normalize(
-      m_options.target_triple ? m_options.target_triple : "riscv64"));
+      m_target_triple.empty() ? "riscv64" : m_target_triple));
   std::string targetError;
   const llvm::Target *target =
       llvm::TargetRegistry::lookupTarget(triple.getTriple(), targetError);
@@ -275,7 +279,7 @@ llvm::TargetMachine *RiscvBackend::createRiscvTargetMachine() {
     return nullptr;
   }
 
-  // `m_options.cpu` (e.g. `spacemit-k3`, `generic-rvv1.0`) is a
+  // `m_cpu` (e.g. `spacemit-k3`, `generic-rvv1.0`) is a
   // Triton/RiscvBackend-side chip identifier, not an LLVM `-mcpu` name --
   // see RiscvCompileOptions in RiscvBackend.h -- and there is no mapping
   // from that vocabulary to a real LLVM cpu/feature string yet. Passing an
@@ -284,9 +288,9 @@ llvm::TargetMachine *RiscvBackend::createRiscvTargetMachine() {
   // not a recoverable LogicalResult::failure()) when it can't derive a
   // valid XLen from the cpu, e.g. "LLVM ERROR: RV64 target requires an
   // RV64 CPU". So for now this always uses a real, generic LLVM cpu name
-  // matching the triple's width, and ignores m_options.cpu -- fine for the
+  // matching the triple's width, and ignores m_cpu -- fine for the
   // placeholder `ret void` body makeLLVMIR produces today, but a real
-  // chip-name-to-LLVM-cpu/feature mapping is needed before m_options.cpu
+  // chip-name-to-LLVM-cpu/feature mapping is needed before m_cpu
   // can be honored.
   std::string cpu = triple.isArch64Bit() ? "generic-rv64" : "generic-rv32";
 
@@ -296,7 +300,7 @@ llvm::TargetMachine *RiscvBackend::createRiscvTargetMachine() {
   // Linux userspace (glibc, other .so's on the system) actually uses.
   // Matches the `features` rustc_target::spec::targets::riscv64_generic
   // declares (M/A/F/D/C, i.e. the standard "G" extension set, plus V);
-  // once m_options.features carries a real per-chip feature string this
+  // once m_features carries a real per-chip feature string this
   // should prefer that instead of always using this fixed baseline.
   std::string features = "+m,+a,+f,+d,+c";
 

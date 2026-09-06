@@ -82,9 +82,9 @@ private:
   /// Creates an LLVM `TargetMachine` for this backend's target triple,
   /// logging why and returning nullptr on failure. Caller owns the
   /// returned pointer. Uses a real, generic LLVM cpu name matching the
-  /// triple's width rather than `m_options.cpu` -- see the comment in the
-  /// .cpp for why forwarding that Triton-side chip identifier directly
-  /// would abort the process instead of failing gracefully.
+  /// triple's width rather than `m_cpu` -- see the comment in the .cpp for
+  /// why forwarding that Triton-side chip identifier directly would abort
+  /// the process instead of failing gracefully.
   llvm::TargetMachine *createRiscvTargetMachine();
 
   /// Reparses `m_llvmir` (populated by makeLLVMIR) into `context`, logging
@@ -99,7 +99,16 @@ private:
   /// found.
   std::string findLld();
 
-  RiscvCompileOptions m_options;
+  // Copied out of the incoming RiscvCompileOptions in the constructor rather
+  // than storing that struct (and its raw pointers) by value: the pointers
+  // are only guaranteed valid for the duration of the constructor call (see
+  // MlirModule::_ffi_strings on the Rust side), so this backend needs its
+  // own independent storage for as long as it lives. Empty string means
+  // "not set" (mirrors a NULL pointer in RiscvCompileOptions).
+  std::string m_target_triple;
+  std::string m_cpu;
+  std::string m_features;
+  bool m_debug;
 };
 
 } // namespace triton

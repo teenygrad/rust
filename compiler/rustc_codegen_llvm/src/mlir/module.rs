@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 
 use melior::Context;
 use melior::ir::{Location, Module};
@@ -90,13 +90,6 @@ pub struct MlirModule<'c> {
     pub mlir_source: Option<String>,
     /// Kernel metadata parsed from the PTX comment block appended by CudaBackend.
     pub kernel_metadata: Option<KernelMetadata>,
-    /// Owned backing storage for any `*const c_char` fields in `compiler`'s
-    /// `CompileOptions` (e.g. `RiscvCompileOptions::cpu`/`target_triple`).
-    /// The C++ backend stores that struct *by value*, pointers and all, so
-    /// these must outlive `compiler` itself, not just the `TritonCompiler::new`
-    /// call that read them -- never drop this before `compiler`. Empty for
-    /// backends (e.g. Cuda today) whose options carry no such pointers.
-    _ffi_strings: Vec<CString>,
 }
 
 /// Resolve the PTX ISA version (encoded as `major*10 + minor`, e.g. `82` for
@@ -218,7 +211,6 @@ impl<'c> MlirModule<'c> {
             mlir_source: None,
             kernel_metadata: None,
             compiled_bin: None,
-            _ffi_strings: Vec::new(),
         }
     }
 
@@ -231,9 +223,16 @@ impl<'c> MlirModule<'c> {
         let location = Location::unknown(&context);
         let module = Module::new(location);
 
+        // `ffi_strings` backs any `*const c_char` fields in `options` (e.g.
+        // `RiscvCompileOptions::cpu`/`target_triple`) -- it only needs to
+        // outlive the `TritonCompiler::new` call below, since each backend
+        // copies whatever it needs out of `options` during construction
+        // (e.g. RiscvBackend's constructor copies into its own `std::string`
+        // fields) rather than borrowing from it afterward.
         let (options, target_name, ffi_strings) = crate::mlir::target::resolve(sess);
         let compiler = TritonCompiler::new(context.to_raw(), target_name, &options)
             .expect("Failed to create Triton compiler");
+        drop(ffi_strings);
 
         Self {
             name: mod_name.to_string(),
@@ -244,11 +243,6 @@ impl<'c> MlirModule<'c> {
             mlir_source: None,
             kernel_metadata: None,
             compiled_bin: None,
-            // Backend structs like RiscvCompileOptions are stored by value in
-            // the C++ backend, pointers and all -- these CStrings must
-            // outlive `compiler`, not just the `TritonCompiler::new` call
-            // above. See the field doc on `_ffi_strings`.
-            _ffi_strings: ffi_strings,
         }
     }
 
@@ -278,7 +272,6 @@ impl<'c> MlirModule<'c> {
             mlir_source: None,
             kernel_metadata: None,
             compiled_bin: None,
-            _ffi_strings: Vec::new(),
         }
     }
 
