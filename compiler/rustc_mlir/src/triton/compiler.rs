@@ -128,7 +128,7 @@ impl TritonCompiler {
 // Tie the returned string's lifetime to the compiler so that:
 // - the reference can't outlive the TritonCompiler (which owns the C++ object)
 // - a &mut borrow for compile() will conflict with any live reference, preventing
-//   use-after-reallocation when m_asm is replaced by the next generatePtx call.
+//   use-after-reallocation when m_asm is replaced by the next compile() call.
 fn ptr_to_str<'a>(_anchor: &'a TritonCompiler, ptr: *const std::ffi::c_char) -> Option<&'a str> {
     if ptr.is_null() {
         return None;

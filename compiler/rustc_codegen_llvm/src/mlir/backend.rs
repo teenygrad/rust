@@ -167,20 +167,20 @@ fn compile_module(mlir_module: &mut MlirModule<'static>) -> Result<(), MlirError
         return Err(MlirError::CodegenFailed { err: "Triton compilation failed".to_string() });
     }
 
-    let ptx = mlir_module
+    let asm = mlir_module
         .compiler
         .get_asm()
         .ok_or_else(|| MlirError::CodegenFailed { err: "Triton returned no ASM".to_string() })?
         .to_owned();
 
-    log_pipeline_stages(mlir_module, &ptx);
+    log_pipeline_stages(mlir_module, &asm);
 
-    let metadata = crate::mlir::module::KernelMetadata::parse(&ptx);
+    let metadata = crate::mlir::module::KernelMetadata::parse(&asm);
     mlir_module.kernel_metadata = Some(metadata);
-    mlir_module.ptx_asm = Some(ptx);
+    mlir_module.asm = Some(asm);
     // Some backends (e.g. RiscvBackend) additionally link a real binary
     // (a shared library) in makeBIN; write_compiled_module prefers this
-    // over ptx_asm when present, so the actual final artifact -- not just
+    // over asm when present, so the actual final artifact -- not just
     // its assembly text -- reaches the output file.
     mlir_module.compiled_bin = mlir_module.compiler.get_bin_bytes().map(<[u8]>::to_vec);
     Ok(())
@@ -202,7 +202,7 @@ fn compile_module(mlir_module: &mut MlirModule<'static>) -> Result<(), MlirError
 /// `=trace` for the per-pass detail too). See
 /// [`crate::mlir::module::MlirModule::new_for_session`] for how
 /// `CompileOptions::debug` gets set from this same log target.
-fn log_pipeline_stages(mlir_module: &MlirModule<'static>, ptx: &str) {
+fn log_pipeline_stages(mlir_module: &MlirModule<'static>, asm: &str) {
     let compiler = &mlir_module.compiler;
 
     tracing::debug!(target: crate::mlir::LOG_TARGET, stage = "mlir", "{}", mlir_module.mlir_source.as_deref().unwrap_or_default());
@@ -210,7 +210,7 @@ fn log_pipeline_stages(mlir_module: &MlirModule<'static>, ptx: &str) {
     tracing::debug!(target: crate::mlir::LOG_TARGET, stage = "ttgir", "{}", compiler.get_ttgir().unwrap_or_default());
     tracing::debug!(target: crate::mlir::LOG_TARGET, stage = "llir", "{}", compiler.get_llir().unwrap_or_default());
     tracing::debug!(target: crate::mlir::LOG_TARGET, stage = "llvmir", "{}", compiler.get_llvm_ir().unwrap_or_default());
-    tracing::debug!(target: crate::mlir::LOG_TARGET, stage = "ptx", "{}", ptx);
+    tracing::debug!(target: crate::mlir::LOG_TARGET, stage = "asm", "{}", asm);
 }
 
 impl WriteBackendMethods for MlirCodegenBackend {
@@ -310,7 +310,7 @@ impl WriteBackendMethods for MlirCodegenBackend {
         info!("=== MLIR optimize_and_codegen_thin '{}' (pass-through) ===", name);
 
         // Recover the bytes serialize_module serialized into the thin buffer
-        // (compiled_bin if the backend produced one, else the ptx_asm text --
+        // (compiled_bin if the backend produced one, else the asm text --
         // see serialize_module). write_compiled_module treats compiled_bin
         // opaquely, so this round-trip is correct either way.
         let mut mlir_module = MlirModule::new(&name);
@@ -332,13 +332,13 @@ impl WriteBackendMethods for MlirCodegenBackend {
 
     fn serialize_module(module: Self::Module, _is_thin: bool) -> Self::ModuleBuffer {
         // Prefer compiled_bin (e.g. RiscvBackend's linked shared library)
-        // over the ptx_asm text, matching write_compiled_module's
+        // over the asm text, matching write_compiled_module's
         // precedence -- so optimize_and_codegen_thin's pass-through
         // preserves the backend's actual final artifact, not just its
         // assembly text.
         let bytes = module
             .compiled_bin
-            .unwrap_or_else(|| module.ptx_asm.map(|s| s.into_bytes()).unwrap_or_default());
+            .unwrap_or_else(|| module.asm.map(|s| s.into_bytes()).unwrap_or_default());
         ModuleBuffer { data: bytes }
     }
 }
@@ -347,11 +347,11 @@ impl WriteBackendMethods for MlirCodegenBackend {
 /// pre-Triton MLIR source) to the expected output paths and builds the
 /// resulting `CompiledModule`. Shared by `codegen` (no-LTO path) and
 /// `optimize_and_codegen_thin` (ThinLTO pass-through path) since both end up
-/// with a `ModuleCodegen<MlirModule>` whose `ptx_asm`/`compiled_bin` are
+/// with a `ModuleCodegen<MlirModule>` whose `asm`/`compiled_bin` are
 /// already populated by compile_codegen_unit_impl (via compile_module).
 ///
 /// `compiled_bin` (e.g. RiscvBackend's linked ELF shared library) is
-/// preferred over `ptx_asm` when present, so the backend's actual final
+/// preferred over `asm` when present, so the backend's actual final
 /// artifact reaches the output file rather than just its assembly text.
 /// `serialize_module`/`optimize_and_codegen_thin` round-trip whichever of
 /// the two was preferred through the ThinLTO pass-through path too.
@@ -366,7 +366,7 @@ fn write_compiled_module(
     } else {
         module
             .module_llvm
-            .ptx_asm
+            .asm
             .as_deref()
             .unwrap_or_else(|| {
                 panic!(
@@ -467,22 +467,24 @@ impl CodegenBackend for MlirCodegenBackend {
         outputs: &OutputFilenames,
     ) {
         use rustc_session::config::OutputType;
-        info!("MLIR: link (writing PTX output)");
+        info!("MLIR: link (writing backend output)");
 
         // produce_final_output_artifacts only copies temp files for output
-        // types listed in --emit. For PTX there is no linking step, so we
-        // copy each module's object (PTX) directly to the -o destination.
+        // types listed in --emit. There is no linking step here, so we copy
+        // each module's object (asm text for Cuda, or a linked binary for
+        // backends like Riscv -- see MlirModule::asm/compiled_bin) directly
+        // to the -o destination.
         let out = outputs.path(OutputType::Object);
         for module in &compiled_modules.modules {
             if let Some(obj) = &module.object {
                 if let Err(e) = std::fs::copy(obj, out.as_path()) {
                     sess.dcx().fatal(format!(
-                        "failed to write PTX output to {}: {}",
+                        "failed to write output to {}: {}",
                         out.as_path().display(),
                         e
                     ));
                 }
-                info!("PTX written to {}", out.as_path().display());
+                info!("Output written to {}", out.as_path().display());
             }
         }
     }

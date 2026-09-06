@@ -75,13 +75,14 @@ pub struct MlirModule<'c> {
     pub mlir: Module<'c>,
     pub context: Context,
     pub compiler: TritonCompiler,
-    /// PTX produced by Triton. Populated in compile_codegen_unit_impl and
-    /// threaded through the thin-LTO pass-through so codegen can write it.
-    pub ptx_asm: Option<String>,
+    /// Assembly text produced by Triton (PTX for Cuda, backend-specific asm
+    /// for others). Populated in compile_codegen_unit_impl and threaded
+    /// through the thin-LTO pass-through so codegen can write it.
+    pub asm: Option<String>,
     /// Raw compiled binary (e.g. RiscvBackend's linked ELF shared library),
     /// populated in compile_codegen_unit_impl from
     /// `TritonCompiler::get_bin_bytes` when the backend produced one.
-    /// `write_compiled_module` prefers this over `ptx_asm` when present, so
+    /// `write_compiled_module` prefers this over `asm` when present, so
     /// the backend's actual final artifact reaches the output file instead
     /// of just its assembly text.
     pub compiled_bin: Option<Vec<u8>>,
@@ -192,7 +193,7 @@ impl<'c> MlirModule<'c> {
     /// that never run real per-target codegen through this module: the
     /// allocator shim (`codegen_allocator`) and the thin-LTO pass-through
     /// reconstruction (`optimize_and_codegen_thin`), both of which populate
-    /// `ptx_asm` from elsewhere rather than invoking `compiler.compile()`.
+    /// `asm` from elsewhere rather than invoking `compiler.compile()`.
     /// Real per-CGU codegen goes through [`Self::new_for_session`] instead,
     /// which resolves the backend/capability from the session's
     /// `--target`/`-C target-cpu` (see `crate::mlir::target`).
@@ -213,7 +214,7 @@ impl<'c> MlirModule<'c> {
             mlir: module,
             compiler,
             context,
-            ptx_asm: None,
+            asm: None,
             mlir_source: None,
             kernel_metadata: None,
             compiled_bin: None,
@@ -239,7 +240,7 @@ impl<'c> MlirModule<'c> {
             mlir: module,
             compiler,
             context,
-            ptx_asm: None,
+            asm: None,
             mlir_source: None,
             kernel_metadata: None,
             compiled_bin: None,
@@ -273,7 +274,7 @@ impl<'c> MlirModule<'c> {
             context,
             mlir: module,
             compiler,
-            ptx_asm: None,
+            asm: None,
             mlir_source: None,
             kernel_metadata: None,
             compiled_bin: None,
