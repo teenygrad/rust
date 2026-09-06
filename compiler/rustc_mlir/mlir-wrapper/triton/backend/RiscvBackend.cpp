@@ -254,7 +254,7 @@ LogicalResult RiscvBackend::makeBIN(MLIRContext &context, ModuleOp module) {
     return failure();
   }
 
-  m_bin.assign((*soBuf)->getBufferStart(), (*soBuf)->getBufferSize());
+  m_bin.assign((*soBuf)->getBufferStart(), (*soBuf)->getBufferEnd());
   return success();
 }
 

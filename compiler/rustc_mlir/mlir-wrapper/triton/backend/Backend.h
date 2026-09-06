@@ -22,6 +22,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "llvm/IR/Module.h"
 
@@ -170,11 +171,8 @@ public:
 
   /// May contain embedded NUL bytes (e.g. a linked ELF shared library, see
   /// RiscvBackend::makeBIN) -- callers MUST use getBINSize() as the real
-  /// length. Returned as `uint8_t*` rather than `char*` so the type itself
-  /// signals this is a raw byte buffer, not a NUL-terminated C string.
-  const uint8_t *getBIN() const {
-    return reinterpret_cast<const uint8_t *>(m_bin.data());
-  }
+  /// length.
+  const uint8_t *getBIN() const { return m_bin.data(); }
 
   /// Byte length of getBIN()'s buffer, valid even when it contains embedded
   /// NULs.
@@ -191,10 +189,9 @@ protected:
   std::string m_llvmir;
 
   std::string m_asm;
-  // Raw bytes of the compiled binary. Despite the type, not necessarily
-  // text or even valid UTF-8 -- e.g. RiscvBackend::makeBIN stores a linked
-  // ELF shared library here. Always pair getBIN() with getBINSize().
-  std::string m_bin;
+  // Raw bytes of the compiled binary, e.g. RiscvBackend::makeBIN stores a
+  // linked ELF shared library here. Always pair getBIN() with getBINSize().
+  std::vector<uint8_t> m_bin;
 
   virtual std::optional<Error> addPass(PassManager &pm, MlirPass pass);
 
