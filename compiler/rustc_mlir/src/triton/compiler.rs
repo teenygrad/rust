@@ -73,21 +73,12 @@ impl TritonCompiler {
         ptr_to_str(self, unsafe { ffi::mlirTritonCompilerGetASM(self.raw) })
     }
 
-    /// Textual interpretation of the compiled binary, if it happens to be
-    /// valid NUL-free UTF-8. Real binary output (e.g. RiscvBackend's linked
-    /// ELF shared library) generally isn't, and this returns `None` for it
-    /// even though data is present -- use [TritonCompiler::get_bin_bytes]
-    /// instead for anything that isn't guaranteed to be text.
-    pub fn get_bin(&self) -> Option<&str> {
-        let ptr = unsafe { ffi::mlirTritonCompilerGetBIN(self.raw) } as *const std::ffi::c_char;
-        ptr_to_str(self, ptr)
-    }
-
     /// Returns the raw bytes of the compiled binary from the last successful
     /// [TritonCompiler::compile], e.g. RiscvBackend's linked ELF shared
-    /// library. Unlike [TritonCompiler::get_bin], this does not assume the
-    /// content is text: it uses the backend's explicit byte length rather
-    /// than stopping at the first NUL. Returns `None` if there is no output.
+    /// library. This uses the backend's explicit byte length (`getBINSize`)
+    /// rather than scanning for a NUL terminator, since the underlying
+    /// buffer is not guaranteed to be NUL-terminated and may contain
+    /// embedded NULs. Returns `None` if there is no output.
     ///
     /// The returned slice's lifetime rules match [TritonCompiler::get_asm].
     pub fn get_bin_bytes(&self) -> Option<&[u8]> {
