@@ -26,6 +26,9 @@ include(HandleLLVMOptions)
 include_directories(${LLVM_INCLUDE_DIRS})
 include_directories(${MLIR_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+# Tablegen'd files (e.g. riscv/Dialect/RVV/IR/*.inc) land in the mirrored
+# build-tree path; needed for our own dialects' #include "riscv/..." lines.
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 # Add Triton includes if available
 if(DEFINED TRITON_SOURCE_DIR)
@@ -45,6 +48,13 @@ endif()
 # Compiler flags
 add_definitions(${LLVM_DEFINITIONS})
 
+# Our own MLIR dialects (not Triton's -- see riscv/Dialect/RVV/IR/RVVDialect.td
+# for why RVV lives here rather than in src/triton/third_party). Built as its
+# own add_mlir_dialect_library() subproject (see riscv/CMakeLists.txt) rather
+# than compiled directly into mlir-wrapper, so it's automatically picked up
+# below via MLIR_DIALECT_LIBS instead of needing an explicit source/link entry.
+add_subdirectory(riscv)
+
 # Source files
 set(WRAPPER_SOURCES
     MLIRWrapper.cpp
@@ -53,6 +63,7 @@ set(WRAPPER_SOURCES
     triton/TritonCompiler.cpp
     triton/backend/Backend.cpp
     triton/backend/CudaBackend.cpp
+    triton/backend/RiscvBackend.cpp
 )
 
 # Create static library

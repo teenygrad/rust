@@ -68,6 +68,12 @@ pub(crate) fn target() -> Target {
             // Static initializers must not have cycles on this target
             static_initializer_must_be_acyclic: true,
 
+            // This target exists to be compiled through the `mlir` codegen
+            // backend's CUDA/Triton path (see `rustc_codegen_llvm::mlir`);
+            // route to it by default so `--target nvptx64-nvidia-cuda` alone
+            // is enough, without also requiring `-Z codegen-backend=mlir`.
+            default_codegen_backend: Some("mlir".into()),
+
             ..Default::default()
         },
     }

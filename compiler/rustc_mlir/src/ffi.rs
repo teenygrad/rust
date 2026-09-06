@@ -72,6 +72,7 @@ pub struct Dim3 {
 pub enum TargetBackend {
     Cuda = 0,
     Rocm = 1,
+    Riscv = 2,
 }
 
 // ---------------------------------------------------------------------------
@@ -185,6 +186,32 @@ impl Default for CudaCompileOptions {
 // Tagged union of backend option structs (mirrors `CompileOptionsData` in C++)
 // ---------------------------------------------------------------------------
 
+/// FFI-safe compilation options for the (stub) RISC-V backend.
+/// Mirrors `RiscvCompileOptions` in `RiscvBackend.h`.
+///
+/// Reserved for a future real RISC-V Triton backend; the C++ `RiscvBackend`
+/// stub reports `Error::NotImplemented` for every codegen stage and does not
+/// yet consume these fields.
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct RiscvCompileOptions {
+    pub target_triple: *const c_char, // NULL = backend default
+    pub cpu: *const c_char,           // NULL = backend default
+    pub features: *const c_char,      // NULL = backend default
+    pub debug: bool,
+}
+
+impl Default for RiscvCompileOptions {
+    fn default() -> Self {
+        Self {
+            target_triple: std::ptr::null(),
+            cpu: std::ptr::null(),
+            features: std::ptr::null(),
+            debug: false,
+        }
+    }
+}
+
 /// Union of all per-backend option structs.  Only the member corresponding to
 /// `CompileOptions::backend` may be read.
 ///
@@ -195,6 +222,7 @@ impl Default for CudaCompileOptions {
 #[derive(Copy, Clone)]
 pub union CompileOptionsData {
     pub cuda: CudaCompileOptions,
+    pub riscv: RiscvCompileOptions,
     // pub rocm:  RocmCompileOptions,  // reserved for future use
 }
 
@@ -215,6 +243,46 @@ impl CompileOptions {
             backend: TargetBackend::Cuda,
             data: CompileOptionsData { cuda: CudaCompileOptions::default() },
         }
+    }
+
+    /// Returns a `CompileOptions` populated with default RISC-V settings.
+    ///
+    /// The RISC-V backend is currently a stub (see `RiscvBackend.h`): every
+    /// codegen stage returns `Error::NotImplemented`, so this is only useful
+    /// for exercising the FFI plumbing today.
+    pub fn default_riscv() -> Self {
+        Self {
+            backend: TargetBackend::Riscv,
+            data: CompileOptionsData { riscv: RiscvCompileOptions::default() },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn target_backend_discriminants_match_cpp() {
+        // Must stay in lockstep with `enum TargetBackend : uint32_t` in
+        // Compiler.h.
+        assert_eq!(TargetBackend::Cuda as u32, 0);
+        assert_eq!(TargetBackend::Rocm as u32, 1);
+        assert_eq!(TargetBackend::Riscv as u32, 2);
+    }
+
+    #[test]
+    fn default_riscv_selects_riscv_backend_with_default_options() {
+        let options = CompileOptions::default_riscv();
+        assert_eq!(options.backend, TargetBackend::Riscv);
+
+        // Safety: `backend` is `Riscv`, so reading the `riscv` union member
+        // is the variant selected by the discriminant.
+        let riscv = unsafe { options.data.riscv };
+        assert!(riscv.target_triple.is_null());
+        assert!(riscv.cpu.is_null());
+        assert!(riscv.features.is_null());
+        assert!(!riscv.debug);
     }
 }
 
@@ -249,7 +317,13 @@ unsafe extern "C" {
     pub fn mlirTritonCompilerGetTTGIR(compiler: MlirTritonCompiler) -> *const c_char;
     pub fn mlirTritonCompilerGetLLVMIR(compiler: MlirTritonCompiler) -> *const c_char;
     pub fn mlirTritonCompilerGetASM(compiler: MlirTritonCompiler) -> *const c_char;
-    pub fn mlirTritonCompilerGetBIN(compiler: MlirTritonCompiler) -> *const c_char;
+    /// May contain embedded NUL bytes (e.g. a linked ELF shared library) --
+    /// always pair with `mlirTritonCompilerGetBINSize` rather than treating
+    /// this as a NUL-terminated C string. Returned as `*const u8` (not
+    /// `*const c_char`) so the type itself signals this is a raw byte
+    /// buffer.
+    pub fn mlirTritonCompilerGetBIN(compiler: MlirTritonCompiler) -> *const u8;
+    pub fn mlirTritonCompilerGetBINSize(compiler: MlirTritonCompiler) -> usize;
 
     pub fn mlirTritonCompilerFree(compiler: MlirTritonCompiler);
 }

@@ -28,6 +28,7 @@
 // Dim3) are defined in CudaBackend.h and pulled in here so that CompileOptions
 // can reference CudaCompileOptions in its union.
 #include "triton/backend/CudaBackend.h"
+#include "triton/backend/RiscvBackend.h"
 
 namespace mlir {
 namespace triton {
@@ -41,6 +42,7 @@ namespace triton {
 enum TargetBackend : uint32_t {
   TargetBackend_Cuda = 0,
   TargetBackend_Rocm = 1,
+  TargetBackend_Riscv = 2,
 };
 
 // ---------------------------------------------------------------------------
@@ -59,6 +61,7 @@ enum TargetBackend : uint32_t {
 /// CompileOptions::backend may be accessed.
 union CompileOptionsData {
   CudaCompileOptions cuda;
+  RiscvCompileOptions riscv;
   // RocmCompileOptions  rocm;   // reserved for future use
 };
 

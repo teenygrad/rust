@@ -21,22 +21,26 @@
 //!
 //! ## Target mechanism
 //!
-//! The MLIR backend is used with GPU and other non-CPU targets. Target selection is flexible:
+//! The MLIR backend is used with GPU and other non-CPU targets. Target selection follows the
+//! same split rustc uses everywhere: the `--target` triple's *architecture* picks which
+//! hardware backend (Cuda/Riscv, see `rustc_mlir::ffi::TargetBackend`) a compile uses, and
+//! `-C target-cpu` picks the specific model/capability within it (see [`target::resolve`]).
 //!
-//! - **Builtin targets**: The `nvptx64-nvidia-cuda` target (and any other builtin that sets
-//!   `default_codegen_backend: Some("mlir")` in `rustc_target::spec::targets`) uses the MLIR
-//!   backend by default. Use `--target nvptx64-nvidia-cuda`; no need to pass `--codegen-backend=mlir`.
+//! - **Builtin targets**: `nvptx64-nvidia-cuda` (arch `Nvptx64` -> Cuda backend, `-C
+//!   target-cpu=sm_90` etc.) and `riscv64-generic` (arch `RiscV64`/`RiscV32` -> Riscv backend,
+//!   `-C target-cpu=spacemit-k3` etc., currently a stub -- see `RiscvBackend.h`) both set
+//!   `default_codegen_backend: Some("mlir")` in `rustc_target::spec::targets`, so `--target
+//!   nvptx64-nvidia-cuda` / `--target riscv64-generic` alone select this backend; no need to
+//!   also pass `--codegen-backend=mlir`.
 //!
-//! - **Custom targets via JSON**: Define a target spec JSON file and set
-//!   `"default-codegen-backend": "mlir"`. Then either:
-//!   - Put `<triple>.json` in a directory listed in `RUST_TARGET_PATH`, or
-//!   - Pass `--target /path/to/spec.json`.
-//!     See `rustc_target::spec` for the full JSON schema.
+//! - **Custom targets via JSON**: Define a target spec JSON file with an `arch` this backend
+//!   recognizes (see [`target::resolve`]) and set `"default-codegen-backend": "mlir"`. Then
+//!   either put `<triple>.json` in a directory listed in `RUST_TARGET_PATH`, or pass `--target
+//!   /path/to/spec.json`. See `rustc_target::spec` for the full JSON schema.
 //!
-//! - **Adding new builtin targets**: Add a module under `rustc_target/src/spec/targets/` and
-//!   register it in the `supported_targets!` macro in `rustc_target/src/spec/mod.rs`. Set
-//!   `default_codegen_backend: Some("mlir".into())` in that target's `TargetOptions` to use
-//!   the MLIR backend by default.
+//! - **Adding a new arch**: extend the match in [`target::resolve`] (and add a corresponding
+//!   `rustc_mlir::ffi::TargetBackend` variant / C++ backend if it's a genuinely new hardware
+//!   backend, not just a new triple for an existing one).
 //!
 //! ## Module Structure
 //!
@@ -47,6 +51,7 @@
 //! - `ffi`: FFI bindings to MLIR/Triton C++ libraries
 //! - `mir_visitor`: MIR traversal and logging utilities
 //! - `module`: MLIR module representation
+//! - `target`: `--target`/`-C target-cpu` -> `CompileOptions` resolution
 //! - `test_harness`: Test utilities for JIT and programmatic use
 
 pub(crate) mod backend;
@@ -56,6 +61,7 @@ pub(crate) mod errors;
 pub(crate) mod ffi;
 pub(crate) mod mir_visitor;
 pub(crate) mod module;
+pub(crate) mod target;
 
 pub use backend::MlirCodegenBackend;
 pub use module::MlirModule;

@@ -20,6 +20,7 @@
 
 #include "TritonCompiler.h"
 #include "backend/CudaBackend.h"
+#include "backend/RiscvBackend.h"
 
 using namespace std;
 
@@ -30,6 +31,9 @@ TritonCompiler::TritonCompiler(MLIRContext *context, std::string target,
                                CompileOptions options)
     : Compiler(context, target, options) {
   switch (options.backend) {
+  case TargetBackend_Riscv:
+    backend = new RiscvBackend(target, options.data.riscv);
+    break;
   case TargetBackend_Cuda:
   default:
     backend = new CudaBackend(target, options.data.cuda);
@@ -68,7 +72,8 @@ const char *TritonCompiler::getTTIR() const { return backend->getTTIR(); }
 const char *TritonCompiler::getTTGIR() const { return backend->getTTGIR(); }
 const char *TritonCompiler::getLLVMIR() const { return backend->getLLVMIR(); }
 const char *TritonCompiler::getASM() const { return backend->getASM(); }
-const char *TritonCompiler::getBIN() const { return backend->getBIN(); }
+const uint8_t *TritonCompiler::getBIN() const { return backend->getBIN(); }
+size_t TritonCompiler::getBINSize() const { return backend->getBINSize(); }
 
 LogicalResult TritonCompiler::applyTritonPasses(ModuleOp mlir_module) {
   auto result = backend->applyPasses(*context, mlir_module, Language::TRITON);

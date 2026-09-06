@@ -17,6 +17,7 @@
 #ifndef TRITON_COMPILER_H
 #define TRITON_COMPILER_H
 
+#include <cstdint>
 #include <string>
 
 #include "mlir/IR/BuiltinOps.h"
@@ -45,7 +46,10 @@ public:
   const char *getTTGIR() const;
   const char *getLLVMIR() const;
   const char *getASM() const;
-  const char *getBIN() const;
+  /// May contain embedded NUL bytes; always pair with getBINSize() for the
+  /// real length rather than treating this as a NUL-terminated C string.
+  const uint8_t *getBIN() const;
+  size_t getBINSize() const;
 
 private:
   LogicalResult applyTritonPasses(ModuleOp mlir_module);

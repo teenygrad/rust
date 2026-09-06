@@ -17,10 +17,12 @@
 #ifndef TRITON_BACKEND_H
 #define TRITON_BACKEND_H
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "llvm/IR/Module.h"
 
@@ -54,6 +56,7 @@ using namespace mlir::triton::instrument;
 enum Error {
   InvalidPass,
   InvalidLLVMModule,
+  NotImplemented,
 };
 
 enum Language {
@@ -166,7 +169,14 @@ public:
 
   const char *getASM() const { return m_asm.c_str(); }
 
-  const char *getBIN() const { return m_bin.c_str(); }
+  /// May contain embedded NUL bytes (e.g. a linked ELF shared library, see
+  /// RiscvBackend::makeBIN) -- callers MUST use getBINSize() as the real
+  /// length.
+  const uint8_t *getBIN() const { return m_bin.data(); }
+
+  /// Byte length of getBIN()'s buffer, valid even when it contains embedded
+  /// NULs.
+  size_t getBINSize() const { return m_bin.size(); }
 
 protected:
   std::string m_target;
@@ -179,7 +189,9 @@ protected:
   std::string m_llvmir;
 
   std::string m_asm;
-  std::string m_bin; // utf-8 encoded string
+  // Raw bytes of the compiled binary, e.g. RiscvBackend::makeBIN stores a
+  // linked ELF shared library here. Always pair getBIN() with getBINSize().
+  std::vector<uint8_t> m_bin;
 
   virtual std::optional<Error> addPass(PassManager &pm, MlirPass pass);
 
